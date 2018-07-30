@@ -27,7 +27,7 @@
 using namespace std;
 
 template <class vertex>
-graph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mmap) {
+hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mmap) {
   words W;
   if (mmap) {
     _seq<char> S = mmapStringFromFile(fname);
@@ -445,11 +445,19 @@ graph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mmap) {
 /* #endif */
 /* } */
 
-/* template <class vertex> */
-/* graph<vertex> readGraph(char* iFile, bool compressed, bool symmetric, bool binary, bool mmap) { */
-/*   if(binary) return readGraphFromBinary<vertex>(iFile,symmetric); */
-/*   else return readGraphFromFile<vertex>(iFile,symmetric,mmap); */
-/* } */
+template <class vertex>
+hypergraph<vertex> readHypergraph(char* iFile, bool compressed, bool symmetric, bool binary, bool mmap) {
+  //if(binary) return readGraphFromBinary<vertex>(iFile,symmetric);
+  //else
+  return readHypergraphFromFile<vertex>(iFile,symmetric,mmap);
+}
+
+template <class vertex>
+hypergraph<vertex> readCompressedHypergraph(char* iFile, bool symmetric, bool mmap) {
+  //if(binary) return readGraphFromBinary<vertex>(iFile,symmetric);
+  //else
+  return readHypergraphFromFile<vertex>(iFile,symmetric,mmap);
+}
 
 /* template <class vertex> */
 /* graph<vertex> readCompressedGraph(char* fname, bool isSymmetric, bool mmap) { */

@@ -50,7 +50,7 @@ public:
   long m_h;
   void* edgesV, *inEdgesV, *edgesH, *inEdgesH;
 
- Uncompressed_Mem_Hypergraph(vertex* VV, vertex* HH, long nn_v, long mm_v, long nn_h, long mm_h, void* ai, void* _edgesV, void* _edgesH, void* _inEdgesV = NULL, void* _inEdgesH = NULL)
+ Uncompressed_Mem_Hypergraph(vertex* VV, vertex* HH, long nn_v, long mm_v, long nn_h, long mm_h, void* _edgesV, void* _edgesH, void* _inEdgesV = NULL, void* _inEdgesH = NULL)
    : V(VV), H(HH), n_v(nn_v), m_v(mm_v), n_h(nn_h), m_h(mm_h), edgesV(_edgesV), edgesH(_edgesH), inEdgesV(_inEdgesV), inEdgesH(_inEdgesH) { }
 
   void del() {
