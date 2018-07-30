@@ -43,6 +43,32 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   long start = P.getOptionLongValue("-r",0);
   long n = GA.n_v;
   //creates Parents array, initialized to all -1, except for start
+
+  cout << "vertices\n";
+  for(long i=0;i<n;i++) {
+    vertex v = GA.V[i];
+    for(long j=0;j<v.getOutDegree();j++)
+      cout << v.getOutNeighbor(j) << " ";
+    cout << endl;
+    for(long j=0;j<v.getInDegree();j++)
+      cout << v.getInNeighbor(j) << " ";
+    cout << endl;
+
+  }
+
+  cout << "hyperedges\n";
+  long n_h = GA.n_h;
+  for(long i=0;i<n_h;i++) {
+    vertex v = GA.H[i];
+    for(long j=0;j<v.getOutDegree();j++)
+      cout << v.getOutNeighbor(j) << " ";
+    cout << endl;
+    for(long j=0;j<v.getInDegree();j++)
+      cout << v.getInNeighbor(j) << " ";
+    cout << endl;
+
+  }
+  
   uintE* Parents = newA(uintE,n);
   parallel_for(long i=0;i<n;i++) Parents[i] = UINT_E_MAX;
   Parents[start] = start;

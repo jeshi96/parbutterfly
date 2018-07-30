@@ -60,7 +60,7 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
   long m_v = atol(W.Strings[2]);
   long n_h = atol(W.Strings[3]);
   long m_h = atol(W.Strings[4]);
-  
+
 #ifndef WEIGHTED
   if (len != n_v + m_v + n_h + m_h + 4) {
 #else
@@ -134,87 +134,13 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
     }}
 
   if(!isSymmetric) {
-    //vertices
+    //in-edges for vertices obtained from out-edges for hyperedges
     uintT* tOffsets = newA(uintT,n_v);
     {parallel_for(long i=0;i<n_v;i++) tOffsets[i] = INT_T_MAX;}
 #ifndef WEIGHTED
-    intPair* temp = newA(intPair,m_v);
+    intPair* temp = newA(intPair,m_h);
 #else
-    intTriple* temp = newA(intTriple,m_v);
-#endif
-    {parallel_for(long i=0;i<n_v;i++){
-      uintT o = offsetsV[i];
-      for(uintT j=0;j<v[i].getOutDegree();j++){
-#ifndef WEIGHTED
-	temp[o+j] = make_pair(v[i].getOutNeighbor(j),i);
-#else
-	temp[o+j] = make_pair(v[i].getOutNeighbor(j),make_pair(i,v[i].getOutWeight(j)));
-#endif
-      }
-      }}
-    free(offsetsV);
-
-#ifndef WEIGHTED
-#ifndef LOWMEM
-    intSort::iSort(temp,m_v,n_h+1,getFirst<uintE>());
-#else
-    quickSort(temp,m_v,pairFirstCmp<uintE>());
-#endif
-#else
-#ifndef LOWMEM
-    intSort::iSort(temp,m_v,n_h+1,getFirst<intPair>());
-#else
-    quickSort(temp,m_v,pairFirstCmp<intPair>());
-#endif
-#endif
-
-    tOffsets[temp[0].first] = 0;
-#ifndef WEIGHTED
-    uintE* inEdgesV = newA(uintE,m_v);
-    inEdgesV[0] = temp[0].second;
-#else
-    intE* inEdgesV = newA(intE,2*m_v);
-    inEdgesV[0] = temp[0].second.first;
-    inEdgesV[1] = temp[0].second.second;
-#endif
-    {parallel_for(long i=1;i<m_v;i++) {
-#ifndef WEIGHTED
-      inEdgesV[i] = temp[i].second;
-#else
-      inEdgesV[2*i] = temp[i].second.first;
-      inEdgesV[2*i+1] = temp[i].second.second;
-#endif
-      if(temp[i].first != temp[i-1].first) {
-	tOffsets[temp[i].first] = i;
-      }
-      }}
-
-    free(temp);
-
-    //fill in offsets of degree 0 vertices by taking closest non-zero
-    //offset to the right
-    sequence::scanIBack(tOffsets,tOffsets,n_v,minF<uintT>(),(uintT)m_v);
-
-    {parallel_for(long i=0;i<n_v;i++){
-      uintT o = tOffsets[i];
-      uintT l = ((i == n_v-1) ? m_v : tOffsets[i+1])-tOffsets[i];
-      v[i].setInDegree(l);
-#ifndef WEIGHTED
-      v[i].setInNeighbors(inEdgesV+o);
-#else
-      v[i].setInNeighbors(inEdgesV+2*o);
-#endif
-      }}
-
-    free(tOffsets);
-
-    //hyperedges
-    tOffsets = newA(uintT,n_h);
-    {parallel_for(long i=0;i<n_h;i++) tOffsets[i] = INT_T_MAX;}
-#ifndef WEIGHTED
-    temp = newA(intPair,m_h);
-#else
-    temp = newA(intTriple,m_h);
+    intTriple* temp = newA(intTriple,m_h);
 #endif
     {parallel_for(long i=0;i<n_h;i++){
       uintT o = offsetsH[i];
@@ -244,14 +170,88 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
 
     tOffsets[temp[0].first] = 0;
 #ifndef WEIGHTED
-    uintE* inEdgesH = newA(uintE,m_h);
+    uintE* inEdgesV = newA(uintE,m_h);
+    inEdgesV[0] = temp[0].second;
+#else
+    intE* inEdgesV = newA(intE,2*m_h);
+    inEdgesV[0] = temp[0].second.first;
+    inEdgesV[1] = temp[0].second.second;
+#endif
+    {parallel_for(long i=1;i<m_h;i++) {
+#ifndef WEIGHTED
+      inEdgesV[i] = temp[i].second;
+#else
+      inEdgesV[2*i] = temp[i].second.first;
+      inEdgesV[2*i+1] = temp[i].second.second;
+#endif
+      if(temp[i].first != temp[i-1].first) {
+	tOffsets[temp[i].first] = i;
+      }
+      }}
+
+    free(temp);
+
+    //fill in offsets of degree 0 vertices by taking closest non-zero
+    //offset to the right
+    sequence::scanIBack(tOffsets,tOffsets,n_v,minF<uintT>(),(uintT)m_h);
+
+    {parallel_for(long i=0;i<n_v;i++){
+      uintT o = tOffsets[i];
+      uintT l = ((i == n_v-1) ? m_h : tOffsets[i+1])-tOffsets[i];
+      v[i].setInDegree(l);
+#ifndef WEIGHTED
+      v[i].setInNeighbors(inEdgesV+o);
+#else
+      v[i].setInNeighbors(inEdgesV+2*o);
+#endif
+      }}
+
+    free(tOffsets);
+
+    //in-edges for hyperedges obtained from out-edges for vertices
+    tOffsets = newA(uintT,n_h);
+    {parallel_for(long i=0;i<n_h;i++) tOffsets[i] = INT_T_MAX;}
+#ifndef WEIGHTED
+    temp = newA(intPair,m_v);
+#else
+    temp = newA(intTriple,m_v);
+#endif
+    {parallel_for(long i=0;i<n_v;i++){
+      uintT o = offsetsV[i];
+      for(uintT j=0;j<v[i].getOutDegree();j++){
+#ifndef WEIGHTED
+	temp[o+j] = make_pair(v[i].getOutNeighbor(j),i);
+#else
+	temp[o+j] = make_pair(v[i].getOutNeighbor(j),make_pair(i,v[i].getOutWeight(j)));
+#endif
+      }
+      }}
+    free(offsetsV);
+
+#ifndef WEIGHTED
+#ifndef LOWMEM
+    intSort::iSort(temp,m_v,n_h+1,getFirst<uintE>());
+#else
+    quickSort(temp,m_v,pairFirstCmp<uintE>());
+#endif
+#else
+#ifndef LOWMEM
+    intSort::iSort(temp,m_v,n_h+1,getFirst<intPair>());
+#else
+    quickSort(temp,m_v,pairFirstCmp<intPair>());
+#endif
+#endif
+
+    tOffsets[temp[0].first] = 0;
+#ifndef WEIGHTED
+    uintE* inEdgesH = newA(uintE,m_v);
     inEdgesH[0] = temp[0].second;
 #else
-    intE* inEdgesH = newA(intE,2*m_h);
+    intE* inEdgesH = newA(intE,2*m_v);
     inEdgesH[0] = temp[0].second.first;
     inEdgesH[1] = temp[0].second.second;
 #endif
-    {parallel_for(long i=1;i<m_h;i++) {
+    {parallel_for(long i=1;i<m_v;i++) {
 #ifndef WEIGHTED
       inEdgesH[i] = temp[i].second;
 #else
@@ -267,11 +267,11 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
 
     //fill in offsets of degree 0 vertices by taking closest non-zero
     //offset to the right
-    sequence::scanIBack(tOffsets,tOffsets,n_h,minF<uintT>(),(uintT)m_h);
+    sequence::scanIBack(tOffsets,tOffsets,n_h,minF<uintT>(),(uintT)m_v);
 
     {parallel_for(long i=0;i<n_h;i++){
       uintT o = tOffsets[i];
-      uintT l = ((i == n_h-1) ? m_h : tOffsets[i+1])-tOffsets[i];
+      uintT l = ((i == n_h-1) ? m_v : tOffsets[i+1])-tOffsets[i];
       h[i].setInDegree(l);
 #ifndef WEIGHTED
       h[i].setInNeighbors(inEdgesH+o);
