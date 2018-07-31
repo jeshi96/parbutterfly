@@ -77,7 +77,7 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
   uintE* edgesH = newA(uintE,m_h);
 #else
   intE* edgesV = newA(intE,2*m_v);
-  intE* edgesH = newa(intE,2*m_h);
+  intE* edgesH = newA(intE,2*m_h);
 #endif
 
   {parallel_for(long i=0; i < n_v; i++) offsetsV[i] = atol(W.Strings[i + 5]);}

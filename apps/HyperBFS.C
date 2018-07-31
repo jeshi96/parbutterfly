@@ -22,6 +22,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #define HYPER 1
+#define WEIGHTED 1
 #include "ligra.h"
 
 struct BFS_F {
@@ -47,11 +48,12 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   cout << "vertices\n";
   for(long i=0;i<n;i++) {
     vertex v = GA.V[i];
+    cout << i << endl;
     for(long j=0;j<v.getOutDegree();j++)
-      cout << v.getOutNeighbor(j) << " ";
+      cout << "( "<< v.getOutNeighbor(j) << " " << v.getOutWeight(j) << ") ";
     cout << endl;
     for(long j=0;j<v.getInDegree();j++)
-      cout << v.getInNeighbor(j) << " ";
+      cout << "( " << v.getInNeighbor(j) << " " << v.getInWeight(j) << ") ";
     cout << endl;
 
   }
@@ -60,11 +62,12 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   long n_h = GA.n_h;
   for(long i=0;i<n_h;i++) {
     vertex v = GA.H[i];
+    cout << i << endl;
     for(long j=0;j<v.getOutDegree();j++)
-      cout << v.getOutNeighbor(j) << " ";
+      cout << "( "<< v.getOutNeighbor(j) << " " << v.getOutWeight(j) << ") ";
     cout << endl;
     for(long j=0;j<v.getInDegree();j++)
-      cout << v.getInNeighbor(j) << " ";
+      cout << "( " << v.getInNeighbor(j) << " "  << v.getInNeighbor(j) << ") ";
     cout << endl;
 
   }
