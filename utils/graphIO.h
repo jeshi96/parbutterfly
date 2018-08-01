@@ -751,7 +751,7 @@ namespace benchIO {
     parallel_for(long i=0;i<nh;i++) Out[nv+mv+4+i] = G.H[i].degree;
     sequence::scan(nv+mv+4+Out,nv+mv+4+Out,nh,addF<intT>(),(intT)0);
     for(long i=0;i<nh;i++) {
-      intT *O = Out + 4 + nv + + mv + nh + Out[nv+mv+4+i];
+      intT *O = Out + 4 + nv + mv + nh + Out[nv+mv+4+i];
       vertex<intT> h = G.H[i];
       for(long j=0;j < h.degree; j++) O[j] = h.Neighbors[j];
     }
@@ -786,24 +786,30 @@ namespace benchIO {
   }
 
   template <class intT>
-  int writeWghHypergraphToFile(hypergraph<intT> G, char* fname) {
+  int writeWghHypergraphToFile(wghHypergraph<intT> G, char* fname) {
     long nv = G.nv, mv = G.mv, nh = G.nh, mh = G.mh;
-    long totalLen = 4 + nv + mv + nh + mh;
+    long totalLen = 4 + nv + mv*2 + nh + mh*2;
     intT *Out = newA(intT, totalLen);
     Out[0] = nv; Out[1] = mv; Out[2] = nh; Out[3] = mh;
     parallel_for(long i=0;i<nv;i++) Out[4+i] = G.V[i].degree;
     sequence::scan(4+Out,4+Out,nv,addF<intT>(),(intT)0);
     for(long i=0;i<nv;i++) {
       intT *O = Out + 4 + nv + Out[4+i];
-      vertex<intT> v = G.V[i];
-      for(long j=0;j < v.degree; j++) O[j] = v.Neighbors[j];
+      wghVertex<intT> v = G.V[i];
+      for(long j=0;j < v.degree; j++) {
+	O[j] = v.Neighbors[j];
+	O[j+mv] = v.nghWeights[j];
+      }
     }
-    parallel_for(long i=0;i<nh;i++) Out[nv+mv+4+i] = G.H[i].degree;
-    sequence::scan(nv+mv+4+Out,nv+mv+4+Out,nh,addF<intT>(),(intT)0);
+    parallel_for(long i=0;i<nh;i++) Out[nv+2*mv+4+i] = G.H[i].degree;
+    sequence::scan(nv+2*mv+4+Out,nv+2*mv+4+Out,nh,addF<intT>(),(intT)0);
     for(long i=0;i<nh;i++) {
-      intT *O = Out + 4 + nv + + mv + nh + Out[nv+mv+4+i];
-      vertex<intT> h = G.H[i];
-      for(long j=0;j < h.degree; j++) O[j] = h.Neighbors[j];
+      intT *O = Out + 4 + nv + 2*mv + nh + Out[nv+2*mv+4+i];
+      wghVertex<intT> h = G.H[i];
+      for(long j=0;j < h.degree; j++) {
+	O[j] = h.Neighbors[j];
+	O[j+mh] = h.nghWeights[j];
+      }
     }
     int r = writeArrayToFile(WghAdjHypergraphHeader,Out,totalLen,fname);
     free(Out);
