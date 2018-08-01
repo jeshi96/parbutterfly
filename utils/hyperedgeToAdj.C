@@ -22,11 +22,6 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-//Converts a SNAP graph (http://snap.stanford.edu/data/index.html) to
-//Ligra adjacency graph format. To symmetrize the graph, pass the "-s"
-//flag. For undirected graphs on SNAP, the "-s" flag must be passed
-//since each edge appears in only one direction
-
 #include "parseCommandLine.h"
 #include "graphIO.h"
 #include "parallel.h"

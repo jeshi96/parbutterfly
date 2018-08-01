@@ -922,6 +922,7 @@ namespace benchIO {
     return wghEdgeArray<intT>(E, maxrc, maxrc, n);
   }
 
+  //one hyperedge per line followed by weight on a separate line
   template <class intT>
     wghHyperedgeArray<intT> readWghHyperedges(char* fname) {
     _seq<char> S = readStringFromFile(fname);
@@ -939,16 +940,16 @@ namespace benchIO {
     S.del();
     
     lines W = stringToLinesOfWords(S2, S.n-k);
-    long n = W.numLines;
-    long m = W.m;
+    long n = W.numLines/2;
+    long m = W.m-n;
     wghEdge<intT> *VE = newA(wghEdge<intT>,m);
     wghEdge<intT> *HE = newA(wghEdge<intT>,m);
     {parallel_for(long i=0;i<n;i++) {
-	long offset = W.Lines[i];
-	long degree = (i == n-1) ? m-W.Lines[i] : W.Lines[i+1]-W.Lines[i];
+	long offset = W.Lines[2*i];
+	long degree = W.Lines[2*i+1]-W.Lines[2*i];
 	for(long j=0;j<degree;j++) {
-	  VE[offset+j] = wghEdge<intT>(atol(W.Strings[2*(offset+j)]),i,atol(W.Strings[2*(offset+j)+1]));
-	  HE[offset+j] = wghEdge<intT>(i,atol(W.Strings[2*(offset+j)]),atol(W.Strings[2*(offset+j)+1]));
+	  VE[offset+j-i] = wghEdge<intT>(atol(W.Strings[offset+j]),i,atol(W.Strings[W.Lines[2*i+1]]));
+	  HE[offset+j-i] = wghEdge<intT>(i,atol(W.Strings[offset+j]),atol(W.Strings[W.Lines[2*i+1]]));
 	}
       }} 
     W.del();
