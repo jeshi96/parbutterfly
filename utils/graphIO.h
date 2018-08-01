@@ -866,13 +866,14 @@ namespace benchIO {
     S.del();
     
     lines W = stringToLinesOfWords(S2, S.n-k);
-    long n = W.numLines;
+    long nh = W.numLines;
     long m = W.m;
     edge<intT> *VE = newA(edge<intT>,m);
     edge<intT> *HE = newA(edge<intT>,m);
-    {parallel_for(long i=0;i<n;i++) {
+    
+    {parallel_for(long i=0;i<nh;i++) {
 	long offset = W.Lines[i];
-	long degree = (i == n-1) ? m-W.Lines[i] : W.Lines[i+1]-W.Lines[i];
+	long degree = (i == nh-1) ? m-W.Lines[i] : W.Lines[i+1]-W.Lines[i];
 	for(long j=0;j<degree;j++) {
 	  VE[offset+j] = edge<intT>(atol(W.Strings[offset+j]),i);
 	  HE[offset+j] = edge<intT>(i,atol(W.Strings[offset+j]));
@@ -885,7 +886,18 @@ namespace benchIO {
       maxID = max<intT>(maxID, VE[i].u);
     }
     maxID++;
-    return hyperedgeArray<intT>(VE,HE,maxID,n,m,m);
+    //compress IDs into contiguous range
+    intT* IDs = newA(intT,maxID);
+    {parallel_for(long i=0;i<maxID;i++) IDs[i]=0;}
+    {parallel_for(long i=0; i < m; i++) if(!IDs[VE[i].u]) CAS(&IDs[VE[i].u],(intT)0,(intT)1);}
+    long nv = sequence::plusScan(IDs,IDs,maxID);
+
+    {parallel_for(long i=0;i<m;i++) {
+	VE[i].u = IDs[VE[i].u];
+	HE[i].v = IDs[HE[i].v];
+      }}
+    free(IDs);
+    return hyperedgeArray<intT>(VE,HE,nv,nh,m,m);
   }
 
   template <class intT>
@@ -959,7 +971,18 @@ namespace benchIO {
       maxID = max<intT>(maxID, VE[i].u);
     }
     maxID++;
-    return wghHyperedgeArray<intT>(VE,HE,maxID,n,m,m);
+    //compress IDs into contiguous range
+    intT* IDs = newA(intT,maxID);
+    {parallel_for(long i=0;i<maxID;i++) IDs[i]=0;}
+    {parallel_for(long i=0; i < m; i++) if(!IDs[VE[i].u]) CAS(&IDs[VE[i].u],(intT)0,(intT)1);}
+    long nv = sequence::plusScan(IDs,IDs,maxID);
+
+    {parallel_for(long i=0;i<m;i++) {
+	VE[i].u = IDs[VE[i].u];
+	HE[i].v = IDs[HE[i].v];
+      }}
+    free(IDs);
+    return wghHyperedgeArray<intT>(VE,HE,nv,n,m,m);
   }
 
   template <class intT>
