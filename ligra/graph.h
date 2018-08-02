@@ -40,18 +40,18 @@ public:
 };
 
 template <class vertex>
-struct Uncompressed_Mem_Hypergraph : public Deletable {
+struct Uncompressed_Memhypergraph : public Deletable {
 public:
   vertex* V;
   vertex* H;
-  long n_v;
-  long m_v;
-  long n_h;
-  long m_h;
+  long nv;
+  long mv;
+  long nh;
+  long mh;
   void* edgesV, *inEdgesV, *edgesH, *inEdgesH;
 
- Uncompressed_Mem_Hypergraph(vertex* VV, vertex* HH, long nn_v, long mm_v, long nn_h, long mm_h, void* _edgesV, void* _edgesH, void* _inEdgesV = NULL, void* _inEdgesH = NULL)
-   : V(VV), H(HH), n_v(nn_v), m_v(mm_v), n_h(nn_h), m_h(mm_h), edgesV(_edgesV), edgesH(_edgesH), inEdgesV(_inEdgesV), inEdgesH(_inEdgesH) { }
+ Uncompressed_Memhypergraph(vertex* VV, vertex* HH, long nnv, long mmv, long nnh, long mmh, void* _edgesV, void* _edgesH, void* _inEdgesV = NULL, void* _inEdgesH = NULL)
+   : V(VV), H(HH), nv(nnv), mv(mmv), nh(nnh), mh(mmh), edgesV(_edgesV), edgesH(_edgesH), inEdgesV(_inEdgesV), inEdgesH(_inEdgesH) { }
 
   void del() {
     free(edgesV);
@@ -114,20 +114,20 @@ template <class vertex>
 struct hypergraph {
   vertex *V;
   vertex *H;
-  long n_v;
-  long m_v;
-  long n_h;
-  long m_h;
+  long nv;
+  long mv;
+  long nh;
+  long mh;
   bool transposed;
   uintE* flagsV;
   uintE* flagsH;
   Deletable *D;
 
-hypergraph(vertex* _V, vertex* _H, long _n_v, long _m_v, long _n_h, long _m_h, Deletable* _D) : V(_V), H(_H), n_v(_n_v), m_v(_m_v), n_h(_n_h), m_h(_m_h),
+hypergraph(vertex* _V, vertex* _H, long _nv, long _mv, long _nh, long _mh, Deletable* _D) : V(_V), H(_H), nv(_nv), mv(_mv), nh(_nh), mh(_mh),
     D(_D), flagsV(NULL), flagsH(NULL), transposed(0) {}
 
-hypergraph(vertex* _V, vertex* _H, long _n_v, long _m_v, long _n_h, long _m_h,  Deletable* _D, uintE* _flagsV, uintE* _flagsH) : V(_V), H(_H),
-    n_v(_n_v), m_v(_m_v), n_h(_n_h), m_h(_m_h), D(_D), flagsV(_flagsV), flagsH(_flagsH), transposed(0) {}
+hypergraph(vertex* _V, vertex* _H, long _nv, long _mv, long _nh, long _mh,  Deletable* _D, uintE* _flagsV, uintE* _flagsH) : V(_V), H(_H),
+    nv(_nv), mv(_mv), nh(_nh), mh(_mh), D(_D), flagsV(_flagsV), flagsH(_flagsH), transposed(0) {}
 
   void del() {
     if (flagsV != NULL) free(flagsV);
@@ -139,10 +139,10 @@ hypergraph(vertex* _V, vertex* _H, long _n_v, long _m_v, long _n_h, long _m_h,  
   void transpose() {
     if ((sizeof(vertex) == sizeof(asymmetricVertex)) ||
         (sizeof(vertex) == sizeof(compressedAsymmetricVertex))) {
-      parallel_for(long i=0;i<n_v;i++) {
+      parallel_for(long i=0;i<nv;i++) {
         V[i].flipEdges();
       }
-      parallel_for(long i=0;i<n_h;i++) {
+      parallel_for(long i=0;i<nh;i++) {
 	H[i].flipEdges();
       }
       transposed = !transposed;
