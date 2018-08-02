@@ -161,11 +161,14 @@ struct hypergraph {
   long nh;
   long mh;
   intT* edgesV, *edgesH;
+  intT* allocatedInplace;
 
-hypergraph(vertex<intT>* _V, vertex<intT>* _H, long _nv, long _mv, long _nh, long _mh, intT* _edgesV, intT* _edgesH) : V(_V), H(_H), nv(_nv), mv(_mv), nh(_nh), mh(_mh), edgesV(_edgesV), edgesH(_edgesH) {}
-
+hypergraph(vertex<intT>* _V, vertex<intT>* _H, long _nv, long _mv, long _nh, long _mh, intT* _edgesV, intT* _edgesH) : V(_V), H(_H), nv(_nv), mv(_mv), nh(_nh), mh(_mh), edgesV(_edgesV), edgesH(_edgesH), allocatedInplace(0) {}
+hypergraph(vertex<intT>* _V, vertex<intT>* _H, long _nv, long _mv, long _nh, long _mh, intT* ai) : V(_V), H(_H), nv(_nv), mv(_mv), nh(_nh), mh(_mh), allocatedInplace(ai) {}
   void del() {
-    free(H); free(V); free(edgesV); free(edgesH);
+    free(H); free(V);
+    if(allocatedInplace) free(allocatedInplace);
+    else {free(edgesV); free(edgesH);}
   }
 };
 
@@ -213,10 +216,13 @@ struct wghHypergraph {
   long nh;
   long mh;
   intT* edgesV, *edgesH;
-wghHypergraph(wghVertex<intT>* _V, wghVertex<intT>* _H, long _nv, long _mv, long _nh, long _mh, intT* _edgesV, intT* _edgesH) : V(_V), H(_H), nv(_nv), mv(_mv), nh(_nh), mh(_mh), edgesV(_edgesV), edgesH(_edgesH) {}
-
+  intT* allocatedInplace;
+wghHypergraph(wghVertex<intT>* _V, wghVertex<intT>* _H, long _nv, long _mv, long _nh, long _mh, intT* _edgesV, intT* _edgesH) : V(_V), H(_H), nv(_nv), mv(_mv), nh(_nh), mh(_mh), edgesV(_edgesV), edgesH(_edgesH), allocatedInplace(0) {}
+wghHypergraph(wghVertex<intT>* _V, wghVertex<intT>* _H, long _nv, long _mv, long _nh, long _mh, intT* ai) : V(_V), H(_H), nv(_nv), mv(_mv), nh(_nh), mh(_mh), allocatedInplace(ai) {}
   void del() {
-    free(H); free(V); free(edgesV); free(edgesH); 
+    free(H); free(V);
+    if(allocatedInplace) free(allocatedInplace);
+    else {free(edgesV); free(edgesH);} 
   }
 };
 
@@ -1053,6 +1059,104 @@ namespace benchIO {
     }
     return wghGraph<intT>(v,(intT)n,(uintT)m,(intT*)In,weights);
   }
+
+  template <class intT>
+  hypergraph<intT> readHypergraphFromFile(char* fname) {
+    _seq<char> S = readStringFromFile(fname);
+    words W = stringToWords(S.A, S.n);
+    if (W.Strings[0] != AdjHypergraphHeader) {
+      cout << "Bad input file: missing header: " << AdjHypergraphHeader << endl;
+      abort();
+    }
+
+    long len = W.m -1;
+    uintT * In = newA(uintT, len);
+    {parallel_for(long i=0; i < len; i++) In[i] = atol(W.Strings[i + 1]);}
+    W.del();
+    
+    long nv = In[0];
+    long mv = In[1];
+    long nh = In[2];
+    long mh = In[3];
+    
+    if (len != nv + mv + nh + mh + 4) {
+      cout << "Bad input file: length = "<<len<< " nv+mv+nh+mh+4 = " << nv+mv+nh+mh+4 << endl;
+      abort();
+    }
+    vertex<intT> *v = newA(vertex<intT>,nv);
+    vertex<intT> *h = newA(vertex<intT>,nh);
+    uintT* offsetsV = In+4;
+    uintT* edgesV = In+4+nv;
+    uintT* offsetsH = In+4+nv+mv;
+    uintT* edgesH = In+4+nv+mv+nh;
+
+    parallel_for (uintT i=0; i < nv; i++) {
+      uintT o = offsetsV[i];
+      uintT l = ((i == nv-1) ? mv : offsetsV[i+1])-offsetsV[i];
+      v[i].degree = l;
+      v[i].Neighbors = (intT*)(edgesV+o);
+    }
+    parallel_for (uintT i=0; i < nh; i++) {
+      uintT o = offsetsH[i];
+      uintT l = ((i == nh-1) ? mh : offsetsH[i+1])-offsetsH[i];
+      h[i].degree = l;
+      h[i].Neighbors = (intT*)(edgesH+o);
+    }
+
+    return hypergraph<intT>(v,h,nv,mv,nh,mh,In);
+  }
+
+  template <class intT>
+    wghHypergraph<intT> readWghHypergraphFromFile(char* fname) {
+    _seq<char> S = readStringFromFile(fname);
+    words W = stringToWords(S.A, S.n);
+    if (W.Strings[0] != WghAdjHypergraphHeader) {
+      cout << "Bad input file: missing header: " << WghAdjHypergraphHeader << endl;
+      abort();
+    }
+    
+    long len = W.m -1;
+    intT * In = newA(intT, len);
+    {parallel_for(long i=0; i < len; i++) In[i] = atol(W.Strings[i + 1]);}
+    W.del();
+    
+    long nv = In[0];
+    long mv = In[1];
+    long nh = In[2];
+    long mh = In[3];
+    
+    if (len != nv + 2*mv + nh + 2*mh + 4) {
+      cout << "Bad input file" << endl;
+      abort();
+    }
+    wghVertex<intT> *v = newA(wghVertex<intT>,nv);
+    wghVertex<intT> *h = newA(wghVertex<intT>,nh);
+    uintT* offsetsV = (uintT*)In+4;
+    uintT* edgesV = (uintT*)In+4+nv;
+    intT* weightsV = In+4+nv+mv;
+    uintT* offsetsH = (uintT*)In+4+nv+2*mv;
+    uintT* edgesH = (uintT*)In+4+nv+2*mv+nh;
+    intT* weightsH = In+4+nv+2*mv+nh+mh;
+    
+    parallel_for (uintT i=0; i < nv; i++) {
+      uintT o = offsetsV[i];
+      uintT l = ((i == nv-1) ? mv : offsetsV[i+1])-offsetsV[i];
+      v[i].degree = l;
+      v[i].Neighbors = (intT*)(edgesV+o);
+      v[i].nghWeights = (weightsV+o);
+    }
+
+    parallel_for (uintT i=0; i < nh; i++) {
+      uintT o = offsetsH[i];
+      uintT l = ((i == nh-1) ? mh : offsetsH[i+1])-offsetsH[i];
+      h[i].degree = l;
+      h[i].Neighbors = (intT*)(edgesH+o);
+      h[i].nghWeights = (weightsH+o);
+    }
+
+    return wghHypergraph<intT>(v,h,nv,mv,nh,mh,In);
+  }
+
 };
 
 #endif // _BENCH_GRAPH_IO

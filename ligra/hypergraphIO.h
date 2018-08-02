@@ -295,7 +295,7 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
 }
 
 template <class vertex>
-graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
+hypergraph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
   char* config = (char*) ".config";
   char* vadj = (char*) ".vadj";
   char* vidx = (char*) ".vidx";
@@ -387,6 +387,7 @@ graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
     edgesAndWeightsH[2*i+1] = edgesH[i+mh];
     }}
 #endif
+  
   //vertices
   {parallel_for(long i=0;i<nv;i++) {
     uintT o = offsetsV[i];
@@ -410,7 +411,6 @@ graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
 #endif
     }}
 
-  
   if(!isSymmetric) {
     //in-edges for vertices obtained from out-edges for hyperedges
     uintT* tOffsets = newA(uintT,nv);
@@ -420,6 +420,7 @@ graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
 #else
     intTriple* temp = newA(intTriple,mh);
 #endif
+
     {parallel_for(intT i=0;i<nh;i++){
       uintT o = offsetsH[i];
       for(uintT j=0;j<h[i].getOutDegree();j++){
@@ -431,6 +432,7 @@ graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
       }
       }}
     free(offsetsH);
+
 #ifndef WEIGHTED
 #ifndef LOWMEM
     intSort::iSort(temp,mh,nv+1,getFirst<uintE>());
@@ -444,6 +446,7 @@ graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
     quickSort(temp,mh,pairFirstCmp<intPair>());
 #endif
 #endif
+
     tOffsets[temp[0].first] = 0;
 #ifndef WEIGHTED
     uintE* inEdgesV = newA(uintE,mh);
@@ -464,6 +467,7 @@ graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
 	tOffsets[temp[i].first] = i;
       }
       }}
+
     free(temp);
     //fill in offsets of degree 0 vertices by taking closest non-zero
     //offset to the right
@@ -572,9 +576,8 @@ graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
 
 template <class vertex>
 hypergraph<vertex> readHypergraph(char* iFile, bool compressed, bool symmetric, bool binary, bool mmap) {
-  //if(binary) return readGraphFromBinary<vertex>(iFile,symmetric);
-  //else
-  return readHypergraphFromFile<vertex>(iFile,symmetric,mmap);
+  if(binary) return readHypergraphFromBinary<vertex>(iFile,symmetric);
+  else return readHypergraphFromFile<vertex>(iFile,symmetric,mmap);
 }
 
 template <class vertex>
