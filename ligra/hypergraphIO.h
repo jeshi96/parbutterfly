@@ -294,156 +294,281 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
   }
 }
 
-/* template <class vertex> */
-/* graph<vertex> readGraphFromBinary(char* iFile, bool isSymmetric) { */
-/*   char* config = (char*) ".config"; */
-/*   char* adj = (char*) ".adj"; */
-/*   char* idx = (char*) ".idx"; */
-/*   char configFile[strlen(iFile)+strlen(config)+1]; */
-/*   char adjFile[strlen(iFile)+strlen(adj)+1]; */
-/*   char idxFile[strlen(iFile)+strlen(idx)+1]; */
-/*   *configFile = *adjFile = *idxFile = '\0'; */
-/*   strcat(configFile,iFile); */
-/*   strcat(adjFile,iFile); */
-/*   strcat(idxFile,iFile); */
-/*   strcat(configFile,config); */
-/*   strcat(adjFile,adj); */
-/*   strcat(idxFile,idx); */
+template <class vertex>
+graph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
+  char* config = (char*) ".config";
+  char* vadj = (char*) ".vadj";
+  char* vidx = (char*) ".vidx";
+  char* hadj = (char*) ".hadj";
+  char* hidx = (char*) ".hidx";
+  char configFile[strlen(iFile)+strlen(config)+1];
+  char vadjFile[strlen(iFile)+strlen(vadj)+1];
+  char vidxFile[strlen(iFile)+strlen(vidx)+1];
+  char hadjFile[strlen(iFile)+strlen(hadj)+1];
+  char hidxFile[strlen(iFile)+strlen(hidx)+1];
+  *configFile = *vadjFile = *vidxFile = *hadjFile = *hidxFile = '\0';
+  strcat(configFile,iFile);
+  strcat(vadjFile,iFile);
+  strcat(vidxFile,iFile);
+  strcat(hadjFile,iFile);
+  strcat(hidxFile,iFile);
+  strcat(configFile,config);
+  strcat(vadjFile,vadj);
+  strcat(vidxFile,vidx);
+  strcat(hadjFile,hadj);
+  strcat(hidxFile,hidx);
 
-/*   ifstream in(configFile, ifstream::in); */
-/*   long n; */
-/*   in >> n; */
-/*   in.close(); */
+  ifstream in(configFile, ifstream::in);
+  long nv, mv, nh, mh;
+  in >> nv; in >> mv; in >> nh; in >> mh;
+  in.close();
 
-/*   ifstream in2(adjFile,ifstream::in | ios::binary); //stored as uints */
-/*   in2.seekg(0, ios::end); */
-/*   long size = in2.tellg(); */
-/*   in2.seekg(0); */
-/* #ifdef WEIGHTED */
-/*   long m = size/(2*sizeof(uint)); */
-/* #else */
-/*   long m = size/sizeof(uint); */
-/* #endif */
-/*   char* s = (char *) malloc(size); */
-/*   in2.read(s,size); */
-/*   in2.close(); */
-/*   uintE* edges = (uintE*) s; */
+  ifstream in2(vadjFile,ifstream::in | ios::binary); //stored as uints
+  in2.seekg(0, ios::end);
+  long size = in2.tellg();
+  in2.seekg(0);
+#ifdef WEIGHTED
+  if(mv != size/(2*sizeof(uint))) { cout << "size wrong\n"; exit(0); }
+#else
+  if(mv != size/(sizeof(uint))) { cout << "size wrong\n"; exit(0); }
+#endif
+  char* s = (char *) malloc(size);
+  in2.read(s,size);
+  in2.close();
+  uintE* edgesV = (uintE*) s;
 
-/*   ifstream in3(idxFile,ifstream::in | ios::binary); //stored as longs */
-/*   in3.seekg(0, ios::end); */
-/*   size = in3.tellg(); */
-/*   in3.seekg(0); */
-/*   if(n != size/sizeof(intT)) { cout << "File size wrong\n"; abort(); } */
+  ifstream in3(vidxFile,ifstream::in | ios::binary); //stored as longs
+  in3.seekg(0, ios::end);
+  size = in3.tellg();
+  in3.seekg(0);
+  if(nv != size/sizeof(intT)) { cout << "File size wrong\n"; abort(); }
 
-/*   char* t = (char *) malloc(size); */
-/*   in3.read(t,size); */
-/*   in3.close(); */
-/*   uintT* offsets = (uintT*) t; */
+  char* t = (char *) malloc(size);
+  in3.read(t,size);
+  in3.close();
+  uintT* offsetsV = (uintT*) t;
 
-/*   vertex* v = newA(vertex,n); */
-/* #ifdef WEIGHTED */
-/*   intE* edgesAndWeights = newA(intE,2*m); */
-/*   {parallel_for(long i=0;i<m;i++) { */
-/*     edgesAndWeights[2*i] = edges[i]; */
-/*     edgesAndWeights[2*i+1] = edges[i+m]; */
-/*     }} */
-/*   //free(edges); */
-/* #endif */
-/*   {parallel_for(long i=0;i<n;i++) { */
-/*     uintT o = offsets[i]; */
-/*     uintT l = ((i==n-1) ? m : offsets[i+1])-offsets[i]; */
-/*       v[i].setOutDegree(l); */
-/* #ifndef WEIGHTED */
-/*       v[i].setOutNeighbors((uintE*)edges+o); */
-/* #else */
-/*       v[i].setOutNeighbors(edgesAndWeights+2*o); */
-/* #endif */
-/*     }} */
+  ifstream in4(hadjFile,ifstream::in | ios::binary); //stored as uints
+  in4.seekg(0, ios::end);
+  size = in4.tellg();
+  in4.seekg(0);
+#ifdef WEIGHTED
+  if(mh != size/(2*sizeof(uint))) { cout << "size wrong\n"; exit(0); }
+#else
+  if(mh != size/(sizeof(uint))) { cout << "size wrong\n"; exit(0); }
+#endif
+  char* s2 = (char *) malloc(size);
+  in4.read(s2,size);
+  in4.close();
+  uintE* edgesH = (uintE*) s2;
 
-/*   if(!isSymmetric) { */
-/*     uintT* tOffsets = newA(uintT,n); */
-/*     {parallel_for(long i=0;i<n;i++) tOffsets[i] = INT_T_MAX;} */
-/* #ifndef WEIGHTED */
-/*     intPair* temp = newA(intPair,m); */
-/* #else */
-/*     intTriple* temp = newA(intTriple,m); */
-/* #endif */
-/*     {parallel_for(intT i=0;i<n;i++){ */
-/*       uintT o = offsets[i]; */
-/*       for(uintT j=0;j<v[i].getOutDegree();j++){ */
-/* #ifndef WEIGHTED */
-/* 	temp[o+j] = make_pair(v[i].getOutNeighbor(j),i); */
-/* #else */
-/* 	temp[o+j] = make_pair(v[i].getOutNeighbor(j),make_pair(i,v[i].getOutWeight(j))); */
-/* #endif */
-/*       } */
-/*       }} */
-/*     free(offsets); */
-/* #ifndef WEIGHTED */
-/* #ifndef LOWMEM */
-/*     intSort::iSort(temp,m,n+1,getFirst<uintE>()); */
-/* #else */
-/*     quickSort(temp,m,pairFirstCmp<uintE>()); */
-/* #endif */
-/* #else */
-/* #ifndef LOWMEM */
-/*     intSort::iSort(temp,m,n+1,getFirst<intPair>()); */
-/* #else */
-/*     quickSort(temp,m,pairFirstCmp<intPair>()); */
-/* #endif */
-/* #endif */
-/*     tOffsets[temp[0].first] = 0; */
-/* #ifndef WEIGHTED */
-/*     uintE* inEdges = newA(uintE,m); */
-/*     inEdges[0] = temp[0].second; */
-/* #else */
-/*     intE* inEdges = newA(intE,2*m); */
-/*     inEdges[0] = temp[0].second.first; */
-/*     inEdges[1] = temp[0].second.second; */
-/* #endif */
-/*     {parallel_for(long i=1;i<m;i++) { */
-/* #ifndef WEIGHTED */
-/*       inEdges[i] = temp[i].second; */
-/* #else */
-/*       inEdges[2*i] = temp[i].second.first; */
-/*       inEdges[2*i+1] = temp[i].second.second; */
-/* #endif */
-/*       if(temp[i].first != temp[i-1].first) { */
-/* 	tOffsets[temp[i].first] = i; */
-/*       } */
-/*       }} */
-/*     free(temp); */
-/*     //fill in offsets of degree 0 vertices by taking closest non-zero */
-/*     //offset to the right */
-/*     sequence::scanIBack(tOffsets,tOffsets,n,minF<uintT>(),(uintT)m); */
-/*     {parallel_for(long i=0;i<n;i++){ */
-/*       uintT o = tOffsets[i]; */
-/*       uintT l = ((i == n-1) ? m : tOffsets[i+1])-tOffsets[i]; */
-/*       v[i].setInDegree(l); */
-/* #ifndef WEIGHTED */
-/*       v[i].setInNeighbors((uintE*)inEdges+o); */
-/* #else */
-/*       v[i].setInNeighbors((intE*)(inEdges+2*o)); */
-/* #endif */
-/*       }} */
-/*     free(tOffsets); */
-/* #ifndef WEIGHTED */
-/*     Uncompressed_Mem<vertex>* mem = new Uncompressed_Mem<vertex>(v,n,m,edges,inEdges); */
-/*     return graph<vertex>(v,n,m,mem); */
-/* #else */
-/*     Uncompressed_Mem<vertex>* mem = new Uncompressed_Mem<vertex>(v,n,m,edgesAndWeights,inEdges); */
-/*     return graph<vertex>(v,n,m,mem); */
-/* #endif */
-/*   } */
-/*   free(offsets); */
-/* #ifndef WEIGHTED */
-/*   Uncompressed_Mem<vertex>* mem = new Uncompressed_Mem<vertex>(v,n,m,edges); */
-/*   return graph<vertex>(v,n,m,mem); */
-/* #else */
-/*   Uncompressed_Mem<vertex>* mem = new Uncompressed_Mem<vertex>(v,n,m,edgesAndWeights); */
-/*   return graph<vertex>(v,n,m,mem); */
-/* #endif */
-/* } */
+  ifstream in5(hidxFile,ifstream::in | ios::binary); //stored as longs
+  in5.seekg(0, ios::end);
+  size = in5.tellg();
+  in5.seekg(0);
+  if(nh != size/sizeof(intT)) { cout << "File size wrong\n"; abort(); }
+
+  char* t2 = (char *) malloc(size);
+  in5.read(t2,size);
+  in5.close();
+  uintT* offsetsH = (uintT*) t2;
+
+  vertex* v = newA(vertex,nv);
+  vertex* h = newA(vertex,nh);
+#ifdef WEIGHTED
+  intE* edgesAndWeightsV = newA(intE,2*mv);
+  {parallel_for(long i=0;i<mv;i++) {
+    edgesAndWeightsV[2*i] = edgesV[i];
+    edgesAndWeightsV[2*i+1] = edgesV[i+mh];
+    }}
+  intE* edgesAndWeightsH = newA(intE,2*mh);
+  {parallel_for(long i=0;i<mh;i++) {
+    edgesAndWeightsH[2*i] = edgesH[i];
+    edgesAndWeightsH[2*i+1] = edgesH[i+mh];
+    }}
+#endif
+  //vertices
+  {parallel_for(long i=0;i<nv;i++) {
+    uintT o = offsetsV[i];
+    uintT l = ((i==nv-1) ? mv : offsetsV[i+1])-offsetsV[i];
+      v[i].setOutDegree(l);
+#ifndef WEIGHTED
+      v[i].setOutNeighbors((uintE*)edgesV+o);
+#else
+      v[i].setOutNeighbors(edgesAndWeightsV+2*o);
+#endif
+    }}
+  //hyperedges
+  {parallel_for(long i=0;i<nh;i++) {
+    uintT o = offsetsH[i];
+    uintT l = ((i==nh-1) ? mh : offsetsH[i+1])-offsetsH[i];
+      h[i].setOutDegree(l);
+#ifndef WEIGHTED
+      h[i].setOutNeighbors((uintE*)edgesH+o);
+#else
+      h[i].setOutNeighbors(edgesAndWeightsH+2*o);
+#endif
+    }}
+
+  
+  if(!isSymmetric) {
+    //in-edges for vertices obtained from out-edges for hyperedges
+    uintT* tOffsets = newA(uintT,nv);
+    {parallel_for(long i=0;i<nv;i++) tOffsets[i] = INT_T_MAX;}
+#ifndef WEIGHTED
+    intPair* temp = newA(intPair,mh);
+#else
+    intTriple* temp = newA(intTriple,mh);
+#endif
+    {parallel_for(intT i=0;i<nh;i++){
+      uintT o = offsetsH[i];
+      for(uintT j=0;j<h[i].getOutDegree();j++){
+#ifndef WEIGHTED
+	temp[o+j] = make_pair(h[i].getOutNeighbor(j),i);
+#else
+	temp[o+j] = make_pair(h[i].getOutNeighbor(j),make_pair(i,h[i].getOutWeight(j)));
+#endif
+      }
+      }}
+    free(offsetsH);
+#ifndef WEIGHTED
+#ifndef LOWMEM
+    intSort::iSort(temp,mh,nv+1,getFirst<uintE>());
+#else
+    quickSort(temp,mh,pairFirstCmp<uintE>());
+#endif
+#else
+#ifndef LOWMEM
+    intSort::iSort(temp,mh,nv+1,getFirst<intPair>());
+#else
+    quickSort(temp,mh,pairFirstCmp<intPair>());
+#endif
+#endif
+    tOffsets[temp[0].first] = 0;
+#ifndef WEIGHTED
+    uintE* inEdgesV = newA(uintE,mh);
+    inEdgesV[0] = temp[0].second;
+#else
+    intE* inEdgesV = newA(intE,2*mh);
+    inEdgesV[0] = temp[0].second.first;
+    inEdgesV[1] = temp[0].second.second;
+#endif
+    {parallel_for(long i=1;i<mh;i++) {
+#ifndef WEIGHTED
+      inEdgesV[i] = temp[i].second;
+#else
+      inEdgesV[2*i] = temp[i].second.first;
+      inEdgesV[2*i+1] = temp[i].second.second;
+#endif
+      if(temp[i].first != temp[i-1].first) {
+	tOffsets[temp[i].first] = i;
+      }
+      }}
+    free(temp);
+    //fill in offsets of degree 0 vertices by taking closest non-zero
+    //offset to the right
+    sequence::scanIBack(tOffsets,tOffsets,nv,minF<uintT>(),(uintT)mh);
+    {parallel_for(long i=0;i<nv;i++){
+      uintT o = tOffsets[i];
+      uintT l = ((i == nv-1) ? mh : tOffsets[i+1])-tOffsets[i];
+      v[i].setInDegree(l);
+#ifndef WEIGHTED
+      v[i].setInNeighbors((uintE*)inEdgesV+o);
+#else
+      v[i].setInNeighbors((intE*)(inEdgesV+2*o));
+#endif
+      }}
+    free(tOffsets);
+
+    //in-edges for hyperedges obtained from out-edges for vertices
+    tOffsets = newA(uintT,nh);
+    {parallel_for(long i=0;i<nh;i++) tOffsets[i] = INT_T_MAX;}
+#ifndef WEIGHTED
+    temp = newA(intPair,mv);
+#else
+    temp = newA(intTriple,mv);
+#endif
+    {parallel_for(intT i=0;i<nv;i++){
+      uintT o = offsetsV[i];
+      for(uintT j=0;j<v[i].getOutDegree();j++){
+#ifndef WEIGHTED
+	temp[o+j] = make_pair(v[i].getOutNeighbor(j),i);
+#else
+	temp[o+j] = make_pair(v[i].getOutNeighbor(j),make_pair(i,v[i].getOutWeight(j)));
+#endif
+      }
+      }}
+    free(offsetsV);
+#ifndef WEIGHTED
+#ifndef LOWMEM
+    intSort::iSort(temp,mv,nh+1,getFirst<uintE>());
+#else
+    quickSort(temp,mv,pairFirstCmp<uintE>());
+#endif
+#else
+#ifndef LOWMEM
+    intSort::iSort(temp,mv,nh+1,getFirst<intPair>());
+#else
+    quickSort(temp,mv,pairFirstCmp<intPair>());
+#endif
+#endif
+    tOffsets[temp[0].first] = 0;
+#ifndef WEIGHTED
+    uintE* inEdgesH = newA(uintE,mv);
+    inEdgesH[0] = temp[0].second;
+#else
+    intE* inEdgesH = newA(intE,2*mv);
+    inEdgesH[0] = temp[0].second.first;
+    inEdgesH[1] = temp[0].second.second;
+#endif
+    {parallel_for(long i=1;i<mv;i++) {
+#ifndef WEIGHTED
+      inEdgesH[i] = temp[i].second;
+#else
+      inEdgesH[2*i] = temp[i].second.first;
+      inEdgesH[2*i+1] = temp[i].second.second;
+#endif
+      if(temp[i].first != temp[i-1].first) {
+	tOffsets[temp[i].first] = i;
+      }
+      }}
+    free(temp);
+    //fill in offsets of degree 0 vertices by taking closest non-zero
+    //offset to the right
+    sequence::scanIBack(tOffsets,tOffsets,nh,minF<uintT>(),(uintT)mv);
+    {parallel_for(long i=0;i<nh;i++){
+      uintT o = tOffsets[i];
+      uintT l = ((i == nh-1) ? mv : tOffsets[i+1])-tOffsets[i];
+      h[i].setInDegree(l);
+#ifndef WEIGHTED
+      h[i].setInNeighbors((uintE*)inEdgesH+o);
+#else
+      h[i].setInNeighbors((intE*)(inEdgesH+2*o));
+#endif
+      }}
+    free(tOffsets);
+
+#ifndef WEIGHTED
+    Uncompressed_Mem_Hypergraph<vertex>* mem =
+      new Uncompressed_Mem_Hypergraph<vertex>(v,h,nv,mv,nh,mh,edgesV,edgesH,inEdgesV,inEdgesH);
+    return hypergraph<vertex>(v,h,nv,mv,nh,mh,mem);
+#else
+    Uncompressed_Mem_Hypergraph<vertex>* mem =
+      new Uncompressed_Mem_Hypergraph<vertex>(v,h,nv,mv,nh,mh,edgesAndWeightsV,edgesAndWeightsH,inEdgesV,inEdgesH);
+    return hypergraph<vertex>(v,h,nv,mv,nh,mh,mem);
+#endif
+  }
+  free(offsetsV); free(offsetsH);
+#ifndef WEIGHTED
+  Uncompressed_Mem_Hypergraph<vertex>* mem =
+    new Uncompressed_Mem_Hypergraph<vertex>(v,h,nv,mv,nh,mh,edgesV,edgesH);
+  return hypergraph<vertex>(v,h,nv,mv,nh,mh,mem);
+#else
+  Uncompressed_Mem_Hypergraph<vertex>* mem =
+    new Uncompressed_Mem_Hypergraph<vertex>(v,h,nv,mv,nh,mh,edgesAndWeightsV,edgesAndWeightsH);
+  return hypergraph<vertex>(v,h,nv,mv,nh,mh,mem);
+#endif
+}
 
 template <class vertex>
 hypergraph<vertex> readHypergraph(char* iFile, bool compressed, bool symmetric, bool binary, bool mmap) {
