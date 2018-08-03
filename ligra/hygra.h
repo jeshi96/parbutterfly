@@ -234,7 +234,7 @@ template <class data, class vertex, class VS, class F>
     free(degrees); free(frontierVertices);
     return (fl & dense_forward) ?
       edgeMapDenseForward<data, vertex, VS, F>(G, nFrom, nTo, vs, f, fl) :
-      edgeMapDense<data, vertex, VS, F>(G, nTo, vs, f, fl);
+      edgeMapDense<data, vertex, VS, F>(fromV ? GA.H : GA.V, nTo, vs, f, fl);
   } else {
     auto vs_out =
       (should_output(fl) && fl & sparse_no_filter) ? // only call snof when we output
