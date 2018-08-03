@@ -28,62 +28,62 @@ using namespace std;
 //*****START FRAMEWORK*****
 
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapDense(hypergraph<vertex> GA, VS& vertexSubset, F &f, const flags fl) {
+  vertexSubsetData<data> edgeMapDense(vertex* G, long nTo, VS& vertexSubset, F &f, const flags fl) {
   using D = tuple<bool, data>;
-  long n = GA.nv;
-  vertex *G = GA.V;
+  //long n = GA.nv;
+  //vertex *G = GA.V;
   if (should_output(fl)) {
-    D* next = newA(D, n);
+    D* next = newA(D, nTo);
     auto g = get_emdense_gen<data>(next);
-    parallel_for (long v=0; v<n; v++) {
+    parallel_for (long v=0; v<nTo; v++) {
       std::get<0>(next[v]) = 0;
       if (f.cond(v)) {
         G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
       }
     }
-    return vertexSubsetData<data>(n, next);
+    return vertexSubsetData<data>(nTo, next);
   } else {
     auto g = get_emdense_nooutput_gen<data>();
-    parallel_for (long v=0; v<n; v++) {
+    parallel_for (long v=0; v<nTo; v++) {
       if (f.cond(v)) {
         G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
       }
     }
-    return vertexSubsetData<data>(n);
+    return vertexSubsetData<data>(nTo);
   }
 }
 
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapDenseForward(hypergraph<vertex> GA, VS& vertexSubset, F &f, const flags fl) {
+  vertexSubsetData<data> edgeMapDenseForward(vertex *G, long nFrom, long nTo, VS& vertexSubset, F &f, const flags fl) {
   using D = tuple<bool, data>;
-  long n = GA.nv;
-  vertex *G = GA.V;
+  //long n = GA.nv;
+  //vertex *G = GA.V;
   if (should_output(fl)) {
-    D* next = newA(D, n);
+    D* next = newA(D, nTo);
     auto g = get_emdense_forward_gen<data>(next);
-    parallel_for(long i=0;i<n;i++) { std::get<0>(next[i]) = 0; }
-    parallel_for (long i=0; i<n; i++) {
+    parallel_for(long i=0;i<nTo;i++) { std::get<0>(next[i]) = 0; }
+    parallel_for (long i=0; i<nFrom; i++) {
       if (vertexSubset.isIn(i)) {
         G[i].decodeOutNgh(i, f, g);
       }
     }
-    return vertexSubsetData<data>(n, next);
+    return vertexSubsetData<data>(nTo, next);
   } else {
     auto g = get_emdense_forward_nooutput_gen<data>();
-    parallel_for (long i=0; i<n; i++) {
+    parallel_for (long i=0; i<nFrom; i++) {
       if (vertexSubset.isIn(i)) {
         G[i].decodeOutNgh(i, f, g);
       }
     }
-    return vertexSubsetData<data>(n);
+    return vertexSubsetData<data>(nTo);
   }
 }
 
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapSparse(hypergraph<vertex>& GA, vertex* frontierVertices, VS& indices,
+  vertexSubsetData<data> edgeMapSparse(hypergraph<vertex>& GA, long nTo, vertex* frontierVertices, VS& indices,
         uintT* degrees, uintT m, F &f, const flags fl) {
   using S = tuple<uintE, data>;
-  long n = indices.n;
+  //long n = indices.n;
   S* outEdges;
   long outEdgeCount = 0;
 
@@ -109,28 +109,27 @@ vertexSubsetData<data> edgeMapSparse(hypergraph<vertex>& GA, vertex* frontierVer
   if (should_output(fl)) {
     S* nextIndices = newA(S, outEdgeCount);
     if (fl & remove_duplicates) {
-      if (GA.flagsV == NULL) {
-        GA.flagsV = newA(uintE, n);
-        parallel_for(long i=0;i<n;i++) { GA.flagsV[i]=UINT_E_MAX; }
+      if (GA.flags == NULL) {
+	GA.initFlags();
       }
       auto get_key = [&] (size_t i) -> uintE& { return std::get<0>(outEdges[i]); };
-      remDuplicates(get_key, GA.flagsV, outEdgeCount, n);
+      remDuplicates(get_key, GA.flags, outEdgeCount, nTo);
     }
     auto p = [] (tuple<uintE, data>& v) { return std::get<0>(v) != UINT_E_MAX; };
     size_t nextM = pbbs::filterf(outEdges, nextIndices, outEdgeCount, p);
     free(outEdges);
-    return vertexSubsetData<data>(n, nextM, nextIndices);
+    return vertexSubsetData<data>(nTo, nextM, nextIndices);
   } else {
-    return vertexSubsetData<data>(n);
+    return vertexSubsetData<data>(nTo);
   }
 }
 
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapSparse_no_filter(hypergraph<vertex>& GA,
+  vertexSubsetData<data> edgeMapSparse_no_filter(hypergraph<vertex>& GA, long nTo,
     vertex* frontierVertices, VS& indices, uintT* offsets, uintT m, F& f,
     const flags fl) {
   using S = tuple<uintE, data>;
-  long n = indices.n;
+  //long n = indices.n;
   long outEdgeCount = sequence::plusScan(offsets, offsets, m);
   S* outEdges = newA(S, outEdgeCount);
 
@@ -187,33 +186,37 @@ vertexSubsetData<data> edgeMapSparse_no_filter(hypergraph<vertex>& GA,
   free(outEdges); free(cts); free(block_offs);
 
   if (fl & remove_duplicates) {
-    if (GA.flagsV == NULL) {
-      GA.flagsV = newA(uintE, n);
-      parallel_for(size_t i=0;i<n;i++) { GA.flagsV[i]=UINT_E_MAX; }
+    if (GA.flags == NULL) {
+      GA.initFlags();
     }
     auto get_key = [&] (size_t i) -> uintE& { return std::get<0>(out[i]); };
-    remDuplicates(get_key, GA.flagsV, outSize, n);
+    remDuplicates(get_key, GA.flags, outSize, nTo);
     S* nextIndices = newA(S, outSize);
     auto p = [] (tuple<uintE, data>& v) { return std::get<0>(v) != UINT_E_MAX; };
     size_t nextM = pbbs::filterf(out, nextIndices, outSize, p);
     free(out);
-    return vertexSubsetData<data>(n, nextM, nextIndices);
+    return vertexSubsetData<data>(nTo, nextM, nextIndices);
   }
-  return vertexSubsetData<data>(n, outSize, out);
+  return vertexSubsetData<data>(nTo, outSize, out);
 }
 
+#define FROM_V 1
+#define FROM_H 0
 // Decides on sparse or dense base on number of nonzeros in the active vertices.
+// Takes as input a flag (fromV) to determine whether mapping from vertices (fromV=1) or hyperedges (fromV=0)
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapData(hypergraph<vertex>& GA, VS &vs, F f,
+  vertexSubsetData<data> edgeMapData(hypergraph<vertex>& GA, bool fromV, VS &vs, F f,
     intT threshold = -1, const flags& fl=0) {
-  long numVertices = GA.nv, numEdges = GA.mv, m = vs.numNonzeros();
+  //nFrom is num vertices on incoming side and nTo is num vertices on outgoing side
+  long nFrom = fromV ? GA.nv : GA.nh, nTo = fromV ? GA.nh : GA.nv;
+  long numEdges = fromV ? GA.mv : GA.nh, m = vs.numNonzeros();
   if(threshold == -1) threshold = numEdges/20; //default threshold
-  vertex *G = GA.V;
-  if (numVertices != vs.numRows()) {
+  vertex *G = fromV ? GA.V : GA.H;
+  if (nFrom != vs.numRows()) {
     cout << "edgeMap: Sizes Don't match" << endl;
     abort();
   }
-  if (vs.size() == 0) return vertexSubsetData<data>(numVertices);
+  if (vs.size() == 0) return vertexSubsetData<data>(nTo);
   vs.toSparse();
   uintT* degrees = newA(uintT, m);
   vertex* frontierVertices = newA(vertex,m);
@@ -225,18 +228,18 @@ vertexSubsetData<data> edgeMapData(hypergraph<vertex>& GA, VS &vs, F f,
   }}
 
   uintT outDegrees = sequence::plusReduce(degrees, m);
-  if (outDegrees == 0) return vertexSubsetData<data>(numVertices);
+  if (outDegrees == 0) return vertexSubsetData<data>(nTo);
   if (m + outDegrees > threshold) {
     vs.toDense();
     free(degrees); free(frontierVertices);
     return (fl & dense_forward) ?
-      edgeMapDenseForward<data, vertex, VS, F>(GA, vs, f, fl) :
-      edgeMapDense<data, vertex, VS, F>(GA, vs, f, fl);
+      edgeMapDenseForward<data, vertex, VS, F>(G, nFrom, nTo, vs, f, fl) :
+      edgeMapDense<data, vertex, VS, F>(G, nTo, vs, f, fl);
   } else {
     auto vs_out =
       (should_output(fl) && fl & sparse_no_filter) ? // only call snof when we output
-      edgeMapSparse_no_filter<data, vertex, VS, F>(GA, frontierVertices, vs, degrees, vs.numNonzeros(), f, fl) :
-      edgeMapSparse<data, vertex, VS, F>(GA, frontierVertices, vs, degrees, vs.numNonzeros(), f, fl);
+      edgeMapSparse_no_filter<data, vertex, VS, F>(GA, nTo, frontierVertices, vs, degrees, vs.numNonzeros(), f, fl) :
+      edgeMapSparse<data, vertex, VS, F>(GA, nTo, frontierVertices, vs, degrees, vs.numNonzeros(), f, fl);
     free(degrees); free(frontierVertices);
     return vs_out;
   }
@@ -244,7 +247,7 @@ vertexSubsetData<data> edgeMapData(hypergraph<vertex>& GA, VS &vs, F f,
 
 // Regular edgeMap, where no extra data is stored per vertex.
 template <class vertex, class VS, class F>
-vertexSubset edgeMap(hypergraph<vertex> GA, VS& vs, F f,
+  vertexSubset edgeMap(hypergraph<vertex> GA, bool fromV, VS& vs, F f,
     intT threshold = -1, const flags& fl=0) {
-  return edgeMapData<pbbs::empty>(GA, vs, f, threshold, fl);
+  return edgeMapData<pbbs::empty>(GA, fromV, vs, f, threshold, fl);
 }

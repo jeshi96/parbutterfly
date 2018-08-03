@@ -119,23 +119,25 @@ struct hypergraph {
   long nh;
   long mh;
   bool transposed;
-  uintE* flagsV;
-  uintE* flagsH;
+  uintE* flags;
   Deletable *D;
 
 hypergraph(vertex* _V, vertex* _H, long _nv, long _mv, long _nh, long _mh, Deletable* _D) : V(_V), H(_H), nv(_nv), mv(_mv), nh(_nh), mh(_mh),
-    D(_D), flagsV(NULL), flagsH(NULL), transposed(0) {}
+    D(_D), flags(NULL), transposed(0) {}
 
-hypergraph(vertex* _V, vertex* _H, long _nv, long _mv, long _nh, long _mh,  Deletable* _D, uintE* _flagsV, uintE* _flagsH) : V(_V), H(_H),
-    nv(_nv), mv(_mv), nh(_nh), mh(_mh), D(_D), flagsV(_flagsV), flagsH(_flagsH), transposed(0) {}
+hypergraph(vertex* _V, vertex* _H, long _nv, long _mv, long _nh, long _mh,  Deletable* _D, uintE* _flags) : V(_V), H(_H),
+    nv(_nv), mv(_mv), nh(_nh), mh(_mh), D(_D), flags(_flags), transposed(0) {}
 
   void del() {
-    if (flagsV != NULL) free(flagsV);
-    if (flagsH != NULL) free(flagsH); 
+    if (flags != NULL) free(flags);
     D->del();
     free(D);
   }
-
+  void initFlags() {
+    flags = newA(uintE,max(nv,nh));
+    parallel_for(long i=0;i<max(nv,nh);i++) flags[i]=UINT_E_MAX;
+  }
+  
   void transpose() {
     if ((sizeof(vertex) == sizeof(asymmetricVertex)) ||
         (sizeof(vertex) == sizeof(compressedAsymmetricVertex))) {
