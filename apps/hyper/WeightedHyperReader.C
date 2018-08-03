@@ -27,7 +27,7 @@
 
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
-  long n = GA.n_v;
+  long n = GA.nv;
   cout << "vertices\n";
   for(long i=0;i<n;i++) {
     vertex v = GA.V[i];
@@ -42,8 +42,8 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   }
 
   cout << "hyperedges\n";
-  long n_h = GA.n_h;
-  for(long i=0;i<n_h;i++) {
+  long nh = GA.nh;
+  for(long i=0;i<nh;i++) {
     vertex v = GA.H[i];
     cout << i << endl;
     for(long j=0;j<v.getOutDegree();j++)
