@@ -45,8 +45,8 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   //creates Parents array, initialized to all -1, except for start
   uintE* ParentsV = newA(uintE,nv);
   uintE* ParentsH = newA(uintE,nh);
-  parallel_for(long i=0;i<nv;i++) ParentsV[i] = UINT_E_MAX;
-  parallel_for(long i=0;i<nh;i++) ParentsH[i] = UINT_E_MAX;
+  {parallel_for(long i=0;i<nv;i++) ParentsV[i] = UINT_E_MAX;}
+  {parallel_for(long i=0;i<nh;i++) ParentsH[i] = UINT_E_MAX;}
   ParentsV[start] = start;
   vertexSubset Frontier(nv,start); //creates initial frontier
   while(1){ //loop until frontier is empty
