@@ -1103,7 +1103,7 @@ namespace benchIO {
       h[i].Neighbors = (intT*)(edgesH+o);
     }
 
-    return hypergraph<intT>(v,h,nv,mv,nh,mh,In);
+    return hypergraph<intT>(v,h,nv,mv,nh,mh,(intT*)In);
   }
 
   template <class intT>
