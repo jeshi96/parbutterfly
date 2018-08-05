@@ -47,25 +47,36 @@ struct BC_F {
   inline bool cond (uintE d) { return Visited[d] == 0; } //check if visited
 };
 
-struct BC_Back_F {
-  fType* DependenciesSrc, *DependenciesDest;
-  bool* Visited;
-  BC_Back_F(fType* _DependenciesSrc, fType* _DependenciesDest, bool* _Visited) : 
-    DependenciesSrc(_DependenciesSrc), DependenciesDest(_DependenciesDest), Visited(_Visited) {}
+struct BC_Back_VtoH {
+  fType* DependenciesV, *DependenciesH, *NumPathsV;
+  bool* VisitedH;
+  BC_Back_VtoH(fType* _DependenciesV, fType* _DependenciesH, fType * _NumPathsV, bool* _VisitedH) : 
+    DependenciesV(_DependenciesV), DependenciesH(_DependenciesH), NumPathsV(_NumPathsV), VisitedH(_VisitedH) {}
   inline bool update(uintE s, uintE d){ //Update function for backwards phase
-    fType oldV = DependenciesDest[d];
-    DependenciesDest[d] += DependenciesSrc[s];
-    return oldV == 0.0;
+    DependenciesH[d] += DependenciesV[s]/NumPathsV[s];
+    return 1;
   }
   inline bool updateAtomic (uintE s, uintE d) { //atomic Update
-    volatile fType oldV, newV;
-    do {
-      oldV = DependenciesDest[d];
-      newV = oldV + DependenciesSrc[s];
-    } while(!CAS(&DependenciesDest[d],oldV,newV));
-    return oldV == 0.0;
+    writeAdd(&DependenciesH[d],DependenciesV[s]/NumPathsV[s]);
+    return 1;	
   }
-  inline bool cond (uintE d) { return Visited[d] == 0; } //check if visited
+  inline bool cond (uintE d) { return VisitedH[d] == 0; } //check if visited
+};
+
+struct BC_Back_HtoV {
+  fType* DependenciesV, *DependenciesH, *NumPathsV;
+  bool* VisitedV;
+  BC_Back_HtoV(fType* _DependenciesV, fType* _DependenciesH, fType * _NumPathsV, bool* _VisitedV) : 
+    DependenciesV(_DependenciesV), DependenciesH(_DependenciesH), NumPathsV(_NumPathsV), VisitedV(_VisitedV) {}
+  inline bool update(uintE s, uintE d){ //Update function for backwards phase
+    DependenciesV[d] += DependenciesH[s]*NumPathsV[d];
+    return 1;
+  }
+  inline bool updateAtomic (uintE s, uintE d) { //atomic Update
+    writeAdd(&DependenciesV[d],DependenciesH[s]*NumPathsV[d]);
+    return 1;
+  }
+  inline bool cond (uintE d) { return VisitedV[d] == 0; } //check if visited
 };
 
 //vertex map function to mark visited vertexSubset
@@ -82,20 +93,12 @@ struct BC_Vertex_F {
 //and add to Dependencies score
 struct BC_Back_Vertex_F {
   bool* Visited;
-  fType* Dependencies, *inverseNumPaths;
-  BC_Back_Vertex_F(bool* _Visited, fType* _Dependencies, fType* _inverseNumPaths) : 
-    Visited(_Visited), Dependencies(_Dependencies), inverseNumPaths(_inverseNumPaths) {}
+  fType* Dependencies;
+  BC_Back_Vertex_F(bool* _Visited, fType* _Dependencies) : 
+    Visited(_Visited), Dependencies(_Dependencies) {}
   inline bool operator() (uintE i) {
     Visited[i] = 1;
-    Dependencies[i] += inverseNumPaths[i];
-    return 1; }};
-
-struct BC_Back_Hyperedge_F {
-  bool* Visited;
-  BC_Back_Hyperedge_F(bool* _Visited) :
-    Visited(_Visited) {}
-  inline bool operator() (uintE i) {
-    Visited[i] = 1;
+    Dependencies[i] += 1; //inverseNumPaths[i];
     return 1; }};
 
 template <class vertex>
@@ -120,26 +123,23 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   Levels.push_back(Frontier);
 
   long round = 0;
-  while(1){ //first phase
+  while(1){ //forward phase
     round++;
     vertexSubset output = edgeMap(GA, FROM_V, Frontier, BC_F(NumPathsV,NumPathsH,VisitedH));
     vertexMap(output, BC_Vertex_F(VisitedH)); //mark visited
     Levels.push_back(output); //save frontier onto Levels
     Frontier = output;
     if(Frontier.isEmpty()) break;
-    cout << round << " " << Frontier.numNonzeros() << endl;
+    //cout << round << " " << Frontier.numNonzeros() << endl;
     round++;
     output = edgeMap(GA, FROM_H, Frontier, BC_F(NumPathsH,NumPathsV,VisitedV));
     vertexMap(output, BC_Vertex_F(VisitedV)); //mark visited
     Levels.push_back(output); //save frontier onto Levels
     Frontier = output;
     if(Frontier.isEmpty()) break;
-    cout << round << " " << Frontier.numNonzeros() << endl;
+    //cout << round << " " << Frontier.numNonzeros() << endl;
   }
   free(NumPathsH);
-
-  long nz = 0; for(long i=0;i<nv;i++) nz += (NumPathsV[i] != 0); cout << "nz paths = " << nz << endl;
-  for(long i=0;i<100;i++) cout << NumPathsV[i] << " "; cout << endl;
 
   //first phase ended on hyperedges
   if((round % 2) == 0) Levels[round--].del();
@@ -150,45 +150,30 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   fType* DependenciesH = newA(fType,nh);
   {parallel_for(long i=0;i<nh;i++) DependenciesH[i] = 0.0;}
 
-  //invert numpaths
-  fType* inverseNumPathsV = NumPathsV;
-  {parallel_for(long i=0;i<nv;i++) inverseNumPathsV[i] = 1/inverseNumPathsV[i];}
-  // fType* inverseNumPathsH = NumPathsH;
-  // {parallel_for(long i=0;i<nh;i++) inverseNumPathsH[i] = 1/inverseNumPathsH[i];}
-
   //reuse Visited
   {parallel_for(long i=0;i<nv;i++) VisitedV[i] = 0;}
   {parallel_for(long i=0;i<nh;i++) VisitedH[i] = 0;}
-  cout << "starting backwards\n";
+  
   //tranpose graph
   GA.transpose();
-  for(long r=round-1;r>0;r=r-2) { //backwards phase
+  for(long r=round-1;r>0;r=r-2) { //backward phase
     Frontier = Levels[r];
-    cout << r << " " << Frontier.numNonzeros() << endl; 
-    vertexMap(Frontier,BC_Back_Vertex_F(VisitedV,DependenciesV,inverseNumPathsV));
+    //cout << r << " " << Frontier.numNonzeros() << endl;
+    //mark vertices as visited and add to dependency score
+    vertexMap(Frontier,BC_Back_Vertex_F(VisitedV,DependenciesV)); 
     //vertex dependencies to hyperedges
-    edgeMap(GA, FROM_V, Frontier, BC_Back_F(DependenciesV,DependenciesH,VisitedH), -1, no_output);
+    edgeMap(GA, FROM_V, Frontier, BC_Back_VtoH(DependenciesV,DependenciesH,NumPathsV,VisitedH), -1, no_output);
     Frontier.del();
-    //cout << "deleted\n";
     Frontier = Levels[r-1]; //gets frontier from Levels array
-    vertexMap(Frontier,BC_Back_Hyperedge_F(VisitedH)); //mark hyperedges as visited
-    cout << r-1 << " " << Frontier.numNonzeros() << endl; 
+    vertexMap(Frontier,BC_Vertex_F(VisitedH)); //mark hyperedges as visited
+    //cout << r-1 << " " << Frontier.numNonzeros() << endl; 
     //hyperedge dependencies to vertices
-    edgeMap(GA, FROM_H, Frontier, BC_Back_F(DependenciesH,DependenciesV,VisitedV), -1, no_output);
+    edgeMap(GA, FROM_H, Frontier, BC_Back_HtoV(DependenciesV,DependenciesH,NumPathsV,VisitedV), -1, no_output);
     Frontier.del();
   }
 
-  //first frontier
-  Frontier = Levels[0];
-  vertexMap(Frontier,BC_Back_Vertex_F(VisitedV,DependenciesV,inverseNumPathsV));
-  Frontier.del();
-
-  //Update dependencies scores
-  parallel_for(long i=0;i<nv;i++) {
-    DependenciesV[i]=(DependenciesV[i]-inverseNumPathsV[i])/inverseNumPathsV[i];
-  }
-  for(long i=0;i<100;i++) cout << DependenciesV[i] << " "; cout << endl; 
-  free(inverseNumPathsV);
+  Levels[0].del(); //first frontier
+  free(NumPathsV);
   free(VisitedV); free(VisitedH);
   free(DependenciesV); free(DependenciesH);
 }
