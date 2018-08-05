@@ -65,9 +65,25 @@ struct PR_Vertex_Reset {
   }
 };
 
+struct Entropy_F {
+  double* EntropyH, *pH, *pV;
+  Entropy_F(double* _EntropyH, double* _pH, double* _pV) : 
+    EntropyH(_EntropyH), pH(_pH), pV(_pV) {}
+  inline bool update(uintE s, uintE d){ //update function applies PageRank equation
+    EntropyH[d] += pV[s]*log2(pH[d]/pV[s]);
+    return 1;
+  }
+  inline bool updateAtomic (uintE s, uintE d) { //atomic Update
+    writeAdd(&EntropyH[d],pV[s]*log2(pH[d]/pV[s]));
+    return 1;
+  }
+  inline bool cond (intT d) { return cond_true(d); }};
+
+//pass -entropy flag to compute entropy of hyperedges at the end
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
   long maxIters = P.getOptionLongValue("-maxiters",100);
+  bool entropy = P.getOptionValue("-entropy");
   const intE nv = GA.nv, nh = GA.nh;
   const double damping = 0.85, epsilon = 0.0000001;
   
@@ -86,12 +102,19 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
 
   long iter = 0;
   while(iter++ < maxIters) {
-    //cout << "sum: " << sequence::plusReduce(pV,nv) << endl;
+    //cout << "V sum: " << sequence::plusReduce(pV,nv) << endl;
     vertexMap(FrontierH,PR_Vertex_Reset(pH));
     edgeMap(GA,FROM_V,FrontierV,PR_F<vertex>(pV,pH,GA.V),0,no_output);
     vertexMap(FrontierV,PR_Vertex_Reset(pV));
+    //cout << "H sum: " << sequence::plusReduce(pH,nh) << endl;
     edgeMap(GA,FROM_H,FrontierH,PR_F<vertex>(pH,pV,GA.H),0,no_output);
     vertexMap(FrontierV,PR_Vertex_F(pV,damping,nv));
   }
-    FrontierV.del(); FrontierH.del(); free(pH); free(pV); 
+  if(entropy) {
+    double* EntropyH = newA(double,nh);
+    {parallel_for(long i=0;i<nh;i++) EntropyH[i] = 0;}
+    edgeMap(GA,FROM_V,FrontierV,Entropy_F(EntropyH,pH,pV),0,no_output);
+    free(EntropyH);
+  }
+  FrontierV.del(); FrontierH.del(); free(pH); free(pV); 
 }
