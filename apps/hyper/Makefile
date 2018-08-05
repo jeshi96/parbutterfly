@@ -43,7 +43,7 @@ endif
 
 COMMON= ligra.h graph.h compressedVertex.h vertex.h utils.h IO.h parallel.h gettime.h index_map.h maybe.h sequence.h edgeMap_utils.h binary_search.h quickSort.h blockRadixSort.h transpose.h parseCommandLine.h byte.h byteRLE.h nibble.h byte-pd.h byteRLE-pd.h nibble-pd.h vertexSubset.h encoder.C decoder.C hypergraphIO.h hygra.h
 
-ALL= encoder decoder HyperReader WeightedHyperReader HyperBFS HyperCC HyperSSSP
+ALL= encoder decoder HyperReader WeightedHyperReader HyperBFS HyperCC HyperSSSP HyperPageRank
 
 all: $(ALL)
 
