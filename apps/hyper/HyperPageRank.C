@@ -21,21 +21,22 @@
 // LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-#include "ligra.h"
+#define HYPER 1
+#include "hygra.h"
 #include "math.h"
 
 template <class vertex>
 struct PR_F {
-  double* p_curr, *p_next;
+  double* pSrc, *pDest;
   vertex* V;
-  PR_F(double* _p_curr, double* _p_next, vertex* _V) : 
-    p_curr(_p_curr), p_next(_p_next), V(_V) {}
+  PR_F(double* _pSrc, double* _pDest, vertex* _V) : 
+    pSrc(_pSrc), pDest(_pDest), V(_V) {}
   inline bool update(uintE s, uintE d){ //update function applies PageRank equation
-    p_next[d] += p_curr[s]/V[s].getOutDegree();
+    pDest[d] += pSrc[s]/V[s].getOutDegree();
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d) { //atomic Update
-    writeAdd(&p_next[d],p_curr[s]/V[s].getOutDegree());
+    writeAdd(&pDest[d],pSrc[s]/V[s].getOutDegree());
     return 1;
   }
   inline bool cond (intT d) { return cond_true(d); }};
@@ -44,24 +45,22 @@ struct PR_F {
 struct PR_Vertex_F {
   double damping;
   double addedConstant;
-  double* p_curr;
-  double* p_next;
-  PR_Vertex_F(double* _p_curr, double* _p_next, double _damping, intE n) :
-    p_curr(_p_curr), p_next(_p_next), 
-    damping(_damping), addedConstant((1-_damping)*(1/(double)n)){}
+  double* pV;
+  PR_Vertex_F(double* _pV, double _damping, intE n) :
+    pV(_pV), damping(_damping), addedConstant((1-_damping)*(1/(double)n)){}
   inline bool operator () (uintE i) {
-    p_next[i] = damping*p_next[i] + addedConstant;
+    pV[i] = damping*pV[i] + addedConstant;
     return 1;
   }
 };
 
 //resets p
 struct PR_Vertex_Reset {
-  double* p_curr;
-  PR_Vertex_Reset(double* _p_curr) :
-    p_curr(_p_curr) {}
+  double* p;
+  PR_Vertex_Reset(double* _p) :
+    p(_p) {}
   inline bool operator () (uintE i) {
-    p_curr[i] = 0.0;
+    p[i] = 0.0;
     return 1;
   }
 };
@@ -69,32 +68,30 @@ struct PR_Vertex_Reset {
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
   long maxIters = P.getOptionLongValue("-maxiters",100);
-  const intE n = GA.n;
+  const intE nv = GA.nv, nh = GA.nh;
   const double damping = 0.85, epsilon = 0.0000001;
   
-  double one_over_n = 1/(double)n;
-  double* p_curr = newA(double,n);
-  {parallel_for(long i=0;i<n;i++) p_curr[i] = one_over_n;}
-  double* p_next = newA(double,n);
-  {parallel_for(long i=0;i<n;i++) p_next[i] = 0;} //0 if unchanged
-  bool* frontier = newA(bool,n);
-  {parallel_for(long i=0;i<n;i++) frontier[i] = 1;}
+  double one_over_nv = 1/(double)nv;
+  double* pV = newA(double,nv);
+  {parallel_for(long i=0;i<nv;i++) pV[i] = one_over_nv;}
+  double* pH = newA(double,nh);
+  //{parallel_for(long i=0;i<nh;i++) pH[i] = 0;} //0 if unchanged
+  bool* frontierV = newA(bool,nv);
+  {parallel_for(long i=0;i<nv;i++) frontierV[i] = 1;}
+  bool* frontierH = newA(bool,nh);
+  {parallel_for(long i=0;i<nh;i++) frontierH[i] = 1;}
 
-  vertexSubset Frontier(n,n,frontier);
-  
+  vertexSubset FrontierV(nv,nv,frontierV);
+  vertexSubset FrontierH(nh,nh,frontierH);  
+
   long iter = 0;
   while(iter++ < maxIters) {
-    edgeMap(GA,Frontier,PR_F<vertex>(p_curr,p_next,GA.V),0, no_output);
-    vertexMap(Frontier,PR_Vertex_F(p_curr,p_next,damping,n));
-    //compute L1-norm between p_curr and p_next
-    {parallel_for(long i=0;i<n;i++) {
-      p_curr[i] = fabs(p_curr[i]-p_next[i]);
-      }}
-    double L1_norm = sequence::plusReduce(p_curr,n);
-    if(L1_norm < epsilon) break;
-    //reset p_curr
-    vertexMap(Frontier,PR_Vertex_Reset(p_curr));
-    swap(p_curr,p_next);
+    //cout << "sum: " << sequence::plusReduce(pV,nv) << endl;
+    vertexMap(FrontierH,PR_Vertex_Reset(pH));
+    edgeMap(GA,FROM_V,FrontierV,PR_F<vertex>(pV,pH,GA.V),0,no_output);
+    vertexMap(FrontierV,PR_Vertex_Reset(pV));
+    edgeMap(GA,FROM_H,FrontierH,PR_F<vertex>(pH,pV,GA.H),0,no_output);
+    vertexMap(FrontierV,PR_Vertex_F(pV,damping,nv));
   }
-  Frontier.del(); free(p_curr); free(p_next); 
+    FrontierV.del(); FrontierH.del(); free(pH); free(pV); 
 }
