@@ -200,6 +200,57 @@ template <class data, class vertex, class VS, class F>
   return vertexSubsetData<data>(nTo, outSize, out);
 }
 
+// Packs out the adjacency lists of all vertex in vs. A neighbor, ngh, is kept
+// in the new adjacency list if p(ngh) is true.
+// Weighted graphs are not yet supported, but this should be easy to do.
+template <class vertex, class P>
+  vertexSubsetData<uintE> packEdges(vertex* G, vertexSubset& vs, P& p, const flags& fl=0) {
+  using S = tuple<uintE, uintE>;
+  vs.toSparse();
+  long m = vs.numNonzeros(); long n = vs.numRows();
+  if (vs.size() == 0) {
+    return vertexSubsetData<uintE>(n);
+  }
+  auto degrees = array_imap<uintT>(m);
+  granular_for(i, 0, m, (m > 2000), {
+    uintE v = vs.vtx(i);
+    degrees[i] = G[v].getOutDegree();
+  });
+  long outEdgeCount = pbbs::scan_add(degrees, degrees);
+  S* outV;
+  if (should_output(fl)) {
+    outV = newA(S, vs.size());
+  }
+
+  bool* bits = newA(bool, outEdgeCount);
+  uintE* tmp1 = newA(uintE, outEdgeCount);
+  uintE* tmp2 = newA(uintE, outEdgeCount);
+  if (should_output(fl)) {
+    parallel_for (size_t i=0; i<m; i++) {
+      uintE v = vs.vtx(i);
+      size_t offset = degrees[i];
+      auto bitsOff = &(bits[offset]); auto tmp1Off = &(tmp1[offset]);
+      auto tmp2Off = &(tmp2[offset]);
+      size_t ct = G[v].packOutNgh(v, p, bitsOff, tmp1Off, tmp2Off);
+      outV[i] = make_tuple(v, ct);
+    }
+  } else {
+    parallel_for (size_t i=0; i<m; i++) {
+      uintE v = vs.vtx(i);
+      size_t offset = degrees[i];
+      auto bitsOff = &(bits[offset]); auto tmp1Off = &(tmp1[offset]);
+      auto tmp2Off = &(tmp2[offset]);
+      size_t ct = G[v].packOutNgh(v, p, bitsOff, tmp1Off, tmp2Off);
+    }
+  }
+  free(bits); free(tmp1); free(tmp2);
+  if (should_output(fl)) {
+    return vertexSubsetData<uintE>(n, m, outV);
+  } else {
+    return vertexSubsetData<uintE>(n);
+  }
+}
+
 #define FROM_V 1
 #define FROM_H 0
 // Decides on sparse or dense base on number of nonzeros in the active vertices.

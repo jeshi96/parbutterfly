@@ -317,6 +317,14 @@ inline bool CAS(ET *ptr, ET oldv, ET newv) {
 }
 
 template <class ET>
+inline bool writeMax(ET *a, ET b) {
+  ET c; bool r=0;
+  do c = *a;
+  while (c < b && !(r=CAS(a,c,b)));
+  return r;
+}
+
+template <class ET>
 inline bool writeMin(ET *a, ET b) {
   ET c; bool r=0;
   do c = *a;
