@@ -137,7 +137,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     vertexMap(FrontierV,Random_Sample(flags,round,numVerticesProcessed,inverseProb));
     numVerticesProcessed += FrontierV.numNonzeros();
     vertexMap(FrontierH,Degrees_Reset(Degrees));
-    edgeMap(GA, FROM_H, FrontierH, MIS_Count_Neighbors(flags,Degrees,round), -1, no_output);
+    edgeMap(GA, FROM_H, FrontierH, MIS_Count_Neighbors(flags,Degrees,round), INT_T_MAX, no_output);
     vertexSubset fullEdges = vertexFilter(FrontierH, Check_Independence<vertex>(GA.H,Degrees));
     edgeMap(GA, FROM_H, fullEdges, MIS_Reset_Neighbors(flags,round), -1, no_output);
     cout << "round = " << round << " vertices = " << FrontierV.numNonzeros() << " hyperedges = " << FrontierH.numNonzeros() << " full edges = " << fullEdges.numNonzeros() << endl;
