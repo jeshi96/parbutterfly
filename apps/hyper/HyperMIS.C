@@ -61,10 +61,10 @@ struct MIS_Reset {
   inline bool cond (uintE i) {return flags[i] == round;}
 };
 
-struct MIS_Select {
+struct Random_Sample {
   uintT* flags;
   long offset, inverseProb, round;
-  MIS_Select(uintT* _flags, long _round, long _offset, long _inverseProb) :
+  Random_Sample(uintT* _flags, long _round, long _offset, long _inverseProb) :
     flags(_flags), round(_round), offset(_offset), inverseProb(_inverseProb) {}
   inline void operator () (uintE i) {
     if(hashInt((ulong)(i+offset)) % inverseProb == 0) flags[i] = round;    
@@ -80,20 +80,20 @@ struct MIS_Filter {
 };
 
 template <class vertex>
-struct Edge_Filter {
+struct Check_Independence {
   vertex* H;
-  intT* Degree;
-  Edge_Filter(vertex* _H, intT* _Degree) : H(_H), Degree(_Degree) {}
+  intT* Degrees;
+  Check_Independence(vertex* _H, intT* _Degrees) : H(_H), Degrees(_Degrees) {}
   inline bool operator () (uintE i) {
-    return Degree[i] == H[i].getOutDegree();
+    return Degrees[i] == H[i].getOutDegree();
   }
 };
 
 template <class vertex>
-struct Check_H {
+struct Filter_Hyperedges {
   vertex* H;
   uintT* flags;
-  Check_H(vertex* _H, uintT* _flags) : H(_H), flags(_flags) {}
+  Filter_Hyperedges(vertex* _H, uintT* _flags) : H(_H), flags(_flags) {}
   inline bool operator () (uintE i) {
     if(H[i].getOutDegree() == 0) return 0;
     else if(H[i].getOutDegree() == 1) {
@@ -103,15 +103,17 @@ struct Check_H {
   }
 };
 
-struct Degree_Reset {
-  intT* Degree;
-  Degree_Reset(intT* _Degree) : Degree(_Degree) {}
-  inline void operator () (uintE i) { Degree[i] = 0; }
+struct Degrees_Reset {
+  intT* Degrees;
+  Degrees_Reset(intT* _Degrees) : Degrees(_Degrees) {}
+  inline void operator () (uintE i) { Degrees[i] = 0; }
 };
 
 //Takes a symmetric graph as input; priority of a vertex is its ID.
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
+  timer t;
+  t.start();
   const intE nv = GA.nv, nh = GA.nh;
   uintT* flags = newA(uintT,nv); //undecided = 0, out = 1, in = anything else
   bool* frontier_data = newA(bool, nv);
@@ -120,31 +122,29 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     frontier_data[i] = 1;
   }}
   bool* frontierH = newA(bool, nh);
-  intT* Degree = newA(intT,nh);
+  intT* Degrees = newA(intT,nh);
   {parallel_for(long i=0;i<nh;i++) {frontierH[i] = 1; }}
   long round = 1;
-  long inverseProb = 2; //to be set
+  long inverseProb = 3; //to be set
   vertexSubset FrontierV(nv, frontier_data);
   vertexSubset FrontierH(nh, frontierH);
-
+  long numVerticesProcessed = 0;
   while (!FrontierV.isEmpty()) {
     round++;
-    vertexMap(FrontierV,MIS_Select(flags,round,round*nv,inverseProb));
-    vertexMap(FrontierH,Degree_Reset(Degree));
-    cout << round << " " << FrontierV.numNonzeros() << " " << FrontierH.numNonzeros() << endl;
-
-    edgeMap(GA, FROM_H, FrontierH, MIS_Check(flags,Degree), -1, no_output);
-    vertexSubset fullEdges = vertexFilter(FrontierH, Edge_Filter<vertex>(GA.H,Degree));
-    cout << "full edges = " << fullEdges.numNonzeros() << endl;
-
-    edgeMap(GA, FROM_H, fullEdges, MIS_Reset(flags,round), -1, no_output);
+    vertexMap(FrontierV,Random_Sample(flags,round,numVerticesProcessed,inverseProb));
+    numVerticesProcessed += FrontierV.numNonzeros();
+    vertexMap(FrontierH,Degrees_Reset(Degrees));
+    edgeMap(GA, FROM_H, FrontierH, MIS_Check(flags,Degrees), INT_T_MAX, no_output);
+    vertexSubset fullEdges = vertexFilter(FrontierH, Check_Independence<vertex>(GA.H,Degrees));
+    edgeMap(GA, FROM_H, fullEdges, MIS_Reset(flags,round), INT_T_MAX, no_output);
+    cout << "round = " << round << " vertices = " << FrontierV.numNonzeros() << " hyperedges = " << FrontierH.numNonzeros() << " full edges = " << fullEdges.numNonzeros() << endl;
+    
     fullEdges.del();
     //pack edges
+    FrontierH.toSparse();
     auto pack_predicate = [&] (const uintE& u, const uintE& ngh) { return flags[ngh] == 0; };
     packEdges(GA.H, FrontierH, pack_predicate, no_output);
-
-    vertexSubset remainingHyperedges = vertexFilter(FrontierH, Check_H<vertex>(GA.H,flags));
-
+    vertexSubset remainingHyperedges = vertexFilter(FrontierH, Filter_Hyperedges<vertex>(GA.H,flags));
     FrontierH.del();
     FrontierH = remainingHyperedges;
     vertexSubset output = vertexFilter(FrontierV, MIS_Filter(flags));
@@ -157,10 +157,11 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
       vertex h = GA.H[i];
       long inSet = 0;
       for(long j=0;j<h.getInDegree();j++) if(flags[h.getInNeighbor(j)] > 1) inSet++;
-      if(inSet == h.getInDegree()) {cout << "incorrect answer " << inSet << " " << h.getInDegree() << " " << h.getOutDegree() << endl; exit(0);}
+      if(inSet == h.getInDegree()) {cout << "incorrect answer " << i << " " << inSet << " " << h.getInDegree() << " " << h.getOutDegree() << endl; exit(0);}
     }}
 #endif
   
-  free(flags); free(Degree);
+  free(flags); free(Degrees);
   FrontierV.del(); FrontierH.del();
+  t.reportTotal("MIS time");
 }
