@@ -37,7 +37,6 @@
 #include "vertexSubset.h"
 #include "graph.h"
 #include "IO.h"
-#include "hypergraphIO.h"
 #include "parseCommandLine.h"
 #include "gettime.h"
 #include "index_map.h"
