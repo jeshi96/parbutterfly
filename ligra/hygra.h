@@ -343,12 +343,12 @@ template <class V, class vertex>
 struct EdgeMapHypergraph {
   using K = uintE; // keys are always uintE's (vertex-identifiers)
   using KV = tuple<K, V>;
-  hypergraph<vertex>& G;
+  hypergraph<vertex>& GA;
   pbbs::hist_table<K, V> ht;
 
-EdgeMapHypergraph(hypergraph<vertex>& _G, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : G(_G) {
+EdgeMapHypergraph(hypergraph<vertex>& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
     if (ht_size == numeric_limits<size_t>::max()) {
-      ht_size = G.mv/20;
+      ht_size = GA.mv/20;
     }
     ht = pbbs::hist_table<K, V>(_empty, ht_size);
   }
@@ -358,7 +358,8 @@ EdgeMapHypergraph(hypergraph<vertex>& _G, KV _empty, size_t ht_size=numeric_limi
   // apply_f: (uintE ngh, E reduced_val) -> O
   template <class O, class M, class Map, class Reduce, class Apply, class VS>
     inline vertexSubsetData<O> edgeMapReduce(VS& vs, bool fromV, Map& map_f, Reduce& reduce_f, Apply& apply_f) {
-    long nTo = fromV ? G.nh : G.nv;
+    long nTo = fromV ? GA.nh : GA.nv;
+    vertex* G = fromV ? GA.V : GA.H;
     size_t m = vs.size();
     if (m == 0) {
       return vertexSubsetData<O>(nTo);
