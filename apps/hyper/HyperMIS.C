@@ -30,12 +30,12 @@
 #define HYPER 1
 #include "hygra.h"
 
-#define CHECK 1
+//#define CHECK 1
 
-struct MIS_Check {
+struct MIS_Count_Neighbors {
   uintT* flags;
   intT* Degrees;
-  MIS_Check(uintT* _flags, intT* _Degrees) : flags(_flags), Degrees(_Degrees) {}
+  MIS_Count_Neighbors(uintT* _flags, intT* _Degrees) : flags(_flags), Degrees(_Degrees) {}
   inline bool update (uintE s, uintE d) {
     if(flags[d]>1) xadd(&Degrees[s],1);
     return 1;
@@ -46,10 +46,10 @@ struct MIS_Check {
   inline bool cond (uintE i) {return cond_true(i);}
 };
 
-struct MIS_Reset {
+struct MIS_Reset_Neighbors {
   uintT* flags;
   uintT round;
-  MIS_Reset(uintT* _flags, uintT _round) : flags(_flags), round(_round) {}
+  MIS_Reset_Neighbors(uintT* _flags, uintT _round) : flags(_flags), round(_round) {}
   inline bool update (uintE s, uintE d) {
     flags[d] = 0;
     return 1;
@@ -134,9 +134,9 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     vertexMap(FrontierV,Random_Sample(flags,round,numVerticesProcessed,inverseProb));
     numVerticesProcessed += FrontierV.numNonzeros();
     vertexMap(FrontierH,Degrees_Reset(Degrees));
-    edgeMap(GA, FROM_H, FrontierH, MIS_Check(flags,Degrees), INT_T_MAX, no_output);
+    edgeMap(GA, FROM_H, FrontierH, MIS_Count_Neighbors(flags,Degrees), INT_T_MAX, no_output);
     vertexSubset fullEdges = vertexFilter(FrontierH, Check_Independence<vertex>(GA.H,Degrees));
-    edgeMap(GA, FROM_H, fullEdges, MIS_Reset(flags,round), INT_T_MAX, no_output);
+    edgeMap(GA, FROM_H, fullEdges, MIS_Reset_Neighbors(flags,round), INT_T_MAX, no_output);
     cout << "round = " << round << " vertices = " << FrontierV.numNonzeros() << " hyperedges = " << FrontierH.numNonzeros() << " full edges = " << fullEdges.numNonzeros() << endl;
     
     fullEdges.del();
