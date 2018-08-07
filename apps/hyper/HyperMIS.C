@@ -35,15 +35,17 @@
 struct MIS_Count_Neighbors {
   uintT* flags;
   intT* Degrees;
-  MIS_Count_Neighbors(uintT* _flags, intT* _Degrees) : flags(_flags), Degrees(_Degrees) {}
+  long round;
+  MIS_Count_Neighbors(uintT* _flags, intT* _Degrees, long _round) : flags(_flags), Degrees(_Degrees), round(_round) {}
   inline bool update (uintE s, uintE d) {
-    if(flags[d]>1) xadd(&Degrees[s],1);
+    xadd(&Degrees[s],1);
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d) {
-    if(flags[d]>1) Degrees[s]++;
+    Degrees[s]++;
+    return 1;
   }
-  inline bool cond (uintE i) {return cond_true(i);}
+  inline bool cond (uintE i) {return flags[i] == round;}
 };
 
 struct MIS_Reset_Neighbors {
@@ -109,7 +111,8 @@ struct Degrees_Reset {
   inline void operator () (uintE i) { Degrees[i] = 0; }
 };
 
-//Takes a symmetric graph as input; priority of a vertex is its ID.
+//Takes a symmetric graph as input; make sure to pass "-s" flag.
+//Mutates graph, so only run once (pass "-rounds 0").
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
   timer t;
@@ -134,14 +137,12 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     vertexMap(FrontierV,Random_Sample(flags,round,numVerticesProcessed,inverseProb));
     numVerticesProcessed += FrontierV.numNonzeros();
     vertexMap(FrontierH,Degrees_Reset(Degrees));
-    edgeMap(GA, FROM_H, FrontierH, MIS_Count_Neighbors(flags,Degrees), INT_T_MAX, no_output);
+    edgeMap(GA, FROM_H, FrontierH, MIS_Count_Neighbors(flags,Degrees,round), -1, no_output);
     vertexSubset fullEdges = vertexFilter(FrontierH, Check_Independence<vertex>(GA.H,Degrees));
-    edgeMap(GA, FROM_H, fullEdges, MIS_Reset_Neighbors(flags,round), INT_T_MAX, no_output);
+    edgeMap(GA, FROM_H, fullEdges, MIS_Reset_Neighbors(flags,round), -1, no_output);
     cout << "round = " << round << " vertices = " << FrontierV.numNonzeros() << " hyperedges = " << FrontierH.numNonzeros() << " full edges = " << fullEdges.numNonzeros() << endl;
-    
     fullEdges.del();
     //pack edges
-    FrontierH.toSparse();
     auto pack_predicate = [&] (const uintE& u, const uintE& ngh) { return flags[ngh] == 0; };
     packEdges(GA.H, FrontierH, pack_predicate, no_output);
     vertexSubset remainingHyperedges = vertexFilter(FrontierH, Filter_Hyperedges<vertex>(GA.H,flags));
@@ -152,14 +153,14 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     FrontierV = output;
   }
 
-#ifdef CHECK
-  {for(long i=0;i<nh;i++) {
-      vertex h = GA.H[i];
-      long inSet = 0;
-      for(long j=0;j<h.getInDegree();j++) if(flags[h.getInNeighbor(j)] > 1) inSet++;
-      if(inSet == h.getInDegree()) {cout << "incorrect answer " << i << " " << inSet << " " << h.getInDegree() << " " << h.getOutDegree() << endl; exit(0);}
-    }}
-#endif
+// #ifdef CHECK
+//   {for(long i=0;i<nh;i++) {
+//       vertex h = GA.H[i];
+//       long inSet = 0;
+//       for(long j=0;j<h.getInDegree();j++) if(flags[h.getInNeighbor(j)] > 1) inSet++;
+//       if(inSet == h.getInDegree()) {cout << "incorrect answer " << i << " " << inSet << " " << h.getInDegree() << " " << h.getOutDegree() << endl; exit(0);}
+//     }}
+// #endif
   
   free(flags); free(Degrees);
   FrontierV.del(); FrontierH.del();
