@@ -300,7 +300,7 @@ template <class data, class vertex, class VS, class F>
 
 // Regular edgeMap, where no extra data is stored per vertex.
 template <class vertex, class VS, class F>
-  vertexSubset edgeMap(hypergraph<vertex> GA, bool fromV, VS& vs, F f,
+  vertexSubset edgeMap(hypergraph<vertex> &GA, bool fromV, VS& vs, F f,
     intT threshold = -1, const flags& fl=0) {
   return edgeMapData<pbbs::empty>(GA, fromV, vs, f, threshold, fl);
 }

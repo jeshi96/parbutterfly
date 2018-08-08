@@ -37,7 +37,7 @@ struct Init_Deg {
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    Degrees[s]+=H[d].getOutDegree()-1;
+    xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
     return 1;
   }
   inline bool cond (uintE d) { return cond_true(d); }
@@ -52,8 +52,7 @@ struct Update_Deg {
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    writeAdd(&Degrees[d],(long)-Counts[s]);
-    //xadd(&Degrees[d],(long)-Counts[s]);
+    xadd(&Degrees[d],(long)-Counts[s]);
     return 1;
   }
   inline bool cond (uintE d) { return Degrees[d] > 0; }
@@ -64,17 +63,10 @@ struct Count_Removed {
   intE* Counts;
   Count_Removed(intE* _Counts) : Counts(_Counts) {}
   inline bool update (uintE s, uintE d) {
-    Counts[d]++;
-    return Counts[d] == 1;
+    return Counts[d]++ == 0;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    volatile intE oldV, newV; 
-    do { 
-      oldV = Counts[d]; newV = oldV + 1;
-    } while(!CAS(&Counts[d],oldV,newV));
-    return oldV == 0.0;
-
-    //return xadd(&Counts[d],1) == 0;
+    return xadd(&Counts[d],1) == 0;
   }
   inline bool cond (uintE d) { return cond_true(d); }
 };
@@ -126,17 +118,14 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   intE* Counts = newA(intE,nh);
   {parallel_for(long i=0;i<nh;i++) Counts[i] = 0;}
   long largestCore = -1;
+  	
   for (long k = 1;;k++) {
     while (true) {
       vertexSubset toRemove 
 	= vertexFilter(Frontier,Deg_LessThan_K<vertex>(GA.V,Degrees,coreNumbers,k));
-      //cout << "k = " << k <<  " to remove " << toRemove.numNonzeros() << " frontier size = " << Frontier.numNonzeros() << endl;
       vertexSubset remaining = vertexFilter(Frontier,Deg_AtLeast_K<vertex>(GA.V,Degrees,k));
       Frontier.del();
       Frontier = remaining;
-      //cout << "num remaining vertices = " << remaining.numNonzeros() << endl;
-      //long maxDegree = sequence::reduce(Degrees,nv,maxF<long>());
-      //cout << "max remaining degree = " << maxDegree << endl;
       if (0 == toRemove.numNonzeros()) { // fixed point. found k-core
 	toRemove.del();
         break;

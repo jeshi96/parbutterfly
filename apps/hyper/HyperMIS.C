@@ -42,7 +42,7 @@ struct MIS_Count_Neighbors {
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d) {
-    Degrees[s]++;
+    xadd(&Degrees[s],1);
     return 1;
   }
   inline bool cond (uintE i) {return flags[i] == round;}

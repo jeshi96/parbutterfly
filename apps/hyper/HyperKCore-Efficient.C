@@ -9,12 +9,12 @@ struct Init_Deg {
   long* Degrees;
   vertex* H;
   Init_Deg(long* _Degrees, vertex* _H) : Degrees(_Degrees), H(_H) {}
-  inline bool update (uintE s, uintE d) { 
+  inline bool update (uintE s, uintE d) {
     xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    Degrees[s]+=H[d].getOutDegree()-1;
+    xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
     return 1;
   }
   inline bool cond (uintE d) { return cond_true(d); }
@@ -25,16 +25,10 @@ struct Count_Removed {
   intE* Counts;
   Count_Removed(intE* _Counts) : Counts(_Counts) {}
   inline bool update (uintE s, uintE d) {
-    Counts[d]++;
-    return Counts[d] == 1;
+    return Counts[d]++ == 0;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    volatile intE oldV, newV; 
-    do { 
-      oldV = Counts[d]; newV = oldV + 1;
-    } while(!CAS(&Counts[d],oldV,newV));
-    return oldV == 0.0;
-    //return xadd(&Counts[d],1) == 0;
+    return xadd(&Counts[d],1) == 0;
   }
   inline bool cond (uintE d) { return cond_true(d); }
 };
@@ -52,6 +46,7 @@ array_imap<long> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
   intE* Counts = newA(intE,nh);
   {parallel_for(long i=0;i<nh;i++) Counts[i] = 0;}
   edgeMap(GA,FROM_V,Frontier,Init_Deg<vertex>(Degrees,GA.H),INT_T_MAX,no_output);
+
   auto D = array_imap<long>(Degrees,nv);
   auto em = EdgeMapHypergraph<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.mv/5);
   auto b = make_buckets(nv, D, increasing, num_buckets);
@@ -81,7 +76,7 @@ array_imap<long> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
     auto reduce_f = [&] (const uintE& cur, const tuple<uintE, intE>& r) { return cur + std::get<1>(r); };
     vertexSubsetData<uintE> moved = em.template edgeMapReduce<uintE, intE>(FrontierH, FROM_H, map_f, reduce_f, apply_f);
     auto reset_counts = [&] (const uintE& i) { Counts[i] = 0; };
-    vertexMap(FrontierH,reset_counts);
+    vertexMap(FrontierH,reset_counts);    
     FrontierH.del();
     //vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(active, FROM_V, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());

@@ -271,7 +271,7 @@ vertexSubsetData<data> edgeMapData(graph<vertex>& GA, VS &vs, F f,
 
 // Regular edgeMap, where no extra data is stored per vertex.
 template <class vertex, class VS, class F>
-vertexSubset edgeMap(graph<vertex> GA, VS& vs, F f,
+vertexSubset edgeMap(graph<vertex>& GA, VS& vs, F f,
     intT threshold = -1, const flags& fl=0) {
   return edgeMapData<pbbs::empty>(GA, vs, f, threshold, fl);
 }
