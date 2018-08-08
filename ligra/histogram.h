@@ -90,7 +90,7 @@ namespace pbbs {
 
     int nworkers = getWorkers();
 
-    if (n < _hist_seq_threshold || nworkers == 1) {
+    if (0&&n < _hist_seq_threshold /*|| nworkers == 1*/) {
       auto r = seq_histogram_reduce<E, O>(get_elm, n, reduce_f, apply_f, ht);
       return r;
     }

@@ -30,6 +30,7 @@ array_imap<uintE> KCore(graph<vertex>& GA, size_t num_buckets=128) {
       return Maybe<tuple<uintE, uintE> >();
     };
 
+    cout << "k="<<k<<" numActive="<<active.numNonzeros()<<endl;
     vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(active, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());
     moved.del(); active.del();

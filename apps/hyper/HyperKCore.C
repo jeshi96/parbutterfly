@@ -52,7 +52,8 @@ struct Update_Deg {
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    xadd(&Degrees[d],(long)-Counts[s]);
+    writeAdd(&Degrees[d],(long)-Counts[s]);
+    //xadd(&Degrees[d],(long)-Counts[s]);
     return 1;
   }
   inline bool cond (uintE d) { return Degrees[d] > 0; }
@@ -62,11 +63,18 @@ struct Update_Deg {
 struct Count_Removed {
   intE* Counts;
   Count_Removed(intE* _Counts) : Counts(_Counts) {}
-  inline bool update (uintE s, uintE d) { 
-    return ++Counts[d] == 1;
+  inline bool update (uintE s, uintE d) {
+    Counts[d]++;
+    return Counts[d] == 1;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    return xadd(&Counts[d],1) == 1;
+    volatile intE oldV, newV; 
+    do { 
+      oldV = Counts[d]; newV = oldV + 1;
+    } while(!CAS(&Counts[d],oldV,newV));
+    return oldV == 0.0;
+
+    //return xadd(&Counts[d],1) == 0;
   }
   inline bool cond (uintE d) { return cond_true(d); }
 };
@@ -135,7 +143,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
       }
       else {
 	vertexSubset FrontierH = edgeMap(GA,FROM_V,toRemove,Count_Removed(Counts));
-	//cout << "FrontierH size = " << FrontierH.numNonzeros() << endl;
+	cout << "k="<<k-1<< " num active = " << toRemove.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
 	edgeMap(GA,FROM_H,FrontierH,Update_Deg(Degrees,Counts),-1,no_output);
 	auto reset_counts = [&] (const uintE& i) { Counts[i] = 0; };
 	vertexMap(FrontierH,reset_counts);
