@@ -26,6 +26,18 @@
 using namespace benchIO;
 using namespace std;
 
+struct edgeFirstCmp {
+  bool operator() (edge<uintT> e1, edge<uintT> e2) {
+    return e1.u < e2.u;
+  }
+};
+
+struct edgeSecondCmp {
+  bool operator() (edge<uintT> e1, edge<uintT> e2) {
+    return e1.v < e2.v;
+  }
+};
+
 template <class intT>
 hyperedgeArray<intT> hyperedgeRandom(long n, long m, long cardinality) {
   long numEdges = m*cardinality;
@@ -34,12 +46,22 @@ hyperedgeArray<intT> hyperedgeRandom(long n, long m, long cardinality) {
   {parallel_for(long i=0;i<m;i++) {
       for(long j=0;j<cardinality;j++) {
 	ulong offset = i*cardinality+j;
-	HE[offset] = edge<intT>(i,hashInt(offset));
-	VE[offset] = edge<intT>(hashInt(offset),i);
-      }}}
+	HE[offset] = edge<intT>(i,hashInt(offset)%n);
+	VE[offset] = edge<intT>(hashInt(offset)%n,i);
+      }
+      //need to remove duplicates
+      quickSort(VE+i*cardinality,cardinality,edgeFirstCmp());
+      quickSort(HE+i*cardinality,cardinality,edgeSecondCmp());
+      intT curr = HE[i*cardinality].v;
+      for(long j=1;j<cardinality;j++) {
+	ulong offset = i*cardinality+j;
+	if(HE[offset].v == curr) {HE[offset].v = -1; VE[offset].v = -1;}
+	else curr = HE[offset].v;
+      }
+      //filter out -1's
+    }}
   return hyperedgeArray<intT>(VE,HE,n,m,numEdges,numEdges);
 }
-
 
 //Generates a symmetrized hypergraph with n vertices and m hyperedges,
 //each hyperedge containing c vertices.
