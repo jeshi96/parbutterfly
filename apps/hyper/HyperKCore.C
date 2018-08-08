@@ -132,7 +132,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
       }
       else {
 	vertexSubset FrontierH = edgeMap(GA,FROM_V,toRemove,Count_Removed(Counts));
-	cout << "k="<<k-1<< " num active = " << toRemove.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
+	//cout << "k="<<k-1<< " num active = " << toRemove.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
 	edgeMap(GA,FROM_H,FrontierH,Update_Deg(Degrees,Counts),-1,no_output);
 	auto reset_counts = [&] (const uintE& i) { Counts[i] = 0; };
 	vertexMap(FrontierH,reset_counts);

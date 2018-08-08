@@ -71,7 +71,7 @@ array_imap<long> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
     };
 
     vertexSubset FrontierH = edgeMap(GA,FROM_V,active,Count_Removed(Counts));
-    cout << "k="<<k<< " num active = " << active.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
+    //cout << "k="<<k<< " num active = " << active.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
     auto map_f = [&] (const uintE& i, const uintE& j) { return Counts[i]; };
     auto reduce_f = [&] (const uintE& cur, const tuple<uintE, intE>& r) { return cur + std::get<1>(r); };
     vertexSubsetData<uintE> moved = em.template edgeMapReduce<uintE, intE>(FrontierH, FROM_H, map_f, reduce_f, apply_f);
