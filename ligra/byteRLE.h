@@ -99,7 +99,6 @@ template <class T>
     uintT i = 0;
     edgesRead = 1;
     while(1) {
-      if(edgesRead > degree) exit(0);
       if(edgesRead == degree) return;
       uchar header = edgeStart[i++];
       uint numbytes = 1 + (header & 0x3);
