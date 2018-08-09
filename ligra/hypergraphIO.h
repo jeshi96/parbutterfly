@@ -581,92 +581,137 @@ hypergraph<vertex> readHypergraph(char* iFile, bool compressed, bool symmetric, 
 }
 
 template <class vertex>
-hypergraph<vertex> readCompressedHypergraph(char* iFile, bool symmetric, bool mmap) {
-  //if(binary) return readGraphFromBinary<vertex>(iFile,symmetric);
-  //else
-  return readHypergraphFromFile<vertex>(iFile,symmetric,mmap);
+hypergraph<vertex> readCompressedHypergraph(char* fname, bool isSymmetric, bool mmap) {
+  char* s;
+  if (mmap) {
+    _seq<char> S = mmapStringFromFile(fname);
+    // Cannot mutate graph unless we copy.
+    char *bytes = newA(char, S.n);
+    parallel_for(size_t i=0; i<S.n; i++) {
+      bytes[i] = S.A[i];
+    }
+    if (munmap(S.A, S.n) == -1) {
+      perror("munmap");
+      exit(-1);
+    }
+    s = bytes;
+  } else {
+    ifstream in(fname,ifstream::in |ios::binary);
+    in.seekg(0,ios::end);
+    long size = in.tellg();
+    in.seekg(0);
+    cout << "size = " << size << endl;
+    s = (char*) malloc(size);
+    in.read(s,size);
+    in.close();
+  }
+
+  long* sizesV = (long*) s;
+  long nv = sizesV[0], mv = sizesV[1], totalSpaceV = sizesV[2];
+
+  cout << "nv = "<<nv<<" mv = "<<mv<<" totalSpaceV = "<<totalSpaceV<<endl;
+  cout << "reading file..."<<endl;
+
+  uintT* offsetsV = (uintT*) (s+3*sizeof(long));
+  long skip = 3*sizeof(long) + (nv+1)*sizeof(intT);
+  uintE* DegreesV = (uintE*) (s+skip);
+  skip+= nv*sizeof(intE);
+  uchar* edgesV = (uchar*)(s+skip);
+  skip += totalSpaceV;
+
+  uintT* inOffsetsV;
+  uchar* inEdgesV;
+  uintE* inDegreesV;
+  if(!isSymmetric){
+    uchar* inData = (uchar*)(s + skip);
+    sizesV = (long*) inData;
+    long inTotalSpace = sizesV[0];
+    cout << "inTotalSpace = "<<inTotalSpace<<endl;
+    skip += sizeof(long);
+    inOffsetsV = (uintT*) (s + skip);
+    skip += (nv+1)*sizeof(uintT);
+    inDegreesV = (uintE*)(s+skip);
+    skip += nv*sizeof(uintE);
+    inEdgesV = (uchar*)(s + skip);
+    skip += inTotalSpace;
+  } else {
+    inOffsetsV = offsetsV;
+    inEdgesV = edgesV;
+    inDegreesV = DegreesV;
+  }
+
+  long* sizesH = (long*) (s+skip);
+  long nh = sizesH[0], mh = sizesH[1], totalSpaceH = sizesH[2];
+
+  cout << "nh = "<<nh<<" mh = "<<mh<<" totalSpaceH = "<<totalSpaceH<<endl;
+  cout << "reading file..."<<endl;
+
+  skip += 3*sizeof(long);
+  uintT* offsetsH = (uintT*) (s+skip);
+  skip += (nh+1)*sizeof(intT);
+  uintE* DegreesH = (uintE*) (s+skip);
+  skip+= nh*sizeof(intE);
+  uchar* edgesH = (uchar*)(s+skip);
+  skip += totalSpaceH;
+  uintT* inOffsetsH;
+  uchar* inEdgesH;
+  uintE* inDegreesH;
+  if(!isSymmetric){
+    uchar* inData = (uchar*)(s + skip);
+    sizesH = (long*) inData;
+    long inTotalSpace = sizesH[0];
+    cout << "inTotalSpace = "<<inTotalSpace<<endl;
+    skip += sizeof(long);
+    inOffsetsH = (uintT*) (s + skip);
+    skip += (nh+1)*sizeof(uintT);
+    inDegreesH = (uintE*)(s+skip);
+    skip += nh*sizeof(uintE);
+    inEdgesH = (uchar*)(s + skip);
+  } else {
+    inOffsetsH = offsetsH;
+    inEdgesH = edgesH;
+    inDegreesH = DegreesH;
+  }
+
+
+  vertex *V = newA(vertex,nv);
+  parallel_for(long i=0;i<nv;i++) {
+    long o = offsetsV[i];
+    uintT d = DegreesV[i];
+    V[i].setOutDegree(d);
+    V[i].setOutNeighbors(edgesV+o);
+  }
+
+  if(sizeof(vertex) == sizeof(compressedAsymmetricVertex)){
+    parallel_for(long i=0;i<nv;i++) {
+      long o = inOffsetsV[i];
+      uintT d = inDegreesV[i];
+      V[i].setInDegree(d);
+      V[i].setInNeighbors(inEdgesV+o);
+    }
+  }
+
+  vertex *H = newA(vertex,nh);
+  parallel_for(long i=0;i<nh;i++) {
+    long o = offsetsH[i];
+    uintT d = DegreesH[i];
+    H[i].setOutDegree(d);
+    H[i].setOutNeighbors(edgesH+o);
+  }
+
+  if(sizeof(vertex) == sizeof(compressedAsymmetricVertex)){
+    parallel_for(long i=0;i<nh;i++) {
+      long o = inOffsetsH[i];
+      uintT d = inDegreesH[i];
+      H[i].setInDegree(d);
+      H[i].setInNeighbors(inEdgesH+o);
+    }
+  }
+
+  cout << "creating hypergraph..."<<endl;
+
+  Compressed_Memhypergraph<vertex>* mem =
+    new Compressed_Memhypergraph<vertex>(V,H,s);
+  hypergraph<vertex> G(V,H,nv,mv,nh,mh,mem);
+  return G;
 }
-
-/* template <class vertex> */
-/* graph<vertex> readCompressedGraph(char* fname, bool isSymmetric, bool mmap) { */
-/*   char* s; */
-/*   if (mmap) { */
-/*     _seq<char> S = mmapStringFromFile(fname); */
-/*     // Cannot mutate graph unless we copy. */
-/*     char *bytes = newA(char, S.n); */
-/*     parallel_for(size_t i=0; i<S.n; i++) { */
-/*       bytes[i] = S.A[i]; */
-/*     } */
-/*     if (munmap(S.A, S.n) == -1) { */
-/*       perror("munmap"); */
-/*       exit(-1); */
-/*     } */
-/*     s = bytes; */
-/*   } else { */
-/*     ifstream in(fname,ifstream::in |ios::binary); */
-/*     in.seekg(0,ios::end); */
-/*     long size = in.tellg(); */
-/*     in.seekg(0); */
-/*     cout << "size = " << size << endl; */
-/*     s = (char*) malloc(size); */
-/*     in.read(s,size); */
-/*     in.close(); */
-/*   } */
-
-/*   long* sizes = (long*) s; */
-/*   long n = sizes[0], m = sizes[1], totalSpace = sizes[2]; */
-
-/*   cout << "n = "<<n<<" m = "<<m<<" totalSpace = "<<totalSpace<<endl; */
-/*   cout << "reading file..."<<endl; */
-
-/*   uintT* offsets = (uintT*) (s+3*sizeof(long)); */
-/*   long skip = 3*sizeof(long) + (n+1)*sizeof(intT); */
-/*   uintE* Degrees = (uintE*) (s+skip); */
-/*   skip+= n*sizeof(intE); */
-/*   uchar* edges = (uchar*)(s+skip); */
-
-/*   uintT* inOffsets; */
-/*   uchar* inEdges; */
-/*   uintE* inDegrees; */
-/*   if(!isSymmetric){ */
-/*     skip += totalSpace; */
-/*     uchar* inData = (uchar*)(s + skip); */
-/*     sizes = (long*) inData; */
-/*     long inTotalSpace = sizes[0]; */
-/*     cout << "inTotalSpace = "<<inTotalSpace<<endl; */
-/*     skip += sizeof(long); */
-/*     inOffsets = (uintT*) (s + skip); */
-/*     skip += (n+1)*sizeof(uintT); */
-/*     inDegrees = (uintE*)(s+skip); */
-/*     skip += n*sizeof(uintE); */
-/*     inEdges = (uchar*)(s + skip); */
-/*   } else { */
-/*     inOffsets = offsets; */
-/*     inEdges = edges; */
-/*     inDegrees = Degrees; */
-/*   } */
-
-
-/*   vertex *V = newA(vertex,n); */
-/*   parallel_for(long i=0;i<n;i++) { */
-/*     long o = offsets[i]; */
-/*     uintT d = Degrees[i]; */
-/*     V[i].setOutDegree(d); */
-/*     V[i].setOutNeighbors(edges+o); */
-/*   } */
-
-/*   if(sizeof(vertex) == sizeof(compressedAsymmetricVertex)){ */
-/*     parallel_for(long i=0;i<n;i++) { */
-/*       long o = inOffsets[i]; */
-/*       uintT d = inDegrees[i]; */
-/*       V[i].setInDegree(d); */
-/*       V[i].setInNeighbors(inEdges+o); */
-/*     } */
-/*   } */
-
-/*   cout << "creating graph..."<<endl; */
-/*   Compressed_Mem<vertex>* mem = new Compressed_Mem<vertex>(V, s); */
-
-/*   graph<vertex> G(V,n,m,mem); */
-/*   return G; */
-/* } */

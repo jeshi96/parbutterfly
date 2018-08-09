@@ -478,8 +478,8 @@ int parallel_main(int argc, char* argv[]) {
       graph<compressedSymmetricVertex> G =
         readCompressedGraph<compressedSymmetricVertex>(iFile,symmetric,mmap); //symmetric graph
 #else
-      hypergraph<symmetricVertex> G =
-        readCompressedHypergraph<symmetricVertex>(iFile,symmetric,mmap); //symmetric graph
+      hypergraph<compressedSymmetricVertex> G =
+        readCompressedHypergraph<compressedSymmetricVertex>(iFile,symmetric,mmap); //symmetric graph
 #endif
       Compute(G,P);
       for(int r=0;r<rounds;r++) {
@@ -493,8 +493,8 @@ int parallel_main(int argc, char* argv[]) {
       graph<compressedAsymmetricVertex> G =
         readCompressedGraph<compressedAsymmetricVertex>(iFile,symmetric,mmap); //asymmetric graph
 #else
-      hypergraph<asymmetricVertex> G =
-        readCompressedHypergraph<asymmetricVertex>(iFile,symmetric,mmap); //asymmetric graph
+      hypergraph<compressedAsymmetricVertex> G =
+        readCompressedHypergraph<compressedAsymmetricVertex>(iFile,symmetric,mmap); //asymmetric graph
 #endif
       Compute(G,P);
       if(G.transposed) G.transpose();

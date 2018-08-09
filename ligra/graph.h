@@ -79,6 +79,23 @@ public:
 };
 
 template <class vertex>
+struct Compressed_Memhypergraph : public Deletable {
+public:
+  vertex* V;
+  vertex* H;
+  char* s;
+
+ Compressed_Memhypergraph(vertex* _V, vertex* _H, char* _s) :
+  V(_V), H(_H), s(_s) { }
+
+  void del() {
+    free(V);
+    free(H);
+    free(s);
+  }
+};
+
+template <class vertex>
 struct graph {
   vertex *V;
   long n;
