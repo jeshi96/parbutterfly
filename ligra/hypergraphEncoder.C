@@ -125,7 +125,6 @@ void encodeHypergraphFromFile(char* iFile, bool isSymmetric, char* outFile, bool
     strcat(hidxFile,hidx);
 
     ifstream in(configFile, ifstream::in);
-    long nv, mv, nh, mh;
     in >> nv; in >> mv; in >> nh; in >> mh;
     in.close();
 
@@ -146,13 +145,14 @@ void encodeHypergraphFromFile(char* iFile, bool isSymmetric, char* outFile, bool
     in3.seekg(0);
     if(nv != size/sizeof(intT)) { cout << "File size wrong\n"; abort(); }
 
-    char* t = (char *) malloc(size);
+    char* t = (char *) malloc(size+sizeof(intT));
     in3.read(t,size);
     in3.close();
     offsetsV = (uintT*) t;
+    offsetsV[nv] = mv;
 
-    offsetsVSaved = newA(uintT,nv);
-    parallel_for(long i=0;i<nv;i++) offsetsVSaved[i] = offsetsV[i];
+    offsetsVSaved = newA(uintT,nv+1);
+    parallel_for(long i=0;i<nv+1;i++) offsetsVSaved[i] = offsetsV[i];
 
     ifstream in4(hadjFile,ifstream::in | ios::binary); //stored as uints
     in4.seekg(0, ios::end);
@@ -171,10 +171,11 @@ void encodeHypergraphFromFile(char* iFile, bool isSymmetric, char* outFile, bool
     in5.seekg(0);
     if(nh != size/sizeof(intT)) { cout << "File size wrong\n"; abort(); }
 
-    char* t2 = (char *) malloc(size);
+    char* t2 = (char *) malloc(size+sizeof(intT));
     in5.read(t2,size);
     in5.close();
     offsetsH = (uintT*) t2;
+    offsetsH[nh] = mh;
 
   } else {
     _seq<char> S = readStringFromFile(iFile);
@@ -506,7 +507,6 @@ void encodeWeightedHypergraphFromFile(char* iFile, bool isSymmetric, char* outFi
     strcat(hidxFile,hidx);
 
     ifstream in(configFile, ifstream::in);
-    long nv, mv, nh, mh;
     in >> nv; in >> mv; in >> nh; in >> mh;
     in.close();
 
@@ -535,13 +535,14 @@ void encodeWeightedHypergraphFromFile(char* iFile, bool isSymmetric, char* outFi
     in3.seekg(0);
     if(nv != size/sizeof(intT)) { cout << "File size wrong\n"; abort(); }
 
-    char* t = (char *) malloc(size);
+    char* t = (char *) malloc(size+sizeof(intT));
     in3.read(t,size);
     in3.close();
     offsetsV = (uintT*) t;
+    offsetsV[nv] = mv;
 
-    offsetsVSaved = newA(uintT,nv);
-    parallel_for(long i=0;i<nv;i++) offsetsVSaved[i] = offsetsV[i];
+    offsetsVSaved = newA(uintT,nv+1);
+    parallel_for(long i=0;i<nv+1;i++) offsetsVSaved[i] = offsetsV[i];
 
     ifstream in4(hadjFile,ifstream::in | ios::binary); //stored as uints
     in4.seekg(0, ios::end);
@@ -567,11 +568,11 @@ void encodeWeightedHypergraphFromFile(char* iFile, bool isSymmetric, char* outFi
     in5.seekg(0);
     if(nh != size/sizeof(intT)) { cout << "File size wrong\n"; abort(); }
 
-    char* t2 = (char *) malloc(size);
+    char* t2 = (char *) malloc(size+sizeof(intT));
     in5.read(t2,size);
     in5.close();
     offsetsH = (uintT*) t2;
-
+    offsetsH[nh] = mh;
   } else {
     _seq<char> S = readStringFromFile(iFile);
     words W = stringToWords(S.A, S.n);
