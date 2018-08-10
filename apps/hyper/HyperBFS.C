@@ -50,13 +50,13 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   ParentsV[start] = start;
   vertexSubset Frontier(nv,start); //creates initial frontier
   while(1){ //loop until frontier is empty
-    //cout << Frontier.numNonzeros() << endl;
-    vertexSubset output = edgeMap(GA, FROM_V, Frontier, BFS_F(ParentsV));
+    cout << Frontier.numNonzeros() << endl;
+    vertexSubset output = edgeMap(GA, FROM_V, Frontier, BFS_F(ParentsH));
     Frontier.del();
     Frontier = output; //set new frontier
     if(Frontier.isEmpty()) break;
-    //cout << Frontier.numNonzeros() << endl;
-    output = edgeMap(GA, FROM_H, Frontier, BFS_F(ParentsH));    
+    cout << Frontier.numNonzeros() << endl;
+    output = edgeMap(GA, FROM_H, Frontier, BFS_F(ParentsV));
     Frontier.del();
     Frontier = output; //set new frontier
     if(Frontier.isEmpty()) break;

@@ -626,7 +626,7 @@ hypergraph<vertex> readCompressedHypergraph(char* fname, bool isSymmetric, bool 
     uchar* inData = (uchar*)(s + skip);
     sizesV = (long*) inData;
     long inTotalSpace = sizesV[0];
-    cout << "inTotalSpace = "<<inTotalSpace<<endl;
+    cout << "inTotalSpaceV = "<<inTotalSpace<<endl;
     skip += sizeof(long);
     inOffsetsV = (uintT*) (s + skip);
     skip += (nv+1)*sizeof(uintT);
@@ -660,7 +660,7 @@ hypergraph<vertex> readCompressedHypergraph(char* fname, bool isSymmetric, bool 
     uchar* inData = (uchar*)(s + skip);
     sizesH = (long*) inData;
     long inTotalSpace = sizesH[0];
-    cout << "inTotalSpace = "<<inTotalSpace<<endl;
+    cout << "inTotalSpaceH = "<<inTotalSpace<<endl;
     skip += sizeof(long);
     inOffsetsH = (uintT*) (s + skip);
     skip += (nh+1)*sizeof(uintT);

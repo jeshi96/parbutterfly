@@ -107,7 +107,8 @@ int parallel_main(int argc, char* argv[]) {
   char* iFile = P.getArgument(1);
   char* oFile = P.getArgument(0);
   bool weighted = P.getOptionValue("-w");
-  hypergraph<compressedSymmetricVertex> G = readCompressedHypergraph<compressedSymmetricVertex>(iFile,1,0);
+  bool sym = P.getOptionValue("-s");
+  hypergraph<compressedSymmetricVertex> G = readCompressedHypergraph<compressedSymmetricVertex>(iFile,sym,0);
   long nv = G.nv, mv = G.mv, nh = G.nh, mh = G.mh;
 
   ofstream out(oFile,ofstream::out);

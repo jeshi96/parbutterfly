@@ -435,7 +435,7 @@ void encodeHypergraphFromFile(char* iFile, bool isSymmetric, char* outFile, bool
     cout << "compressing in edgesH..."<<endl;
     uintE *ninEdgesH = parallelCompressEdges(inEdgesH, tOffsetsH, nh, mh, DegreesH);
     long tTotalSpaceH[0];
-    tTotalSpaceH[0] = tOffsetsH[nv];
+    tTotalSpaceH[0] = tOffsetsH[nh];
     free(inEdgesH);
     inEdgesH = ninEdgesH;
     cout << "writing in edgesH..."<<endl;
