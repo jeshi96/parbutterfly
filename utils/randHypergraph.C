@@ -58,7 +58,7 @@ hyperedgeArray<intT> hyperedgeRandom(long nv, long nh, long cardinality) {
       intT curr = HE[i*cardinality].v;
       for(long j=1;j<cardinality;j++) {
 	ulong offset = i*cardinality+j;
-	if(HE[offset].v == curr) {HE[offset].v = UINT_T_MAX; VE[offset].u = UINT_T_MAX;}
+	if(HE[offset].v == curr) {HE[offset].v = UINT_T_MAX; VE[offset].u = UINT_T_MAX; }
 	else curr = HE[offset].v;
       }
     }}

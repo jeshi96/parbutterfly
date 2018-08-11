@@ -81,11 +81,13 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
 #endif
 
   {parallel_for(long i=0; i < nv; i++) offsetsV[i] = atol(W.Strings[i + 5]);}
-    {parallel_for(long i=0; i<mv; i++) {
+  {parallel_for(long i=0; i<mv; i++) {
 #ifndef WEIGHTED
       edgesV[i] = atol(W.Strings[i+nv+5]);
+      if(edgesV[i] < 0 || edgesV[i] >= nh) { cout << "edgesV out of range: nh = " << nh << " edge = " << edgesV[i] << endl; exit(0); }
 #else
       edgesV[2*i] = atol(W.Strings[i+nv+5]);
+      if(edgesV[2*i] < 0 || edgesV[2*i] >= nh) { cout << "edgesV out of range: nh = " << nh << " edge = " << edgesV[2*i] << endl; exit(0); }
       edgesV[2*i+1] = atol(W.Strings[i+nv+mv+5]);
 #endif
     }}
@@ -98,8 +100,10 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
     {parallel_for(long i=0; i<mh; i++) {
 #ifndef WEIGHTED
       edgesH[i] = atol(W.Strings[i+nv+mv+nh+5]);
+      if(edgesH[i] < 0 || edgesH[i] >= nv) { cout << "edgesH out of range: nv = " << nv << " edge = " << edgesH[i] << endl; exit(0); }
 #else
       edgesH[2*i] = atol(W.Strings[i+nv+2*mv+nh+5]);
+      if(edgesH[2*i] < 0 || edgesH[2*i] >= nv) { cout << "edgesH out of range: nv = " << nv << " edge = " << edgesH[2*i] << endl; exit(0); }
       edgesH[2*i+1] = atol(W.Strings[i+nv+2*mv+nh+mh+5]);
 #endif
     }}

@@ -99,7 +99,6 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
 
   vertexSubset FrontierV(nv,nv,frontierV);
   vertexSubset FrontierH(nh,nh,frontierH);  
-
   long iter = 0;
   while(iter++ < maxIters) {
     //cout << "V sum: " << sequence::plusReduce(pV,nv) << endl;
@@ -116,5 +115,6 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     edgeMap(GA,FROM_V,FrontierV,Entropy_F(EntropyH,pH,pV),0,no_output);
     free(EntropyH);
   }
-  FrontierV.del(); FrontierH.del(); free(pH); free(pV); 
+  FrontierV.del(); FrontierH.del();
+  free(pH); free(pV); 
 }
