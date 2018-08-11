@@ -140,7 +140,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     edgeMap(GA, FROM_H, FrontierH, MIS_Count_Neighbors(flags,Degrees,round), INT_T_MAX, no_output);
     vertexSubset fullEdges = vertexFilter(FrontierH, Check_Independence<vertex>(GA.H,Degrees));
     edgeMap(GA, FROM_H, fullEdges, MIS_Reset_Neighbors(flags,round), -1, no_output);
-    cout << "round = " << round << " vertices = " << FrontierV.numNonzeros() << " hyperedges = " << FrontierH.numNonzeros() << " full edges = " << fullEdges.numNonzeros() << endl;
+    //cout << "round = " << round << " vertices = " << FrontierV.numNonzeros() << " hyperedges = " << FrontierH.numNonzeros() << " full edges = " << fullEdges.numNonzeros() << endl;
     fullEdges.del();
     //pack edges
     auto pack_predicate = [&] (const uintE& u, const uintE& ngh) { return flags[ngh] == 0; };
