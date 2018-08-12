@@ -26,7 +26,7 @@ def shellGetOutput(str) :
 
 dataDir = "../../inputs/"
 
-applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank"]
+applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank","HyperKCore-Efficient"]
 mis = ["HyperMIS"]
 #applications = ["HyperKCore","HyperKCore-Efficient"]
 wapplications = ["HyperSSSP"]
