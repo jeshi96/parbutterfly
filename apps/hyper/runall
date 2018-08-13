@@ -26,18 +26,14 @@ def shellGetOutput(str) :
 
 dataDir = "../../inputs/"
 
-applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank","HyperKCore-Efficient"]
+applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank"]#,"HyperKCore-Efficient"]
 mis = ["HyperMIS"]
 #applications = ["HyperKCore","HyperKCore-Efficient"]
 wapplications = ["HyperSSSP"]
 
 testfiles = [("com-orkut-ligra","0"),("com-friendster-ligra","0"),("rand-10M-10M-10","0"),("rand-100M-100M-10","0")]
 
-# testfiles = ["nlpkkt_bfsR_J"]
-# testfiles = ["soc-LiveJournal1.txt_J_psep_ordered","com-orkut.ungraph.txt_J_psep_ordered"]
-# testfiles = ["cit-Patents.txt_J_psep_ordered","com-lj.ungraph.txt_J_psep_ordered"]
-
-wtestfiles = [("com-orkut-ligra-wgh","0"),("com-friendster-ligra-wgh","0"),("com-dblp-ligra-wgh","0"),("rand-100M-100M-10-wgh","0")]
+wtestfiles = [("com-orkut-ligra-wgh","0"),("com-friendster-ligra-wgh","0"),("rand-10M-10M-10-wgh","0"),("rand-100M-100M-10-wgh","0")]
 
 processors = [1,2,4]+range(8,144+1,8)
 
@@ -45,8 +41,10 @@ processors = [1,2,4]+range(8,144+1,8)
 for app in applications:
   for testfile in testfiles :
     for p in processors :
-      if p == 1:
-        ss = "export CILK_NWORKERS=1; ./"+app+' -s -rounds 1 -maxiters 1 -r '+testfile[1]+' '+dataDir+testfile[0]
+      if p <= 4:
+        ss = "export CILK_NWORKERS="+`p`+"; ./"+app+' -s -rounds 1 -maxiters 1 -r '+testfile[1]+' '+dataDir+testfile[0]
+      elif p < 72:
+        ss = "export CILK_NWORKERS="+`p`+"; numactl -i all ./" + app + ' -s -rounds 1 -maxiters 1 -r '+testfile[1]+ ' ' + dataDir + testfile[0]
       else:
         ss = "export CILK_NWORKERS="+`p`+"; numactl -i all ./" + app + ' -s -maxiters 1 -r '+testfile[1]+ ' ' + dataDir + testfile[0]
       print app+" "+`p` + " " + testfile[0] 
@@ -74,6 +72,7 @@ for app in wapplications:
       print app+" "+`p` + " " + testfile[0]
       print shellGetOutput(ss)
       sys.stdout.flush()
+
 
 
 # for app in applications:

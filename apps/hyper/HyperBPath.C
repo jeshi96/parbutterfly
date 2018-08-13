@@ -32,7 +32,7 @@ struct BVisitH_F {
     else return 0;
   }
   inline bool updateAtomic (uintE s, uintE d){ //atomic version of Update
-    return (xadd(&ParentsH[d],1) == 0);
+    return (xadd(&ParentsH[d],1) == -1);
   }
   //cond function checks if vertex has been visited yet
   inline bool cond (uintE d) { return (ParentsH[d] < 0); } 
