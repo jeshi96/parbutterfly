@@ -70,11 +70,11 @@ struct Entropy_F {
   Entropy_F(double* _EntropyH, double* _pH, double* _pV) : 
     EntropyH(_EntropyH), pH(_pH), pV(_pV) {}
   inline bool update(uintE s, uintE d){ //update function applies PageRank equation
-    EntropyH[d] += pV[s]*log2(pH[d]/pV[s]);
+    EntropyH[d] += (pV[s]/pH[d])*log2(pH[d]/pV[s]);
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d) { //atomic Update
-    writeAdd(&EntropyH[d],pV[s]*log2(pH[d]/pV[s]));
+    writeAdd(&EntropyH[d],(pV[s]/pH[d])*log2(pH[d]/pV[s]));
     return 1;
   }
   inline bool cond (intT d) { return cond_true(d); }};
