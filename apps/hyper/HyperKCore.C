@@ -27,60 +27,57 @@
 #define HYPER 1
 #include "hygra.h"
 
-template <class vertex>
-struct Init_Deg {
-  long* Degrees;
-  vertex* H;
-  Init_Deg(long* _Degrees, vertex* _H) : Degrees(_Degrees), H(_H) {}
-  inline bool update (uintE s, uintE d) { 
-    xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
-    return 1;
+// template <class vertex>
+// struct Init_Deg {
+//   long* Degrees;
+//   vertex* H;
+//   Init_Deg(long* _Degrees, vertex* _H) : Degrees(_Degrees), H(_H) {}
+//   inline bool update (uintE s, uintE d) { 
+//     xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
+//     return 1;
+//   }
+//   inline bool updateAtomic (uintE s, uintE d){
+//     xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
+//     return 1;
+//   }
+//   inline bool cond (uintE d) { return cond_true(d); }
+// };
+
+struct Remove_Hyperedge {
+  uintE* Flags;
+  Remove_Hyperedge(uintE* _Flags) : Flags(_Flags) {}
+  inline bool update (uintE s, uintE d) {
+    return Flags[d] = 1;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
-    return 1;
+    return CAS(&Flags[d],(uintE)0,(uintE)1);
   }
-  inline bool cond (uintE d) { return cond_true(d); }
+  inline bool cond (uintE d) { return Flags[d] == 0; }
 };
 
 struct Update_Deg {
-  long* Degrees;
-  intE *Counts;
-  Update_Deg(long* _Degrees, intE* _Counts) : Degrees(_Degrees), Counts(_Counts) {}
+  intE* Degrees; uintE k;
+  Update_Deg(intE* _Degrees, uintE _k) : Degrees(_Degrees), k(_k) {}
   inline bool update (uintE s, uintE d) {
-    Degrees[d] -= Counts[s];
+    Degrees[d] -= 1;
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    xadd(&Degrees[d],(long)-Counts[s]);
+    xadd(&Degrees[d],-1);
     return 1;
   }
-  inline bool cond (uintE d) { return Degrees[d] > 0; }
-};
-
-//return true for neighbor the first time it's updated 
-struct Count_Removed {
-  intE* Counts;
-  Count_Removed(intE* _Counts) : Counts(_Counts) {}
-  inline bool update (uintE s, uintE d) {
-    return Counts[d]++ == 0;
-  }
-  inline bool updateAtomic (uintE s, uintE d){
-    return xadd(&Counts[d],1) == 0;
-  }
-  inline bool cond (uintE d) { return cond_true(d); }
+  inline bool cond (uintE d) { return Degrees[d] >= k; }
 };
 
 template<class vertex>
 struct Deg_LessThan_K {
   vertex* V;
-  uintE* coreNumbers;
-  long* Degrees;
+  intE* Degrees;
   uintE k;
-  Deg_LessThan_K(vertex* _V, long* _Degrees, uintE* _coreNumbers, uintE _k) : 
-    V(_V), k(_k), Degrees(_Degrees), coreNumbers(_coreNumbers) {}
+  Deg_LessThan_K(vertex* _V, intE* _Degrees, uintE _k) : 
+    V(_V), k(_k), Degrees(_Degrees) {}
   inline bool operator () (uintE i) {
-    if(Degrees[i] < k) { coreNumbers[i] = k-1; Degrees[i] = 0; return true; }
+    if(Degrees[i] < k) { Degrees[i] = k-1; return true; }
     else return false;
   }
 };
@@ -88,9 +85,9 @@ struct Deg_LessThan_K {
 template<class vertex>
 struct Deg_AtLeast_K {
   vertex* V;
-  long *Degrees;
+  intE *Degrees;
   uintE k;
-  Deg_AtLeast_K(vertex* _V, long* _Degrees, uintE _k) : 
+  Deg_AtLeast_K(vertex* _V, intE* _Degrees, uintE _k) : 
     V(_V), k(_k), Degrees(_Degrees) {}
   inline bool operator () (uintE i) {
     return Degrees[i] >= k;
@@ -108,21 +105,23 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   bool* active = newA(bool,nv);
   {parallel_for(long i=0;i<nv;i++) active[i] = 1;}
   vertexSubset Frontier(nv, nv, active);
-  uintE* coreNumbers = newA(uintE,nv);
-  long* Degrees = newA(long,nv);
+  //uintE* coreNumbers = newA(uintE,nv);
+  intE* Degrees = newA(intE,nv);
   {parallel_for(long i=0;i<nv;i++) {
-      coreNumbers[i] = 0;
-      Degrees[i] = 0;
+      //coreNumbers[i] = 0;
+      Degrees[i] = GA.V[i].getOutDegree();
     }}
-  edgeMap(GA,FROM_V,Frontier,Init_Deg<vertex>(Degrees,GA.H),INT_T_MAX,no_output);
-  intE* Counts = newA(intE,nh);
-  {parallel_for(long i=0;i<nh;i++) Counts[i] = 0;}
+  //edgeMap(GA,FROM_V,Frontier,Init_Deg<vertex>(Degrees,GA.H),INT_T_MAX,no_output);
+  uintE* Flags = newA(uintE,nh);
+  {parallel_for(long i=0;i<nh;i++) Flags[i] = 0;}
   long largestCore = -1;
-  	
+
+  auto em = EdgeMapHypergraph<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.mv/5);
+
   for (long k = 1;;k++) {
     while (true) {
       vertexSubset toRemove 
-	= vertexFilter(Frontier,Deg_LessThan_K<vertex>(GA.V,Degrees,coreNumbers,k));
+	= vertexFilter(Frontier,Deg_LessThan_K<vertex>(GA.V,Degrees,k));
       vertexSubset remaining = vertexFilter(Frontier,Deg_AtLeast_K<vertex>(GA.V,Degrees,k));
       Frontier.del();
       Frontier = remaining;
@@ -131,11 +130,27 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
         break;
       }
       else {
-	vertexSubset FrontierH = edgeMap(GA,FROM_V,toRemove,Count_Removed(Counts));
+	vertexSubset FrontierH = edgeMap(GA,FROM_V,toRemove,Remove_Hyperedge(Flags));
 	//cout << "k="<<k-1<< " num active = " << toRemove.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
-	edgeMap(GA,FROM_H,FrontierH,Update_Deg(Degrees,Counts),-1,no_output);
-	auto reset_counts = [&] (const uintE& i) { Counts[i] = 0; };
-	vertexMap(FrontierH,reset_counts);
+
+	auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
+	  uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
+	  uintE deg = Degrees[v];
+	  if (deg > k-1) {
+	    uintE new_deg = max(deg - edgesRemoved, (uintE) k-1);
+	    Degrees[v] = new_deg;
+	    //uintE bkt = b.get_bucket(deg, new_deg);
+	    return wrap(v, 0);
+	  }
+	  return Maybe<tuple<uintE, uintE> >();
+	};
+
+	//vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(FrontierH, FROM_H, apply_f);
+	//moved.del();
+	edgeMap(GA,FROM_H,FrontierH,Update_Deg(Degrees,k),-1,no_output);
+
+	//auto reset_counts = [&] (const uintE& i) { Counts[i] = 0; };
+	//vertexMap(FrontierH,reset_counts);
 	FrontierH.del();
 	toRemove.del();
       }
@@ -143,5 +158,6 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     if(Frontier.numNonzeros() == 0) { largestCore = k-1; break; }
   }
   cout << "largestCore was " << largestCore << endl;
-  Frontier.del(); free(coreNumbers); free(Degrees); free(Counts);
+  //cout << "### Max core: " << sequence::reduce(Degrees,GA.nv,maxF<uintE>()) << endl;
+  Frontier.del(); free(Degrees); free(Flags);
 }

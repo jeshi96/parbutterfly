@@ -4,50 +4,50 @@
 #include "bucket.h"
 #include "edgeMapReduce.h"
 
-template <class vertex>
-struct Init_Deg {
-  long* Degrees;
-  vertex* H;
-  Init_Deg(long* _Degrees, vertex* _H) : Degrees(_Degrees), H(_H) {}
-  inline bool update (uintE s, uintE d) {
-    xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
-    return 1;
-  }
-  inline bool updateAtomic (uintE s, uintE d){
-    xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
-    return 1;
-  }
-  inline bool cond (uintE d) { return cond_true(d); }
-};
+// template <class vertex>
+// struct Init_Deg {
+//   long* Degrees;
+//   vertex* H;
+//   Init_Deg(long* _Degrees, vertex* _H) : Degrees(_Degrees), H(_H) {}
+//   inline bool update (uintE s, uintE d) {
+//     xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
+//     return 1;
+//   }
+//   inline bool updateAtomic (uintE s, uintE d){
+//     xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
+//     return 1;
+//   }
+//   inline bool cond (uintE d) { return cond_true(d); }
+// };
 
 //return true for neighbor the first time it's updated 
-struct Count_Removed {
-  intE* Counts;
-  Count_Removed(intE* _Counts) : Counts(_Counts) {}
+struct Remove_Hyperedge {
+  uintE* Flags;
+  Remove_Hyperedge(uintE* _Flags) : Flags(_Flags) {}
   inline bool update (uintE s, uintE d) {
-    return Counts[d]++ == 0;
+    return Flags[d] = 1;
   }
   inline bool updateAtomic (uintE s, uintE d){
-    return xadd(&Counts[d],1) == 0;
+    return CAS(&Flags[d],(uintE)0,(uintE)1);
   }
-  inline bool cond (uintE d) { return cond_true(d); }
+  inline bool cond (uintE d) { return Flags[d] == 0; }
 };
 
 template <class vertex>
-array_imap<long> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
+array_imap<uintE> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
   const size_t nv = GA.nv, mv = GA.mv, nh = GA.nh;
   bool* active = newA(bool,nv);
   {parallel_for(long i=0;i<nv;i++) active[i] = 1;}
   vertexSubset Frontier(nv, nv, active);
-  long* Degrees = newA(long,nv);
+  uintE* Degrees = newA(uintE,nv);
   {parallel_for(long i=0;i<nv;i++) {
-      Degrees[i] = 0;
+      Degrees[i] = GA.V[i].getOutDegree();
     }}
-  intE* Counts = newA(intE,nh);
-  {parallel_for(long i=0;i<nh;i++) Counts[i] = 0;}
-  edgeMap(GA,FROM_V,Frontier,Init_Deg<vertex>(Degrees,GA.H),INT_T_MAX,no_output);
+  uintE* Flags = newA(uintE,nh);
+  {parallel_for(long i=0;i<nh;i++) Flags[i] = 0;}
+  //edgeMap(GA,FROM_V,Frontier,Init_Deg<vertex>(Degrees,GA.H),INT_T_MAX,no_output);
+  auto D = array_imap<uintE>(GA.nv, [&] (size_t i) { return GA.V[i].getOutDegree(); });
 
-  auto D = array_imap<long>(Degrees,nv);
   auto em = EdgeMapHypergraph<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.mv/5);
   auto b = make_buckets(nv, D, increasing, num_buckets);
 
@@ -55,14 +55,14 @@ array_imap<long> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
   while (finished != nv) {
     auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
-    long k = bkt.id;
+    uintE k = bkt.id;
     finished += active.size();
-
+    
     auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
       uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
-      long deg = D.s[v];
+      uintE deg = D.s[v];
       if (deg > k) {
-        long new_deg = max(deg - edgesRemoved, k);
+        uintE new_deg = max(deg - edgesRemoved, k);
         D.s[v] = new_deg;
         uintE bkt = b.get_bucket(deg, new_deg);
         return wrap(v, bkt);
@@ -70,15 +70,15 @@ array_imap<long> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
       return Maybe<tuple<uintE, uintE> >();
     };
 
-    vertexSubset FrontierH = edgeMap(GA,FROM_V,active,Count_Removed(Counts));
+    vertexSubset FrontierH = edgeMap(GA,FROM_V,active,Remove_Hyperedge(Flags));
     //cout << "k="<<k<< " num active = " << active.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
-    auto map_f = [&] (const uintE& i, const uintE& j) { return Counts[i]; };
-    auto reduce_f = [&] (const uintE& cur, const tuple<uintE, intE>& r) { return cur + std::get<1>(r); };
-    vertexSubsetData<uintE> moved = em.template edgeMapReduce<uintE, intE>(FrontierH, FROM_H, map_f, reduce_f, apply_f);
-    auto reset_counts = [&] (const uintE& i) { Counts[i] = 0; };
-    vertexMap(FrontierH,reset_counts);    
-    FrontierH.del();
-    //vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(active, FROM_V, apply_f);
+    //auto map_f = [&] (const uintE& i, const uintE& j) { return Flags[i]; };
+    //auto reduce_f = [&] (const uintE& cur, const tuple<uintE, intE>& r) { return cur + std::get<1>(r); };
+    vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(FrontierH, FROM_H, apply_f);
+    //auto reset_counts = [&] (const uintE& i) { Counts[i] = 0; };
+    //vertexMap(FrontierH,reset_counts);    
+    //FrontierH.del();
+    
     b.update_buckets(moved.get_fn_repr(), moved.size());
     moved.del(); active.del();
   }
@@ -98,5 +98,5 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   cout << "### Buckets: " << num_buckets << endl;
 
   auto cores = KCore(GA, num_buckets);
-  cout << "### Max core: " << sequence::reduce(cores.s,GA.nv,maxF<long>()) << endl;
+  //cout << "### Max core: " << sequence::reduce(cores.s,GA.nv,maxF<uintE>()) << endl;
 }

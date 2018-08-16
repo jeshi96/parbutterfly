@@ -28,7 +28,7 @@ dataDir = "../../inputs/"
 
 #applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank"]#,"HyperKCore-Efficient"]
 #mis = ["HyperMIS"]
-applications = ["HyperKCore"]
+applications = ["HyperKCore-Efficient","HyperKCore"]
 wapplications = []
 
 testfiles = [("com-orkut-ligra","0"),("com-friendster-ligra","0"),("rand-10M-10M-10","0"),("rand-100M-100M-10","0")]
@@ -36,7 +36,6 @@ testfiles = [("com-orkut-ligra","0"),("com-friendster-ligra","0"),("rand-10M-10M
 wtestfiles = [("com-orkut-ligra-wgh","0"),("com-friendster-ligra-wgh","0"),("rand-10M-10M-10-wgh","0"),("rand-100M-100M-10-wgh","0")]
 
 processors = [1,2,4]+range(8,144+1,8)
-processors = [1,72,144]
 
 #os.system("make clean; make -j16; ~/hog2 250")
 for app in applications:
