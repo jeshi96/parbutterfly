@@ -38,11 +38,7 @@ struct BC_F {
     return oldV == 0.0;
   }
   inline bool updateAtomic (uintE s, uintE d) { //atomic Update, basically an add
-    volatile fType oldV, newV; 
-    do { 
-      oldV = NumPathsDest[d]; newV = oldV + NumPathsSrc[s];
-    } while(!CAS(&NumPathsDest[d],oldV,newV));
-    return oldV == 0.0;
+    return xadd(&NumPathsDest[d],NumPathsSrc[s]) == 0;
   }
   inline bool cond (uintE d) { return Visited[d] == 0; } //check if visited
 };
@@ -57,7 +53,7 @@ struct BC_Back_VtoH {
     return 1;
   }
   inline bool updateAtomic (uintE s, uintE d) { //atomic Update
-    writeAdd(&DependenciesH[d],DependenciesV[s]/NumPathsV[s]);
+    xadd(&DependenciesH[d],DependenciesV[s]/NumPathsV[s]);
     return 1;	
   }
   inline bool cond (uintE d) { return VisitedH[d] == 0; } //check if visited
@@ -121,7 +117,6 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
  
   vector<vertexSubset> Levels;
   Levels.push_back(Frontier);
-
   long round = 0;
   while(1){ //forward phase
     round++;
@@ -130,14 +125,14 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     Levels.push_back(output); //save frontier onto Levels
     Frontier = output;
     if(Frontier.isEmpty()) break;
-    //cout << round << " " << Frontier.numNonzeros() << endl;
+    cout << round << " " << Frontier.numNonzeros() << endl;
     round++;
     output = edgeMap(GA, FROM_H, Frontier, BC_F(NumPathsH,NumPathsV,VisitedV));
     vertexMap(output, BC_Vertex_F(VisitedV)); //mark visited
     Levels.push_back(output); //save frontier onto Levels
     Frontier = output;
     if(Frontier.isEmpty()) break;
-    //cout << round << " " << Frontier.numNonzeros() << endl;
+    cout << round << " " << Frontier.numNonzeros() << endl;
   }
   free(NumPathsH);
 

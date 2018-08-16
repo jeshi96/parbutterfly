@@ -79,6 +79,7 @@ struct Entropy_F {
   }
   inline bool cond (intT d) { return cond_true(d); }};
 
+//assumes connected graph, otherwise PageRank mass will be lost
 //pass -entropy flag to compute entropy of hyperedges at the end
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
