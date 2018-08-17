@@ -28,12 +28,11 @@ dataDir = "../../inputs/"
 
 applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank","HyperKCore-Efficient","HyperKCore"]
 mis = ["HyperMIS"]
-
 #applications = ["HyperKCore","HyperKCore-Efficient"]
 wapplications = ["HyperSSSP"]
 
-testfiles = [("zipf-10M-10M-10-2","0"),("zipf-100M-100M-10-2","0")]
-wtestfiles = [("zipf-10M-10M-10-2-wgh","0"),("zipf-100M-100M-10-2-wgh","0")]
+testfiles = [("rand-10M-10M-100","0")]
+wtestfiles = [("rand-10M-10M-100-wgh","0")]
 
 processors = [1,2,4]+range(8,144+1,8)
 
