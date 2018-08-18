@@ -80,13 +80,13 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
       break;
     }
     //cout << Frontier.numNonzeros() << endl;
-    vertexSubset output = edgeMap(GA, FROM_V, Frontier, BF_F(ShortestPathLenV,ShortestPathLenH,Visited), GA.mv/20, dense_forward);
+    vertexSubset output = edgeMap(GA, FROM_V, Frontier, BF_F(ShortestPathLenV,ShortestPathLenH,Visited));
     vertexMap(output,BF_Vertex_F(Visited));
     Frontier.del();
     Frontier = output;
     if(Frontier.isEmpty()) break;
     //cout << Frontier.numNonzeros() << endl;
-    output = edgeMap(GA, FROM_H, Frontier, BF_F(ShortestPathLenH,ShortestPathLenV,Visited), GA.mh/20, dense_forward);
+    output = edgeMap(GA, FROM_H, Frontier, BF_F(ShortestPathLenH,ShortestPathLenV,Visited));
     vertexMap(output,BF_Vertex_F(Visited));
     Frontier.del();
     Frontier = output;

@@ -42,7 +42,7 @@ template <class data, class vertex, class VS, class F>
       if (f.cond(v)) {
         G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
       }
-    }
+    } 
     return vertexSubsetData<data>(nTo, next);
   } else {
     auto g = get_emdense_nooutput_gen<data>();
@@ -269,22 +269,25 @@ template <class data, class vertex, class VS, class F>
     cout << "edgeMap: Sizes Don't match" << endl;
     abort();
   }
-  if (vs.size() == 0) return vertexSubsetData<data>(nTo);
-  vs.toSparse();
-  uintT* degrees = newA(uintT, m);
-  vertex* frontierVertices = newA(vertex,m);
-  {parallel_for (size_t i=0; i < m; i++) {
-    uintE v_id = vs.vtx(i);
-    vertex v = G[v_id];
-    degrees[i] = v.getOutDegree();
-    frontierVertices[i] = v;
-  }}
-
-  uintT outDegrees = sequence::plusReduce(degrees, m);
-  if (outDegrees == 0) return vertexSubsetData<data>(nTo);
+  if (m == 0) return vertexSubsetData<data>(nTo);
+  uintT* degrees;
+  vertex* frontierVertices;
+  uintT outDegrees = 0;
+  if(threshold > 0) { //compute sum of out-degrees if threshold > 0 
+    vs.toSparse();
+    degrees = newA(uintT, m);
+    frontierVertices = newA(vertex,m);
+    {parallel_for (size_t i=0; i < m; i++) {
+	uintE v_id = vs.vtx(i);
+	vertex v = G[v_id];
+	degrees[i] = v.getOutDegree();
+	frontierVertices[i] = v;
+      }}
+    outDegrees = sequence::plusReduce(degrees, m);
+    if (outDegrees == 0) return vertexSubsetData<data>(nTo);
+  }
   if (m + outDegrees > threshold) {
     vs.toDense();
-    free(degrees); free(frontierVertices);
     return (fl & dense_forward) ?
       edgeMapDenseForward<data, vertex, VS, F>(G, nFrom, nTo, vs, f, fl) :
       edgeMapDense<data, vertex, VS, F>(fromV ? GA.H : GA.V, nTo, vs, f, fl);
