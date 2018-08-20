@@ -28,6 +28,9 @@ dataDir = "../../inputs/"
 
 applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank","HyperKCore-Efficient"]
 mis = ["HyperMIS"]
+mis = []
+applications = ["HyperPageRank"]
+applications = []
 wapplications = ["HyperSSSP"]
 
 testfiles = [("com-orkut-ligra","0"),("com-friendster-ligra","0"),("rand-10M-10M-10","0"),("rand-10M-10M-100","0"),("rand-10M-20M-10","0"),("rand-10M-30M-10","0"),("rand-10M-40M-10","0"),("rand-10M-50M-10","0"),("rand-10M-60M-10","0"),("rand-10M-70M-10","0"),("rand-10M-80M-10","0"),("rand-10M-90M-10","0"),("rand-10M-100M-10","0"),("rand-100M-100M-10","0")]

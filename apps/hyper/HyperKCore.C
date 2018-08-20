@@ -27,22 +27,6 @@
 #define HYPER 1
 #include "hygra.h"
 
-// template <class vertex>
-// struct Init_Deg {
-//   long* Degrees;
-//   vertex* H;
-//   Init_Deg(long* _Degrees, vertex* _H) : Degrees(_Degrees), H(_H) {}
-//   inline bool update (uintE s, uintE d) { 
-//     xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
-//     return 1;
-//   }
-//   inline bool updateAtomic (uintE s, uintE d){
-//     xadd(&Degrees[s],(long)H[d].getOutDegree()-1);
-//     return 1;
-//   }
-//   inline bool cond (uintE d) { return cond_true(d); }
-// };
-
 struct Remove_Hyperedge {
   uintE* Flags;
   Remove_Hyperedge(uintE* _Flags) : Flags(_Flags) {}
@@ -105,13 +89,10 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   bool* active = newA(bool,nv);
   {parallel_for(long i=0;i<nv;i++) active[i] = 1;}
   vertexSubset Frontier(nv, nv, active);
-  //uintE* coreNumbers = newA(uintE,nv);
   intE* Degrees = newA(intE,nv);
   {parallel_for(long i=0;i<nv;i++) {
-      //coreNumbers[i] = 0;
       Degrees[i] = GA.V[i].getOutDegree();
     }}
-  //edgeMap(GA,FROM_V,Frontier,Init_Deg<vertex>(Degrees,GA.H),INT_T_MAX,no_output);
   uintE* Flags = newA(uintE,nh);
   {parallel_for(long i=0;i<nh;i++) Flags[i] = 0;}
   long largestCore = -1;
@@ -132,7 +113,6 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
       else {
 	vertexSubset FrontierH = edgeMap(GA,FROM_V,toRemove,Remove_Hyperedge(Flags));
 	//cout << "k="<<k-1<< " num active = " << toRemove.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
-
 	auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
 	  uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
 	  uintE deg = Degrees[v];
@@ -144,13 +124,9 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
 	  }
 	  return Maybe<tuple<uintE, uintE> >();
 	};
-
 	//vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(FrontierH, FROM_H, apply_f);
 	//moved.del();
 	edgeMap(GA,FROM_H,FrontierH,Update_Deg(Degrees,k),-1,no_output);
-
-	//auto reset_counts = [&] (const uintE& i) { Counts[i] = 0; };
-	//vertexMap(FrontierH,reset_counts);
 	FrontierH.del();
 	toRemove.del();
       }

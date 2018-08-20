@@ -240,22 +240,25 @@ vertexSubsetData<data> edgeMapData(graph<vertex>& GA, VS &vs, F f,
     cout << "edgeMap: Sizes Don't match" << endl;
     abort();
   }
-  if (vs.size() == 0) return vertexSubsetData<data>(numVertices);
-  vs.toSparse();
-  uintT* degrees = newA(uintT, m);
-  vertex* frontierVertices = newA(vertex,m);
-  {parallel_for (size_t i=0; i < m; i++) {
-    uintE v_id = vs.vtx(i);
-    vertex v = G[v_id];
-    degrees[i] = v.getOutDegree();
-    frontierVertices[i] = v;
-  }}
-
-  uintT outDegrees = sequence::plusReduce(degrees, m);
-  if (outDegrees == 0) return vertexSubsetData<data>(numVertices);
+  if (m == 0) return vertexSubsetData<data>(numVertices);
+  uintT* degrees;
+  vertex* frontierVertices;
+  uintT outDegrees = 0;
+  if(threshold > 0) { //compute sum of out-degrees if threshold > 0 
+    vs.toSparse();
+    degrees = newA(uintT, m);
+    frontierVertices = newA(vertex,m);
+    {parallel_for (size_t i=0; i < m; i++) {
+	uintE v_id = vs.vtx(i);
+	vertex v = G[v_id];
+	degrees[i] = v.getOutDegree();
+	frontierVertices[i] = v;
+      }}
+    outDegrees = sequence::plusReduce(degrees, m);
+    if (outDegrees == 0) return vertexSubsetData<data>(numVertices);
+  }
   if (m + outDegrees > threshold) {
     vs.toDense();
-    free(degrees); free(frontierVertices);
     return (fl & dense_forward) ?
       edgeMapDenseForward<data, vertex, VS, F>(GA, vs, f, fl) :
       edgeMapDense<data, vertex, VS, F>(GA, vs, f, fl);
