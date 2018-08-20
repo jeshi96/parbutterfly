@@ -35,6 +35,8 @@ using namespace std;
 #define hyperedgeFilter vertexFilter
 #define vertexProp(H,args...) edgeMap(H,FROM_V,args)
 #define hyperedgeProp(H,args...) edgeMap(H,FROM_H,args)
+#define hyperedgeFilterNgh packEdges
+#define vertexFilterNgh packEdges
 
 template <class data, class vertex, class VS, class F>
   vertexSubsetData<data> edgeMapDense(vertex* G, long nTo, VS& vertexSubset, F &f, const flags fl) {

@@ -144,7 +144,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     fullEdges.del();
     //pack edges
     auto pack_predicate = [&] (const uintE& u, const uintE& ngh) { return flags[ngh] == 0; };
-    packEdges(GA.H, FrontierH, pack_predicate, no_output);
+    hyperedgeFilterNgh(GA.H, FrontierH, pack_predicate, no_output);
     hyperedgeSubset remainingHyperedges = hyperedgeFilter(FrontierH, Filter_Hyperedges<vertex>(GA.H,flags));
     FrontierH.del();
     FrontierH = remainingHyperedges;
