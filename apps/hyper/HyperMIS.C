@@ -130,22 +130,22 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   long round = 1;
   long inverseProb = 3; //to be set
   vertexSubset FrontierV(nv, frontier_data);
-  vertexSubset FrontierH(nh, frontierH);
+  hyperedgeSubset FrontierH(nh, frontierH);
   long numVerticesProcessed = 0;
   while (!FrontierV.isEmpty()) {
     round++;
     vertexMap(FrontierV,Random_Sample(flags,round,numVerticesProcessed,inverseProb));
     numVerticesProcessed += FrontierV.numNonzeros();
-    vertexMap(FrontierH,Degrees_Reset(Degrees));
-    edgeMap(GA, FROM_H, FrontierH, MIS_Count_Neighbors(flags,Degrees,round), INT_T_MAX, no_output);
-    vertexSubset fullEdges = vertexFilter(FrontierH, Check_Independence<vertex>(GA.H,Degrees));
-    edgeMap(GA, FROM_H, fullEdges, MIS_Reset_Neighbors(flags,round), -1, no_output);
+    hyperedgeMap(FrontierH,Degrees_Reset(Degrees));
+    hyperedgeProp(GA, FrontierH, MIS_Count_Neighbors(flags,Degrees,round), INT_T_MAX, no_output);
+    hyperedgeSubset fullEdges = hyperedgeFilter(FrontierH, Check_Independence<vertex>(GA.H,Degrees));
+    hyperedgeProp(GA, fullEdges, MIS_Reset_Neighbors(flags,round), -1, no_output);
     //cout << "round = " << round << " vertices = " << FrontierV.numNonzeros() << " hyperedges = " << FrontierH.numNonzeros() << " full edges = " << fullEdges.numNonzeros() << endl;
     fullEdges.del();
     //pack edges
     auto pack_predicate = [&] (const uintE& u, const uintE& ngh) { return flags[ngh] == 0; };
     packEdges(GA.H, FrontierH, pack_predicate, no_output);
-    vertexSubset remainingHyperedges = vertexFilter(FrontierH, Filter_Hyperedges<vertex>(GA.H,flags));
+    hyperedgeSubset remainingHyperedges = hyperedgeFilter(FrontierH, Filter_Hyperedges<vertex>(GA.H,flags));
     FrontierH.del();
     FrontierH = remainingHyperedges;
     vertexSubset output = vertexFilter(FrontierV, MIS_Filter(flags));

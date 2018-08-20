@@ -24,9 +24,9 @@
 #define HYPER 1
 #include "hygra.h"
 
-struct CC_F {
+struct CC_Update_F {
   uintE* SrcIDs, *DestIDs, *DestPrevIDs;
-  CC_F(uintE* _SrcIDs, uintE* _DestIDs, uintE* _DestPrevIDs) : 
+  CC_Update_F(uintE* _SrcIDs, uintE* _DestIDs, uintE* _DestPrevIDs) : 
     SrcIDs(_SrcIDs), DestIDs(_DestIDs), DestPrevIDs(_DestPrevIDs) {}
   inline bool update(uintE s, uintE d){ //Update function writes min ID
     uintE origID = DestIDs[d];
@@ -42,9 +42,9 @@ struct CC_F {
 };
 
 //function used by vertex map to sync prevIDs with IDs
-struct CC_Vertex_F {
+struct CC_Copy_F {
   uintE* IDs, *prevIDs;
-  CC_Vertex_F(uintE* _IDs, uintE* _prevIDs) :
+  CC_Copy_F(uintE* _IDs, uintE* _prevIDs) :
     IDs(_IDs), prevIDs(_prevIDs) {}
   inline bool operator () (uintE i) {
     prevIDs[i] = IDs[i];
@@ -60,17 +60,17 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   bool* frontier = newA(bool,nv);
   {parallel_for(long i=0;i<nv;i++) frontier[i] = 1;} 
   vertexSubset FrontierV(nv,nv,frontier); //initial frontier contains all vertices
-  vertexSubset FrontierH(nh);
+  hyperedgeSubset FrontierH(nh);
   while(1){ //iterate until IDs converge
     //cout << FrontierV.numNonzeros() << endl;
-    vertexMap(FrontierH,CC_Vertex_F(IDsH,prevIDsH));
-    vertexSubset output = edgeMap(GA, FROM_V, FrontierV, CC_F(IDsV,IDsH,prevIDsH));
+    hyperedgeMap(FrontierH,CC_Copy_F(IDsH,prevIDsH));
+    hyperedgeSubset output = vertexProp(GA, FrontierV, CC_Update_F(IDsV,IDsH,prevIDsH));
     FrontierH.del();
     FrontierH = output;
     if(FrontierH.isEmpty()) break;
     //cout << FrontierH.numNonzeros() << endl;
-    vertexMap(FrontierV,CC_Vertex_F(IDsV,prevIDsV));
-    output = edgeMap(GA, FROM_H, FrontierH, CC_F(IDsH,IDsV,prevIDsV));
+    vertexMap(FrontierV,CC_Copy_F(IDsV,prevIDsV));
+    output = hyperedgeProp(GA, FrontierH, CC_Update_F(IDsH,IDsV,prevIDsV));
     FrontierV.del();
     FrontierV = output;
     if(FrontierV.isEmpty()) break;

@@ -26,10 +26,10 @@
 #include "math.h"
 
 template <class vertex>
-struct PR_F {
+struct PR_Update_F {
   double* pSrc, *pDest;
   vertex* V;
-  PR_F(double* _pSrc, double* _pDest, vertex* _V) : 
+  PR_Update_F(double* _pSrc, double* _pDest, vertex* _V) : 
     pSrc(_pSrc), pDest(_pDest), V(_V) {}
   inline bool update(uintE s, uintE d){ //update function applies PageRank equation
     pDest[d] += pSrc[s]/V[s].getOutDegree();
@@ -55,9 +55,9 @@ struct PR_Vertex_F {
 };
 
 //resets p
-struct PR_Vertex_Reset {
+struct PR_Reset {
   double* p;
-  PR_Vertex_Reset(double* _p) :
+  PR_Reset(double* _p) :
     p(_p) {}
   inline bool operator () (uintE i) {
     p[i] = 0.0;
@@ -83,7 +83,7 @@ struct Entropy_F {
 //pass -entropy flag to compute entropy of hyperedges at the end
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
-  long maxIters = P.getOptionLongValue("-maxiters",100);
+  long maxIters = P.getOptionLongValue("-maxiters",1);
   bool entropy = P.getOptionValue("-entropy");
   const intE nv = GA.nv, nh = GA.nh;
   const double damping = 0.85, epsilon = 0.0000001;
@@ -99,21 +99,21 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   {parallel_for(long i=0;i<nh;i++) frontierH[i] = 1;}
 
   vertexSubset FrontierV(nv,nv,frontierV);
-  vertexSubset FrontierH(nh,nh,frontierH);  
+  hyperedgeSubset FrontierH(nh,nh,frontierH);  
   long iter = 0;
   while(iter++ < maxIters) {
     //cout << "V sum: " << sequence::plusReduce(pV,nv) << endl;
-    vertexMap(FrontierH,PR_Vertex_Reset(pH));
-    edgeMap(GA,FROM_V,FrontierV,PR_F<vertex>(pV,pH,GA.V),0,no_output);
-    vertexMap(FrontierV,PR_Vertex_Reset(pV));
+    hyperedgeMap(FrontierH,PR_Reset(pH));
+    vertexProp(GA,FrontierV,PR_Update_F<vertex>(pV,pH,GA.V),0,no_output);
+    vertexMap(FrontierV,PR_Reset(pV));
     //cout << "H sum: " << sequence::plusReduce(pH,nh) << endl;
-    edgeMap(GA,FROM_H,FrontierH,PR_F<vertex>(pH,pV,GA.H),0,no_output);
+    hyperedgeProp(GA,FrontierH,PR_Update_F<vertex>(pH,pV,GA.H),0,no_output);
     vertexMap(FrontierV,PR_Vertex_F(pV,damping,nv));
   }
   if(entropy) {
     double* EntropyH = newA(double,nh);
     {parallel_for(long i=0;i<nh;i++) EntropyH[i] = 0;}
-    edgeMap(GA,FROM_V,FrontierV,Entropy_F(EntropyH,pH,pV),0,no_output);
+    vertexProp(GA,FrontierV,Entropy_F(EntropyH,pH,pV),0,no_output);
     free(EntropyH);
   }
   FrontierV.del(); FrontierH.del();

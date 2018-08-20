@@ -97,7 +97,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   {parallel_for(long i=0;i<nh;i++) Flags[i] = 0;}
   long largestCore = -1;
 
-  auto em = EdgeMapHypergraph<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.mv/5);
+  //auto hp = HypergraphProp<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.mv/5);
 
   for (long k = 1;;k++) {
     while (true) {
@@ -111,22 +111,22 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
         break;
       }
       else {
-	vertexSubset FrontierH = edgeMap(GA,FROM_V,toRemove,Remove_Hyperedge(Flags));
+	hyperedgeSubset FrontierH = vertexProp(GA,toRemove,Remove_Hyperedge(Flags));
 	//cout << "k="<<k-1<< " num active = " << toRemove.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
-	auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
-	  uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
-	  uintE deg = Degrees[v];
-	  if (deg > k-1) {
-	    uintE new_deg = max(deg - edgesRemoved, (uintE) k-1);
-	    Degrees[v] = new_deg;
-	    //uintE bkt = b.get_bucket(deg, new_deg);
-	    return wrap(v, 0);
-	  }
-	  return Maybe<tuple<uintE, uintE> >();
-	};
-	//vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(FrontierH, FROM_H, apply_f);
+	// auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
+	//   uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
+	//   uintE deg = Degrees[v];
+	//   if (deg > k-1) {
+	//     uintE new_deg = max(deg - edgesRemoved, (uintE) k-1);
+	//     Degrees[v] = new_deg;
+	//     //uintE bkt = b.get_bucket(deg, new_deg);
+	//     return wrap(v, 0);
+	//   }
+	//   return Maybe<tuple<uintE, uintE> >();
+	// };
+	//vertexSubsetData<uintE> moved = hp.template edgeMapCount<uintE>(FrontierH, FROM_H, apply_f);
 	//moved.del();
-	edgeMap(GA,FROM_H,FrontierH,Update_Deg(Degrees,k),-1,no_output);
+	hyperedgeProp(GA,FrontierH,Update_Deg(Degrees,k),-1,no_output);
 	FrontierH.del();
 	toRemove.del();
       }

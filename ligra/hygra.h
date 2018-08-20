@@ -29,6 +29,13 @@ using namespace std;
 
 //*****START FRAMEWORK*****
 
+#define hyperedgeSubset vertexSubset
+#define hyperedgeSubsetData vertexSubsetData
+#define hyperedgeMap vertexMap
+#define hyperedgeFilter vertexFilter
+#define vertexProp(H,args...) edgeMap(H,FROM_V,args)
+#define hyperedgeProp(H,args...) edgeMap(H,FROM_H,args)
+
 template <class data, class vertex, class VS, class F>
   vertexSubsetData<data> edgeMapDense(vertex* G, long nTo, VS& vertexSubset, F &f, const flags fl) {
   using D = tuple<bool, data>;
@@ -308,7 +315,6 @@ template <class vertex, class VS, class F>
   return edgeMapData<pbbs::empty>(GA, fromV, vs, f, threshold, fl);
 }
 
-
 // edgeMapInduced
 // Version of edgeMapSparse that maps over the one-hop frontier and returns it as
 // a sparse array, without filtering.
@@ -343,13 +349,13 @@ template <class E, class vertex, class VS, class F>
 }
 
 template <class V, class vertex>
-struct EdgeMapHypergraph {
+struct HypergraphProp {
   using K = uintE; // keys are always uintE's (vertex-identifiers)
   using KV = tuple<K, V>;
   hypergraph<vertex>& GA;
   pbbs::hist_table<K, V> ht;
 
-EdgeMapHypergraph(hypergraph<vertex>& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
+HypergraphProp(hypergraph<vertex>& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
     if (ht_size == numeric_limits<size_t>::max()) {
       ht_size = GA.mv/20;
     }
@@ -381,13 +387,20 @@ EdgeMapHypergraph(hypergraph<vertex>& _GA, KV _empty, size_t ht_size=numeric_lim
   }
 
   template <class O, class Apply, class VS>
-    inline vertexSubsetData<O> edgeMapCount(VS& vs, bool fromV, Apply& apply_f) {
+    inline vertexSubsetData<O> hyperedgePropCount(VS& vs, Apply& apply_f) {
     auto map_f = [] (const uintE& i, const uintE& j) { return pbbs::empty(); };
     auto reduce_f = [&] (const uintE& cur, const tuple<uintE, pbbs::empty>& r) { return cur + 1; };
-    return edgeMapReduce<O, pbbs::empty>(vs, fromV, map_f, reduce_f, apply_f);
+    return edgeMapReduce<O, pbbs::empty>(vs, FROM_H, map_f, reduce_f, apply_f);
   }
 
-  ~EdgeMapHypergraph() {
+  template <class O, class Apply, class VS>
+    inline vertexSubsetData<O> vertexPropCount(VS& vs, Apply& apply_f) {
+    auto map_f = [] (const uintE& i, const uintE& j) { return pbbs::empty(); };
+    auto reduce_f = [&] (const uintE& cur, const tuple<uintE, pbbs::empty>& r) { return cur + 1; };
+    return edgeMapReduce<O, pbbs::empty>(vs, FROM_V, map_f, reduce_f, apply_f);
+  }
+
+  ~HypergraphProp() {
     ht.del();
   }
 };

@@ -25,10 +25,10 @@
 #define WEIGHTED 1
 #include "hygra.h"
 
-struct BF_F {
+struct BF_Relax_F {
   intE* ShortestPathLenSrc, *ShortestPathLenDest;
   int* Visited;
-  BF_F(intE* _ShortestPathLenSrc, intE* _ShortestPathLenDest, int* _Visited) : 
+  BF_Relax_F(intE* _ShortestPathLenSrc, intE* _ShortestPathLenDest, int* _Visited) : 
     ShortestPathLenSrc(_ShortestPathLenSrc), ShortestPathLenDest(_ShortestPathLenDest), Visited(_Visited) {}
   inline bool update (uintE s, uintE d, intE edgeLen) { //Update ShortestPathLen if found a shorter path
     intE newDist = ShortestPathLenSrc[s] + edgeLen;
@@ -46,10 +46,10 @@ struct BF_F {
   inline bool cond (uintE d) { return cond_true(d); }
 };
 
-//reset visited vertices
-struct BF_Vertex_F {
+//reset visited elements
+struct BF_Reset_F {
   int* Visited;
-  BF_Vertex_F(int* _Visited) : Visited(_Visited) {}
+  BF_Reset_F(int* _Visited) : Visited(_Visited) {}
   inline bool operator() (uintE i){
     Visited[i] = 0;
     return 1;
@@ -80,14 +80,14 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
       break;
     }
     //cout << Frontier.numNonzeros() << endl;
-    vertexSubset output = edgeMap(GA, FROM_V, Frontier, BF_F(ShortestPathLenV,ShortestPathLenH,Visited));
-    vertexMap(output,BF_Vertex_F(Visited));
+    hyperedgeSubset output = vertexProp(GA, Frontier, BF_Relax_F(ShortestPathLenV,ShortestPathLenH,Visited));
+    hyperedgeMap(output,BF_Reset_F(Visited));
     Frontier.del();
     Frontier = output;
     if(Frontier.isEmpty()) break;
     //cout << Frontier.numNonzeros() << endl;
-    output = edgeMap(GA, FROM_H, Frontier, BF_F(ShortestPathLenH,ShortestPathLenV,Visited));
-    vertexMap(output,BF_Vertex_F(Visited));
+    output = hyperedgeProp(GA, Frontier, BF_Relax_F(ShortestPathLenH,ShortestPathLenV,Visited));
+    vertexMap(output,BF_Reset_F(Visited));
     Frontier.del();
     Frontier = output;
     if(Frontier.isEmpty()) break;

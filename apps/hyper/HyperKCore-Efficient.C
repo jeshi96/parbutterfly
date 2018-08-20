@@ -31,7 +31,7 @@ array_imap<uintE> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
   {parallel_for(long i=0;i<nh;i++) Flags[i] = 0;}
   auto D = array_imap<uintE>(GA.nv, [&] (size_t i) { return GA.V[i].getOutDegree(); });
 
-  auto em = EdgeMapHypergraph<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.mv/5);
+  auto hp = HypergraphProp<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.mv/5);
   auto b = make_buckets(nv, D, increasing, num_buckets);
 
   size_t finished = 0;
@@ -53,9 +53,9 @@ array_imap<uintE> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
       return Maybe<tuple<uintE, uintE> >();
     };
 
-    vertexSubset FrontierH = edgeMap(GA,FROM_V,active,Remove_Hyperedge(Flags));
+    hyperedgeSubset FrontierH = vertexProp(GA,active,Remove_Hyperedge(Flags));
     //cout << "k="<<k<< " num active = " << active.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
-    vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(FrontierH, FROM_H, apply_f);
+    vertexSubsetData<uintE> moved = hp.template hyperedgePropCount<uintE>(FrontierH, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());
     moved.del(); active.del();
   }
