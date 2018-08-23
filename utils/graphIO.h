@@ -856,6 +856,41 @@ namespace benchIO {
   }
 
   template <class intT>
+  wghEdgeArray<intT> readWghSNAP(char* fname) {
+    _seq<char> S = readStringFromFile(fname);
+    char* S2 = newA(char,S.n);
+    //ignore starting lines with '#' and find where to start in file 
+    long k=0;
+    while(1) {
+      if(S.A[k] == '#') {
+	while(S.A[k++] != '\n') continue;
+      }
+      if(k >= S.n || S.A[k] != '#') break; 
+    }
+    parallel_for(long i=0;i<S.n-k;i++) S2[i] = S.A[k+i];
+    S.del();
+
+    words W = stringToWords(S2, S.n-k);
+    long n = W.m/3;
+    wghEdge<intT> *E = newA(wghEdge<intT>,n);
+    {parallel_for(long i=0; i < n; i++)
+      E[i] = wghEdge<intT>(atol(W.Strings[3*i]), 
+			atol(W.Strings[3*i + 1]),
+			atol(W.Strings[3*i + 2]));}
+    W.del();
+
+    long maxR = 0;
+    long maxC = 0;
+    for (long i=0; i < n; i++) {
+      maxR = max<intT>(maxR, E[i].u);
+      maxC = max<intT>(maxC, E[i].v);
+    }
+    long maxrc = max<intT>(maxR,maxC) + 1;
+    return wghEdgeArray<intT>(E, maxrc, maxrc, n);
+  }
+
+  //SNAP format
+  template <class intT>
   hyperedgeArray<intT> readHyperedges(char* fname) {
     _seq<char> S = readStringFromFile(fname);
     char* S2 = newA(char,S.n);
@@ -906,40 +941,7 @@ namespace benchIO {
     return hyperedgeArray<intT>(VE,HE,nv,nh,m,m);
   }
 
-  template <class intT>
-  wghEdgeArray<intT> readWghSNAP(char* fname) {
-    _seq<char> S = readStringFromFile(fname);
-    char* S2 = newA(char,S.n);
-    //ignore starting lines with '#' and find where to start in file 
-    long k=0;
-    while(1) {
-      if(S.A[k] == '#') {
-	while(S.A[k++] != '\n') continue;
-      }
-      if(k >= S.n || S.A[k] != '#') break; 
-    }
-    parallel_for(long i=0;i<S.n-k;i++) S2[i] = S.A[k+i];
-    S.del();
-
-    words W = stringToWords(S2, S.n-k);
-    long n = W.m/3;
-    wghEdge<intT> *E = newA(wghEdge<intT>,n);
-    {parallel_for(long i=0; i < n; i++)
-      E[i] = wghEdge<intT>(atol(W.Strings[3*i]), 
-			atol(W.Strings[3*i + 1]),
-			atol(W.Strings[3*i + 2]));}
-    W.del();
-
-    long maxR = 0;
-    long maxC = 0;
-    for (long i=0; i < n; i++) {
-      maxR = max<intT>(maxR, E[i].u);
-      maxC = max<intT>(maxC, E[i].v);
-    }
-    long maxrc = max<intT>(maxR,maxC) + 1;
-    return wghEdgeArray<intT>(E, maxrc, maxrc, n);
-  }
-
+  //SNAP format
   //one hyperedge per line followed by weight on a separate line
   template <class intT>
     wghHyperedgeArray<intT> readWghHyperedges(char* fname) {
@@ -989,6 +991,124 @@ namespace benchIO {
       }}
     free(IDs);
     return wghHyperedgeArray<intT>(VE,HE,nv,n,m,m);
+  }
+
+  //KONECT format
+  template <class intT>
+  hyperedgeArray<intT> readKONECT(char* fname) {
+    _seq<char> S = readStringFromFile(fname);
+    char* S2 = newA(char,S.n);
+    //ignore starting lines with '#' and find where to start in file 
+    long k=0;
+    while(1) {
+      if(S.A[k] == '%') {
+	while(S.A[k++] != '\n') continue;
+      }
+      if(k >= S.n || S.A[k] != '%') break; 
+    }
+    
+    parallel_for(long i=0;i<S.n-k;i++) S2[i] = S.A[k+i];
+    S.del();
+    
+    words W = stringToWords(S2, S.n-k);
+    long m = W.m/2;
+    edge<intT> *VE = newA(edge<intT>,m);
+    edge<intT> *HE = newA(edge<intT>,m);
+
+    {parallel_for(long i=0; i < m; i++) {
+	VE[i] = edge<intT>(atol(W.Strings[2*i]), 
+			  atol(W.Strings[2*i + 1]));
+	HE[i] = edge<intT>(atol(W.Strings[2*i+1]),atol(W.Strings[2*i]));
+      }}
+    W.del();
+
+    long maxV = 0, maxH = 0;
+    for (long i=0; i < m; i++) {
+      maxV = max<intT>(maxV,VE[i].u);
+      maxH = max<intT>(maxH,HE[i].u);
+    }
+    maxV++; maxH++;
+    //compress IDs into contiguous range
+    intT* IDsV = newA(intT,maxV);
+    {parallel_for(long i=0;i<maxV;i++) IDsV[i]=0;}
+    {parallel_for(long i=0; i < m; i++) if(!IDsV[VE[i].u]) CAS(&IDsV[VE[i].u],(intT)0,(intT)1);}
+    long nv = sequence::plusScan(IDsV,IDsV,maxV);
+
+    intT* IDsH = newA(intT,maxH);
+    {parallel_for(long i=0;i<maxH;i++) IDsH[i]=0;}
+    {parallel_for(long i=0; i < m; i++) if(!IDsH[VE[i].v]) CAS(&IDsH[VE[i].v],(intT)0,(intT)1);}
+    long nh = sequence::plusScan(IDsH,IDsH,maxH);
+
+    {parallel_for(long i=0;i<m;i++) {
+    	VE[i].u = IDsV[VE[i].u];
+	VE[i].v = IDsH[VE[i].v];
+	HE[i].u = IDsH[HE[i].u];
+	HE[i].v = IDsV[HE[i].v];
+      }}
+    free(IDsV);
+    free(IDsH);
+    return hyperedgeArray<intT>(VE,HE,nv,nh,m,m);
+  }
+
+  //KONECT format
+  template <class intT>
+    wghHyperedgeArray<intT> readWghKONECT(char* fname) {
+    _seq<char> S = readStringFromFile(fname);
+    char* S2 = newA(char,S.n);
+    //ignore starting lines with '#' and find where to start in file 
+    long k=0;
+    while(1) {
+      if(S.A[k] == '%') {
+	while(S.A[k++] != '\n') continue;
+      }
+      if(k >= S.n || S.A[k] != '%') break; 
+    }
+    
+    parallel_for(long i=0;i<S.n-k;i++) S2[i] = S.A[k+i];
+    S.del();
+    
+    words W = stringToWords(S2, S.n-k);
+    long m = W.m/4;
+    wghEdge<intT> *VE = newA(wghEdge<intT>,m);
+    wghEdge<intT> *HE = newA(wghEdge<intT>,m);
+
+    {parallel_for(long i=0; i < m; i++) {
+	VE[i] = wghEdge<intT>(atol(W.Strings[4*i]), 
+			   atol(W.Strings[4*i+1]),
+			   atol(W.Strings[4*i+2]));
+	HE[i] = wghEdge<intT>(atol(W.Strings[4*i+1]),
+			   atol(W.Strings[4*i]),
+			   atol(W.Strings[4*i+2]));
+	if(i<10) cout << VE[i].v << " " << VE[i].u << " " << VE[i].w << endl;
+      }}
+    W.del();
+
+    long maxV = 0, maxH = 0;
+    for (long i=0; i < m; i++) {
+      maxV = max<intT>(maxV,VE[i].u);
+      maxH = max<intT>(maxH,HE[i].u);
+    }
+    maxV++; maxH++;
+    //compress IDs into contiguous range
+    intT* IDsV = newA(intT,maxV);
+    {parallel_for(long i=0;i<maxV;i++) IDsV[i]=0;}
+    {parallel_for(long i=0; i < m; i++) if(!IDsV[VE[i].u]) CAS(&IDsV[VE[i].u],(intT)0,(intT)1);}
+    long nv = sequence::plusScan(IDsV,IDsV,maxV);
+
+    intT* IDsH = newA(intT,maxH);
+    {parallel_for(long i=0;i<maxH;i++) IDsH[i]=0;}
+    {parallel_for(long i=0; i < m; i++) if(!IDsH[VE[i].v]) CAS(&IDsH[VE[i].v],(intT)0,(intT)1);}
+    long nh = sequence::plusScan(IDsH,IDsH,maxH);
+
+    {parallel_for(long i=0;i<m;i++) {
+    	VE[i].u = IDsV[VE[i].u];
+	VE[i].v = IDsH[VE[i].v];
+	HE[i].u = IDsH[HE[i].u];
+	HE[i].v = IDsV[HE[i].v];
+      }}
+    free(IDsV);
+    free(IDsH);
+    return wghHyperedgeArray<intT>(VE,HE,nv,nh,m,m);
   }
 
   template <class intT>
