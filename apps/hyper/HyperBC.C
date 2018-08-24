@@ -123,6 +123,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   vector<vertexSubset> Levels;
   Levels.push_back(Frontier);
   long round = 0;
+
   while(1){ //forward phase
     round++;
     hyperedgeSubset output = vertexProp(GA, Frontier, BC_F(NumPathsV,NumPathsH,VisitedH));
@@ -140,7 +141,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     //cout << round << " frontier size= " << Frontier.numNonzeros() << endl;
   }
   free(NumPathsH);
-
+  
   //first phase ended on hyperedges
   if((round % 2) == 0) Levels[round--].del();
   Levels[round].del();
@@ -162,16 +163,15 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     //mark vertices as visited and add to dependency score
     vertexMap(Frontier,BC_Back_Vertex_F(VisitedV,DependenciesV)); 
     //vertex dependencies to hyperedges
-    vertexProp(GA, Frontier, BC_Back_VtoH(DependenciesV,DependenciesH,NumPathsV,VisitedH), 0, no_output);
+    vertexProp(GA, Frontier, BC_Back_VtoH(DependenciesV,DependenciesH,NumPathsV,VisitedH), -1, no_output);
     Frontier.del();
     Frontier = Levels[r-1]; //gets frontier from Levels array
     hyperedgeMap(Frontier,BC_Vertex_F(VisitedH)); //mark hyperedges as visited
     //cout << r-1 << " " << Frontier.numNonzeros() << endl; 
     //hyperedge dependencies to vertices
-    hyperedgeProp(GA, Frontier, BC_Back_HtoV(DependenciesV,DependenciesH,NumPathsV,VisitedV), 0, no_output);
+    hyperedgeProp(GA, Frontier, BC_Back_HtoV(DependenciesV,DependenciesH,NumPathsV,VisitedV), -1, no_output);
     Frontier.del();
   }
-
   Levels[0].del(); //first frontier
   free(NumPathsV);
   free(VisitedV); free(VisitedH);
