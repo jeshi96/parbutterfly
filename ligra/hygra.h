@@ -38,29 +38,74 @@ using namespace std;
 #define hyperedgeFilterNgh packEdges
 #define vertexFilterNgh packEdges
 
+#define GRAIN_SIZE 1024
+
 template <class data, class vertex, class VS, class F>
   vertexSubsetData<data> edgeMapDense(vertex* G, long nTo, VS& vertexSubset, F &f, const flags fl) {
   using D = tuple<bool, data>;
   //long n = GA.nv;
   //vertex *G = GA.V;
-  if (should_output(fl)) {
-    D* next = newA(D, nTo);
-    auto g = get_emdense_gen<data>(next);
-    parallel_for (long v=0; v<nTo; v++) {
-      std::get<0>(next[v]) = 0;
-      if (f.cond(v)) {
-        G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
-      }
-    } 
-    return vertexSubsetData<data>(nTo, next);
-  } else {
-    auto g = get_emdense_nooutput_gen<data>();
-    parallel_for (long v=0; v<nTo; v++) {
-      if (f.cond(v)) {
-        G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
-      }
+  if(fl & edge_parallel) {
+    if (should_output(fl)) {
+      D* next = newA(D, nTo);
+      auto g = get_emdense_gen<data>(next);
+      std::function<void(intT,intT)> recursive_lambda =
+	[&]
+	(intT start, intT end){
+	if ((start == end-1) || (G[end].getOutNeighbors()-G[start].getOutNeighbors() < GRAIN_SIZE*sizeof(intE))){
+	  for (intT v = start; v < end; v++){
+	    std::get<0>(next[v]) = 0;
+	    if (f.cond(v)) {
+	      G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
+	    }
+	  }
+	} else {
+	  cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	  recursive_lambda(start + ((end-start)>>1), end);
+	}
+      }; 
+      recursive_lambda(0,nTo);
+      return vertexSubsetData<data>(nTo, next);
+    } else {
+      auto g = get_emdense_nooutput_gen<data>();
+      std::function<void(intT,intT)> recursive_lambda =
+	[&]
+	(intT start, intT end){
+	if ((start == end-1) || (G[end].getOutNeighbors()-G[start].getOutNeighbors() < GRAIN_SIZE*sizeof(intE))){
+	  for (intT v = start; v < end; v++){
+	    if (f.cond(v)) {
+	      G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
+	    }
+	  } 
+	} else {
+	  cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	  recursive_lambda(start + ((end-start)>>1), end);
+	}
+      }; 
+      recursive_lambda(0,nTo);
+      return vertexSubsetData<data>(nTo);
     }
-    return vertexSubsetData<data>(nTo);
+  }
+  else {
+    if (should_output(fl)) {
+      D* next = newA(D, nTo);
+      auto g = get_emdense_gen<data>(next);
+      parallel_for (long v=0; v<nTo; v++) {
+        std::get<0>(next[v]) = 0;
+        if (f.cond(v)) {
+          G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
+        }
+      }
+      return vertexSubsetData<data>(nTo, next);
+    } else {
+      auto g = get_emdense_nooutput_gen<data>();
+      parallel_for (long v=0; v<nTo; v++) {
+        if (f.cond(v)) {
+          G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
+        }
+      }
+      return vertexSubsetData<data>(nTo);
+    }
   }
 }
 
@@ -92,7 +137,7 @@ template <class data, class vertex, class VS, class F>
 
 template <class data, class vertex, class VS, class F>
   vertexSubsetData<data> edgeMapSparse(hypergraph<vertex>& GA, long nTo, vertex* frontierVertices, VS& indices,
-        uintT* degrees, uintT m, F &f, const flags fl) {
+				       uintT* degrees, uintT m, F &f, const flags fl) {
   using S = tuple<uintE, data>;
   //long n = indices.n;
   S* outEdges;
@@ -137,8 +182,8 @@ template <class data, class vertex, class VS, class F>
 
 template <class data, class vertex, class VS, class F>
   vertexSubsetData<data> edgeMapSparse_no_filter(hypergraph<vertex>& GA, long nTo,
-    vertex* frontierVertices, VS& indices, uintT* offsets, uintT m, F& f,
-    const flags fl) {
+						 vertex* frontierVertices, VS& indices, uintT* offsets, uintT m, F& f,
+						 const flags fl) {
   using S = tuple<uintE, data>;
   //long n = indices.n;
   long outEdgeCount = sequence::plusScan(offsets, offsets, m);
@@ -224,9 +269,9 @@ template <class vertex, class P>
   }
   auto degrees = array_imap<uintT>(m);
   granular_for(i, 0, m, (m > 2000), {
-    uintE v = vs.vtx(i);
-    degrees[i] = G[v].getOutDegree();
-  });
+      uintE v = vs.vtx(i);
+      degrees[i] = G[v].getOutDegree();
+    });
   long outEdgeCount = pbbs::scan_add(degrees, degrees);
   S* outV;
   if (should_output(fl)) {
@@ -268,7 +313,7 @@ template <class vertex, class P>
 // Takes as input a flag (fromV) to determine whether mapping from vertices (fromV=1) or hyperedges (fromV=0)
 template <class data, class vertex, class VS, class F>
   vertexSubsetData<data> edgeMapData(hypergraph<vertex>& GA, bool fromV, VS &vs, F f,
-    intT threshold = -1, const flags& fl=0) {
+				     intT threshold = -1, const flags& fl=0) {
   //nFrom is num vertices on incoming side and nTo is num vertices on outgoing side
   long nFrom = fromV ? GA.nv : GA.nh, nTo = fromV ? GA.nh : GA.nv;
   long numEdges = fromV ? GA.mv : GA.nh, m = vs.numNonzeros();
@@ -313,7 +358,7 @@ template <class data, class vertex, class VS, class F>
 // Regular edgeMap, where no extra data is stored per vertex.
 template <class vertex, class VS, class F>
   vertexSubset edgeMap(hypergraph<vertex> &GA, bool fromV, VS& vs, F f,
-    intT threshold = -1, const flags& fl=0) {
+		       intT threshold = -1, const flags& fl=0) {
   return edgeMapData<pbbs::empty>(GA, fromV, vs, f, threshold, fl);
 }
 
@@ -326,10 +371,10 @@ template <class E, class vertex, class VS, class F>
   V.toSparse();
   auto degrees = array_imap<uintT>(m);
   granular_for(i, 0, m, (m > 2000), {
-    vertex v = G[V.vtx(i)];
-    uintE degree = v.getOutDegree();
-    degrees[i] = degree;
-  });
+      vertex v = G[V.vtx(i)];
+      uintE degree = v.getOutDegree();
+      degrees[i] = degree;
+    });
   long outEdgeCount = pbbs::scan_add(degrees, degrees);
   if (outEdgeCount == 0) {
     return vertexSubsetData<E>(nTo);
@@ -351,58 +396,58 @@ template <class E, class vertex, class VS, class F>
 }
 
 template <class V, class vertex>
-struct HypergraphProp {
-  using K = uintE; // keys are always uintE's (vertex-identifiers)
-  using KV = tuple<K, V>;
-  hypergraph<vertex>& GA;
-  pbbs::hist_table<K, V> ht;
+  struct HypergraphProp {
+    using K = uintE; // keys are always uintE's (vertex-identifiers)
+    using KV = tuple<K, V>;
+    hypergraph<vertex>& GA;
+    pbbs::hist_table<K, V> ht;
 
-HypergraphProp(hypergraph<vertex>& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
+  HypergraphProp(hypergraph<vertex>& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
     if (ht_size == numeric_limits<size_t>::max()) {
       ht_size = GA.mv/20;
     }
     ht = pbbs::hist_table<K, V>(_empty, ht_size);
   }
 
-  // map_f: (uintE v, uintE ngh) -> E
-  // reduce_f: (E, tuple(uintE ngh, E ngh_val)) -> E
-  // apply_f: (uintE ngh, E reduced_val) -> O
-  template <class O, class M, class Map, class Reduce, class Apply, class VS>
-    inline vertexSubsetData<O> edgeMapReduce(VS& vs, bool fromV, Map& map_f, Reduce& reduce_f, Apply& apply_f) {
-    long nTo = fromV ? GA.nh : GA.nv;
-    vertex* G = fromV ? GA.V : GA.H;
-    size_t m = vs.size();
-    if (m == 0) {
-      return vertexSubsetData<O>(nTo);
+    // map_f: (uintE v, uintE ngh) -> E
+    // reduce_f: (E, tuple(uintE ngh, E ngh_val)) -> E
+    // apply_f: (uintE ngh, E reduced_val) -> O
+    template <class O, class M, class Map, class Reduce, class Apply, class VS>
+      inline vertexSubsetData<O> edgeMapReduce(VS& vs, bool fromV, Map& map_f, Reduce& reduce_f, Apply& apply_f) {
+      long nTo = fromV ? GA.nh : GA.nv;
+      vertex* G = fromV ? GA.V : GA.H;
+      size_t m = vs.size();
+      if (m == 0) {
+	return vertexSubsetData<O>(nTo);
+      }
+
+      auto oneHop = edgeMapInduced<M, vertex, VS, Map>(G, nTo, vs, map_f);
+      oneHop.toSparse();
+
+      auto get_elm = make_in_imap<tuple<K, M> >(oneHop.size(), [&] (size_t i) { return oneHop.vtxAndData(i); });
+      auto get_key = make_in_imap<uintE>(oneHop.size(), [&] (size_t i) -> uintE { return oneHop.vtx(i); });
+
+      auto q = [&] (sequentialHT<K, V>& S, tuple<K, M> v) -> void { S.template insertF<M>(v, reduce_f); };
+      auto res = pbbs::histogram_reduce<tuple<K, M>, tuple<K, O> >(get_elm, get_key, oneHop.size(), q, apply_f, ht);
+      oneHop.del();
+      return vertexSubsetData<O>(nTo, res.first, res.second);
     }
 
-    auto oneHop = edgeMapInduced<M, vertex, VS, Map>(G, nTo, vs, map_f);
-    oneHop.toSparse();
+    template <class O, class Apply, class VS>
+      inline vertexSubsetData<O> hyperedgePropCount(VS& vs, Apply& apply_f) {
+      auto map_f = [] (const uintE& i, const uintE& j) { return pbbs::empty(); };
+      auto reduce_f = [&] (const uintE& cur, const tuple<uintE, pbbs::empty>& r) { return cur + 1; };
+      return edgeMapReduce<O, pbbs::empty>(vs, FROM_H, map_f, reduce_f, apply_f);
+    }
 
-    auto get_elm = make_in_imap<tuple<K, M> >(oneHop.size(), [&] (size_t i) { return oneHop.vtxAndData(i); });
-    auto get_key = make_in_imap<uintE>(oneHop.size(), [&] (size_t i) -> uintE { return oneHop.vtx(i); });
+    template <class O, class Apply, class VS>
+      inline vertexSubsetData<O> vertexPropCount(VS& vs, Apply& apply_f) {
+      auto map_f = [] (const uintE& i, const uintE& j) { return pbbs::empty(); };
+      auto reduce_f = [&] (const uintE& cur, const tuple<uintE, pbbs::empty>& r) { return cur + 1; };
+      return edgeMapReduce<O, pbbs::empty>(vs, FROM_V, map_f, reduce_f, apply_f);
+    }
 
-    auto q = [&] (sequentialHT<K, V>& S, tuple<K, M> v) -> void { S.template insertF<M>(v, reduce_f); };
-    auto res = pbbs::histogram_reduce<tuple<K, M>, tuple<K, O> >(get_elm, get_key, oneHop.size(), q, apply_f, ht);
-    oneHop.del();
-    return vertexSubsetData<O>(nTo, res.first, res.second);
-  }
-
-  template <class O, class Apply, class VS>
-    inline vertexSubsetData<O> hyperedgePropCount(VS& vs, Apply& apply_f) {
-    auto map_f = [] (const uintE& i, const uintE& j) { return pbbs::empty(); };
-    auto reduce_f = [&] (const uintE& cur, const tuple<uintE, pbbs::empty>& r) { return cur + 1; };
-    return edgeMapReduce<O, pbbs::empty>(vs, FROM_H, map_f, reduce_f, apply_f);
-  }
-
-  template <class O, class Apply, class VS>
-    inline vertexSubsetData<O> vertexPropCount(VS& vs, Apply& apply_f) {
-    auto map_f = [] (const uintE& i, const uintE& j) { return pbbs::empty(); };
-    auto reduce_f = [&] (const uintE& cur, const tuple<uintE, pbbs::empty>& r) { return cur + 1; };
-    return edgeMapReduce<O, pbbs::empty>(vs, FROM_V, map_f, reduce_f, apply_f);
-  }
-
-  ~HypergraphProp() {
-    ht.del();
-  }
-};
+    ~HypergraphProp() {
+      ht.del();
+    }
+  };

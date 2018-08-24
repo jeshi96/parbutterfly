@@ -52,6 +52,7 @@ const flags sparse_no_filter = 4;
 const flags dense_forward = 8;
 const flags dense_parallel = 16;
 const flags remove_duplicates = 32;
+const flags edge_parallel = 64;
 inline bool should_output(const flags& fl) { return !(fl & no_output); }
 
 template <class data, class vertex, class VS, class F>
