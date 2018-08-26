@@ -137,7 +137,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     vertexMap(FrontierV,Random_Sample(flags,round,numVerticesProcessed,inverseProb));
     numVerticesProcessed += FrontierV.numNonzeros();
     hyperedgeMap(FrontierH,Degrees_Reset(Degrees));
-    hyperedgeProp(GA, FrontierH, MIS_Count_Neighbors(flags,Degrees,round), INT_T_MAX, no_output);
+    hyperedgeProp(GA, FrontierH, MIS_Count_Neighbors(flags,Degrees,round), -1, no_output);
     hyperedgeSubset fullEdges = hyperedgeFilter(FrontierH, Check_Independence<vertex>(GA.H,Degrees));
     hyperedgeProp(GA, fullEdges, MIS_Reset_Neighbors(flags,round), -1, no_output);
     //cout << "round = " << round << " vertices = " << FrontierV.numNonzeros() << " hyperedges = " << FrontierH.numNonzeros() << " full edges = " << fullEdges.numNonzeros() << endl;
@@ -152,7 +152,6 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
     FrontierV.del();
     FrontierV = output;
   }
-
 // #ifdef CHECK
 //   {for(long i=0;i<nh;i++) {
 //       vertex h = GA.H[i];

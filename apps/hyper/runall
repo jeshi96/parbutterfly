@@ -26,18 +26,16 @@ def shellGetOutput(str) :
 
 dataDir = "../../inputs/"
 
-applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank"]#,"HyperKCore-Efficient"]
+applications = ["HyperBFS","HyperBC","HyperCC","HyperPageRank","HyperKCore-Efficient","HyperKCore"]
 mis = ["HyperMIS"]
-applications = ["HyperPageRank"]
 wapplications = ["HyperSSSP"]
-wapplications = []
-mis = []
 
-testfiles = [("com-orkut-ligra","0"),("com-friendster-ligra","0"),("rand-10M-10M-10","0"),("rand-100M-100M-10","0")]
-testfiles = [("rand-100M-100M-10","0")]
-wtestfiles = [("com-orkut-ligra-wgh","0"),("com-friendster-ligra-wgh","0"),("rand-10M-10M-10-wgh","0"),("rand-100M-100M-10-wgh","0")]
-wtestfiles = [("rand-100M-100M-10-wgh","0")]
+testfiles = [("com-orkut-ligra","0"),("com-friendster-ligra","0"),("rand-10M-10M-10","0"),("rand-100M-100M-10","0"),("rand-10M-10M-100","0"),("orkut-groupmemberships-hygra","0"),("trackers-hygra","0")]
+
+wtestfiles = [("com-orkut-ligra-wgh","0"),("com-friendster-ligra-wgh","0"),("rand-10M-10M-10-wgh","0"),("rand-100M-100M-10-wgh","0"),("rand-10M-10M-100-wgh","0"),("orkut-groupmemberships-hygra-wgh","0"),("trackers-hygra-wgh","0")]
+
 processors = [1,2,4]+range(8,144+1,8)
+processors = [1]+range(72,144+1,8)
 
 #os.system("make clean; make -j16; ~/hog2 250")
 for app in applications:

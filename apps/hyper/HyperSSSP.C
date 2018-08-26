@@ -80,13 +80,13 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
       break;
     }
     //cout << Frontier.numNonzeros() << endl;
-    hyperedgeSubset output = vertexProp(GA, Frontier, BF_Relax_F(ShortestPathLenV,ShortestPathLenH,Visited));
+    hyperedgeSubset output = vertexProp(GA, Frontier, BF_Relax_F(ShortestPathLenV,ShortestPathLenH,Visited),-1,dense_forward);
     hyperedgeMap(output,BF_Reset_F(Visited));
     Frontier.del();
     Frontier = output;
     if(Frontier.isEmpty()) break;
     //cout << Frontier.numNonzeros() << endl;
-    output = hyperedgeProp(GA, Frontier, BF_Relax_F(ShortestPathLenH,ShortestPathLenV,Visited));
+    output = hyperedgeProp(GA, Frontier, BF_Relax_F(ShortestPathLenH,ShortestPathLenV,Visited),-1,dense_forward);
     vertexMap(output,BF_Reset_F(Visited));
     Frontier.del();
     Frontier = output;
