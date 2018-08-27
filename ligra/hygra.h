@@ -136,8 +136,7 @@ template <class data, class vertex, class VS, class F>
 }
 
 template <class data, class vertex, class VS, class F>
-  vertexSubsetData<data> edgeMapSparse(hypergraph<vertex>& GA, long nTo, vertex* frontierVertices, VS& indices,
-				       uintT* degrees, uintT m, F &f, const flags fl) {
+  vertexSubsetData<data> edgeMapSparse(hypergraph<vertex>& GA, long nTo, vertex* frontierVertices, VS& indices, uintT* degrees, uintT m, F &f, const flags fl) {
   using S = tuple<uintE, data>;
   //long n = indices.n;
   S* outEdges;
@@ -148,10 +147,29 @@ template <class data, class vertex, class VS, class F>
     outEdgeCount = sequence::plusScan(offsets, offsets, m);
     outEdges = newA(S, outEdgeCount);
     auto g = get_emsparse_gen<data>(outEdges);
-    parallel_for (size_t i = 0; i < m; i++) {
-      uintT v = indices.vtx(i), o = offsets[i];
-      vertex vert = frontierVertices[i];
-      vert.decodeOutNghSparse(v, o, f, g);
+    if(fl & edge_parallel) {
+      std::function<void(intT,intT)> recursive_lambda =
+	[&]
+	(intT start, intT end){
+	if ((start == end-1) || (offsets[end]-offsets[start] < GRAIN_SIZE*sizeof(intE))){ 
+	  for (intT i = start; i < end; i++){
+	    uintT v = indices.vtx(i), o = offsets[i];
+	    vertex vert = frontierVertices[i];
+	    vert.decodeOutNghSparse(v, o, f, g);
+	  }
+	}
+	else {
+	  cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	  recursive_lambda(start + ((end-start)>>1), end);
+	}
+      }; 
+      recursive_lambda(0,m);
+    } else {
+      parallel_for (size_t i = 0; i < m; i++) {
+	uintT v = indices.vtx(i), o = offsets[i];
+	vertex vert = frontierVertices[i];
+	vert.decodeOutNghSparse(v, o, f, g);
+      }
     }
   } else {
     auto g = get_emsparse_nooutput_gen<data>();
@@ -329,7 +347,7 @@ template <class data, class vertex, class VS, class F>
   uintT outDegrees = 0;
   if(threshold > 0) { //compute sum of out-degrees if threshold > 0 
     vs.toSparse();
-    degrees = newA(uintT, m);
+    degrees = newA(uintT, m+1);
     frontierVertices = newA(vertex,m);
     {parallel_for (size_t i=0; i < m; i++) {
 	uintE v_id = vs.vtx(i);
@@ -338,6 +356,7 @@ template <class data, class vertex, class VS, class F>
 	frontierVertices[i] = v;
       }}
     outDegrees = sequence::plusReduce(degrees, m);
+    degrees[m] = outDegrees; //boundary case for sparse edge_parallel
     if (outDegrees == 0) return vertexSubsetData<data>(nTo);
   }
   if (m + outDegrees > threshold) {
