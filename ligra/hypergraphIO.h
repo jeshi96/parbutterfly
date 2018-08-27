@@ -110,8 +110,8 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
 
   //W.del(); // to deal with performance bug in malloc
 
-  vertex* v = newA(vertex,nv);
-  vertex* h = newA(vertex,nh);
+  vertex* v = newA(vertex,nv+1);
+  vertex* h = newA(vertex,nh+1);
 
   //vertices
   {parallel_for (uintT i=0; i < nv; i++) {
@@ -124,7 +124,12 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
     v[i].setOutNeighbors(edgesV+2*o);
 #endif
     }}
-
+#ifndef WEIGHTED
+  v[nv].setOutNeighbors(edgesV+mv);
+#else
+  v[nv].setOutNeighbors(edgesV+2*mv);
+#endif
+  
   //hyperedges
   {parallel_for (uintT i=0; i < nh; i++) {
     uintT o = offsetsH[i];
@@ -136,6 +141,11 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
     h[i].setOutNeighbors(edgesH+2*o);
 #endif
     }}
+#ifndef WEIGHTED
+  h[nh].setOutNeighbors(edgesH+mh);
+#else
+  h[nh].setOutNeighbors(edgesH+2*mh);
+#endif
 
   if(!isSymmetric) {
     //in-edges for vertices obtained from out-edges for hyperedges
@@ -210,6 +220,12 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
 #endif
       }}
 
+#ifndef WEIGHTED
+  v[nv].setInNeighbors(inEdgesV+mv);
+#else
+  v[nv].setInNeighbors(inEdgesV+2*mv);
+#endif
+
     free(tOffsets);
 
     //in-edges for hyperedges obtained from out-edges for vertices
@@ -283,6 +299,12 @@ hypergraph<vertex> readHypergraphFromFile(char* fname, bool isSymmetric, bool mm
       h[i].setInNeighbors(inEdgesH+2*o);
 #endif
       }}
+
+#ifndef WEIGHTED
+  h[nh].setInNeighbors(inEdgesH+mh);
+#else
+  h[nh].setInNeighbors(inEdgesH+2*mh);
+#endif
 
     free(tOffsets);
 
@@ -377,8 +399,8 @@ hypergraph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
   in5.close();
   uintT* offsetsH = (uintT*) t2;
 
-  vertex* v = newA(vertex,nv);
-  vertex* h = newA(vertex,nh);
+  vertex* v = newA(vertex,nv+1);
+  vertex* h = newA(vertex,nh+1);
 #ifdef WEIGHTED
   intE* edgesAndWeightsV = newA(intE,2*mv);
   {parallel_for(long i=0;i<mv;i++) {
@@ -403,6 +425,12 @@ hypergraph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
       v[i].setOutNeighbors(edgesAndWeightsV+2*o);
 #endif
     }}
+#ifndef WEIGHTED
+  v[nv].setOutNeighbors((uintE*)edgesV+mv);
+#else
+  v[nv].setOutNeighbors(edgesAndWeightsV+2*mv);
+#endif
+  
   //hyperedges
   {parallel_for(long i=0;i<nh;i++) {
     uintT o = offsetsH[i];
@@ -414,6 +442,11 @@ hypergraph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
       h[i].setOutNeighbors(edgesAndWeightsH+2*o);
 #endif
     }}
+#ifndef WEIGHTED
+  h[nh].setOutNeighbors((uintE*)edgesH+mh);
+#else
+  h[nh].setOutNeighbors(edgesAndWeightsH+2*mh);
+#endif
 
   if(!isSymmetric) {
     //in-edges for vertices obtained from out-edges for hyperedges
@@ -487,6 +520,11 @@ hypergraph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
 #endif
       }}
     free(tOffsets);
+#ifndef WEIGHTED
+      v[nv].setInNeighbors((uintE*)inEdgesV+mv);
+#else
+      v[nv].setInNeighbors((intE*)(inEdgesV+2*mv));
+#endif
 
     //in-edges for hyperedges obtained from out-edges for vertices
     tOffsets = newA(uintT,nh);
@@ -555,6 +593,11 @@ hypergraph<vertex> readHypergraphFromBinary(char* iFile, bool isSymmetric) {
 #endif
       }}
     free(tOffsets);
+#ifndef WEIGHTED
+      h[nh].setInNeighbors((uintE*)inEdgesH+mh);
+#else
+      h[nh].setInNeighbors((intE*)(inEdgesH+2*mh));
+#endif
 
 #ifndef WEIGHTED
     Uncompressed_Memhypergraph<vertex>* mem =

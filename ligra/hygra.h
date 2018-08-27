@@ -52,7 +52,7 @@ template <class data, class vertex, class VS, class F>
       std::function<void(intT,intT)> recursive_lambda =
 	[&]
 	(intT start, intT end){
-	if ((start == end-1) || (G[end].getOutNeighbors()-G[start].getOutNeighbors() < GRAIN_SIZE*sizeof(intE))){
+	if ((start == end-1) || (G[end].getInNeighbors()-G[start].getInNeighbors() < GRAIN_SIZE*sizeof(intE))){ 
 	  for (intT v = start; v < end; v++){
 	    std::get<0>(next[v]) = 0;
 	    if (f.cond(v)) {
@@ -71,7 +71,7 @@ template <class data, class vertex, class VS, class F>
       std::function<void(intT,intT)> recursive_lambda =
 	[&]
 	(intT start, intT end){
-	if ((start == end-1) || (G[end].getOutNeighbors()-G[start].getOutNeighbors() < GRAIN_SIZE*sizeof(intE))){
+	if ((start == end-1) || (G[end].getInNeighbors()-G[start].getInNeighbors() < GRAIN_SIZE*sizeof(intE))){
 	  for (intT v = start; v < end; v++){
 	    if (f.cond(v)) {
 	      G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
