@@ -38,7 +38,6 @@
 #include "graph.h"
 #include "IO.h"
 #include "parseCommandLine.h"
-#include "gettime.h"
 #include "index_map.h"
 #include "edgeMap_utils.h"
 using namespace std;
