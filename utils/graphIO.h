@@ -548,7 +548,8 @@ namespace benchIO {
     char **SA = newA(char*, m);
     parallel_for (long j=0; j < m; j++) SA[j] = Str+offsets[j];
 
-    free(offsets); free(FL);
+    //free(offsets); 
+    Off.del(); free(FL);
     return words(Str,n,SA,m);
   }
 
@@ -1002,7 +1003,7 @@ namespace benchIO {
     long k=0;
     while(1) {
       if(S.A[k] == '%') {
-	while(S.A[k++] != '\n') continue;
+  while(S.A[k++] != '\n') continue;
       }
       if(k >= S.n || S.A[k] != '%') break; 
     }
@@ -1016,9 +1017,9 @@ namespace benchIO {
     edge<intT> *HE = newA(edge<intT>,m);
 
     {parallel_for(long i=0; i < m; i++) {
-	VE[i] = edge<intT>(atol(W.Strings[2*i]), 
-			  atol(W.Strings[2*i + 1]));
-	HE[i] = edge<intT>(atol(W.Strings[2*i+1]),atol(W.Strings[2*i]));
+  VE[i] = edge<intT>(atol(W.Strings[2*i]), 
+        atol(W.Strings[2*i + 1]));
+  HE[i] = edge<intT>(atol(W.Strings[2*i+1]),atol(W.Strings[2*i]));
       }}
     W.del();
 
@@ -1040,10 +1041,10 @@ namespace benchIO {
     long nh = sequence::plusScan(IDsH,IDsH,maxH);
 
     {parallel_for(long i=0;i<m;i++) {
-    	VE[i].u = IDsV[VE[i].u];
-	VE[i].v = IDsH[VE[i].v];
-	HE[i].u = IDsH[HE[i].u];
-	HE[i].v = IDsV[HE[i].v];
+      VE[i].u = IDsV[VE[i].u];
+  VE[i].v = IDsH[VE[i].v];
+  HE[i].u = IDsH[HE[i].u];
+  HE[i].v = IDsV[HE[i].v];
       }}
     free(IDsV);
     free(IDsH);
@@ -1188,6 +1189,7 @@ namespace benchIO {
       cout << "Bad input file: missing header: " << AdjHypergraphHeader << endl;
       abort();
     }
+    S.del();
 
     long len = W.m -1;
     uintT * In = newA(uintT, len);

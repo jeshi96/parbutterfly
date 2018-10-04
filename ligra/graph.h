@@ -64,6 +64,36 @@ public:
 };
 
 template <class vertex>
+struct Uncompressed_Membipartitegraph : public Deletable {
+public:
+  vertex* V;
+  vertex* U;
+  long nv;
+  long nu;
+  void* edgesV, *edgesU;
+
+ Uncompressed_Membipartitegraph(vertex* VV, vertex* UU, long nnv, long nnu, void* _edgesV=NULL, void* _edgesU=NULL)
+   : V(VV), U(UU), nv(nnv), nu(nnu), edgesV(_edgesV), edgesU(_edgesU){ }
+
+  void del() {
+    if(edgesV != NULL) free(edgesV);
+    else {
+      for (long i=0; i < nv; ++i) {
+        V[i].del();
+      }
+    }
+    if(edgesU != NULL) free(edgesU);
+    else {
+      for (long i=0;i<nu;++i) {
+        U[i].del();
+      }
+    }
+    free(V);
+    free(U);
+  }
+};
+
+template <class vertex>
 struct Compressed_Mem : public Deletable {
 public:
   vertex* V;
@@ -166,6 +196,21 @@ hypergraph(vertex* _V, vertex* _H, long _nv, long _mv, long _nh, long _mh,  Dele
       }
       transposed = !transposed;
     }
+  }
+};
+
+template <class vertex>
+struct bipartiteGraph {
+  vertex *V;
+  vertex *U;
+  long nv;
+  long nu;
+  Deletable *D;
+
+bipartiteGraph(vertex* _V, vertex* _U, long _nv, long _nu, Deletable* _D) : V(_V), U(_U), nv(_nv), nu(_nu), D(_D) {}
+  void del() {
+    D->del();
+    free(D);
   }
 };
 #endif

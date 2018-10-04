@@ -25,7 +25,7 @@ endif
 #compilers
 ifdef CILK
 PCC = g++
-PCFLAGS = -std=c++14 -fcilkplus -lcilkrts -O2 -DCILK $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
+PCFLAGS = -ggdb -O0 -std=c++14 -fcilkplus -lcilkrts -O2 -DCILK $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
 PLFLAGS = -fcilkplus -lcilkrts
 
 else ifdef MKLROOT
@@ -38,20 +38,23 @@ PCFLAGS = -std=c++14 -fopenmp -march=native -O3 -DOPENMP $(INTT) $(INTE) $(CODE)
 
 else
 PCC = g++
-PCFLAGS = -std=c++14 -O2 $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
+PCFLAGS = -std=c++14 -O2 $(INTT) $(INTE) $(CODE) $(PD) $(MEM) 
 endif
 
-COMMON= ligra.h graph.h compressedVertex.h vertex.h utils.h IO.h parallel.h gettime.h index_map.h maybe.h sequence.h edgeMap_utils.h binary_search.h quickSort.h blockRadixSort.h transpose.h parseCommandLine.h byte.h byteRLE.h nibble.h byte-pd.h byteRLE-pd.h nibble-pd.h vertexSubset.h decoder.C hypergraphIO.h hygra.h bucket.h counting_sort.h dyn_arr.h edgeMapReduce.h histogram.h sequentialHT.h hypergraphEncoder.C hypergraphDecoder.C
-
+COMMON= ligra.h graph.h compressedVertex.h vertex.h utils.h IO.h parallel.h gettime.h index_map.h maybe.h sequence.h edgeMap_utils.h binary_search.h quickSort.h blockRadixSort.h transpose.h parseCommandLine.h byte.h byteRLE.h nibble.h byte-pd.h byteRLE-pd.h nibble-pd.h vertexSubset.h decoder.C hypergraphIO.h hygra.h bucket.h counting_sort.h dyn_arr.h edgeMapReduce.h sequentialHT.h hypergraphEncoder.C hypergraphDecoder.C
+LOCAL_COMMON = sparseSet.h
 ALL= hypergraphEncoder hypergraphDecoder HyperReader WeightedHyperReader HyperBFS HyperCC HyperSSSP HyperPageRank HyperBC HyperBPath HyperMIS HyperKCore HyperKCore-Efficient
 
 all: $(ALL)
 
-% : %.C $(COMMON)
+% : %.C $(COMMON) $(LOCAL_COMMON)
 	$(PCC) $(PCFLAGS) -o $@ $<
 
 $(COMMON):
 	ln -s ../../ligra/$@ .
+
+$(LOCAL_COMMON):
+	ln -sf ../localAlg/$@ .
 
 .PHONY : clean
 
@@ -61,3 +64,4 @@ clean :
 cleansrc :
 	rm -f *.o $(ALL)
 	rm $(COMMON)
+	rm $(LOCAL_COMMON)
