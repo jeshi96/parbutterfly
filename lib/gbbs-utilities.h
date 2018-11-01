@@ -33,27 +33,13 @@
 
 #include "macros.h"
 
-#define newA(__E, __n) (__E*)malloc((__n) * sizeof(__E))
-#define COMMA , // to fix
-
-// scan/filter macros; used by sequence implementations
-#define _SCAN_LOG_BSIZE 10
-#define _SCAN_BSIZE (1 << _SCAN_LOG_BSIZE)
-#define _F_BSIZE (2 * _SCAN_BSIZE)
-
-namespace pbbsa {
-constexpr const size_t kSequentialForThreshold = 2048;
-}  // namespace pbbs
-
-
+#if defined(CILK)
 #include <cilk/cilk.h>
 #include <cilk/cilk_api.h>
 #define parallel_for cilk_for
 #define parallel_for_1 cilk_for
 #define parallel_for_16 _Pragma("cilk_grainsize = 16") cilk_for
 #define parallel_for_256 _Pragma("cilk_grainsize = 256") cilk_for
-
-namespace pbbsa {
 size_t nworkers() { return __cilkrts_get_nworkers(); }
 static int getWorkers() { return __cilkrts_get_nworkers(); }
 static void setWorkers(int n) {
@@ -66,7 +52,6 @@ static void setWorkers(int n) {
   }
 }
 static inline int get_worker_num() { return __cilkrts_get_worker_number(); }
-}
 
 template <typename Lf, typename Rf>
 static inline void par_do(bool do_parallel, Lf left, Rf right) {
@@ -105,6 +90,34 @@ static inline void par_for(size_t start, size_t end, size_t granularity, F f) {
     cilk_sync;
   }
 }
+#else
+#define cilk_spawn
+#define cilk_sync
+#define parallel_for for
+#define parallel_for_1 for
+#define parallel_for_256 for
+#define cilk_for for
+static int getWorkers() { return 1; }
+static void setWorkers(int n) {}
+
+template <typename Lf, typename Rf>
+static void par_do(bool do_parallel, Lf left, Rf right) {
+  left();
+  right();
+}
+
+template <typename Lf, typename Mf, typename Rf>
+static void par_do3(bool do_parallel, Lf left, Mf mid, Rf right) {
+  left();
+  mid();
+  right();
+}
+
+template <typename F>
+static void par_for(size_t start, size_t end, size_t granularity, F f) {
+  for (size_t i = start; i < end; i++) f(i);
+}
+#endif
 
 #include <malloc.h>
 struct malloc_init {
@@ -231,7 +244,7 @@ template <typename E>
 E* new_array(size_t n) {
   E* r = new_array_no_init<E>(n);
   if (!std::is_trivially_default_constructible<E>::value) {
-    parallel_for_bc(i, 0, n, (n > pbbsa::kSequentialForThreshold),
+    parallel_for_bc(i, 0, n, (n > pbbs::kSequentialForThreshold),
                     { new ((void*)(r + i)) E; });
   }
   return r;
@@ -242,7 +255,7 @@ template <typename E>
 void delete_array(E* A, size_t n) {
   // C++14 -- suppored by gnu C++11
   if (!std::is_trivially_destructible<E>::value) {
-    parallel_for_bc(i, 0, n, (n > pbbsa::kSequentialForThreshold),
+    parallel_for_bc(i, 0, n, (n > pbbs::kSequentialForThreshold),
                     { A[i].~E(); });
   }
   free(A);

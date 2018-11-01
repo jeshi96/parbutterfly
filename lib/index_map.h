@@ -44,6 +44,7 @@ struct in_imap {
   in_imap(size_t n, F& _f) : f(&_f), s(0), e(n) {};
   in_imap(size_t s, size_t e, F& _f) : f(&_f), s(s), e(e) {};
   T operator[] (const size_t i) {return (*f)(i+s);}
+  T operator() (const size_t i) {return (*f)(i+s);}
   in_imap<T,F> slice(size_t ss, size_t ee) {return in_imap<T,F>(s+ss,s+ee,*f); }
   size_t size() { return e - s;}
 };
