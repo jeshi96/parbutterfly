@@ -3,6 +3,15 @@
 #include <stdlib.h>
 #include <string>
 #include <assert.h>
+
+#define HYPER 1
+
+//trying kcore stuff
+#include "hygra.h"
+#include "index_map.h"
+#include "bucket.h"
+#include "edgeMapReduce.h"
+
 #include "parallel.h"
 #include "gettime.h"
 #include "utils.h"
@@ -16,7 +25,11 @@
 #include "../../lib/histogram.h"
 #include "../../lib/gbbs-histogram.h"
 
+
+
 #include <assert.h>
+
+
 
 #define clean_errno() (errno == 0 ? "None" : strerror(errno))
 #define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
@@ -42,6 +55,12 @@ struct VertexPair {
 	VertexPair(uintE _v1, uintE _v2) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1) {}
 };
 
+struct UVertexPair {
+	uintE v1;
+	uintE v2;
+	UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
+};
+
 struct VertexPairCmp {
 	long nv;
 	VertexPairCmp(long _nv) : nv(_nv) {}
@@ -58,8 +77,20 @@ struct VertexPairCmp2 {
 	}
 };
 
+struct UVertexPairCmp {
+	long nv;
+	UVertexPairCmp(long _nv) : nv(_nv) {}
+	bool operator() (UVertexPair vs1, UVertexPair vs2) {
+		return vs1.v2 * nv + vs1.v1 < vs2.v2 * nv + vs2.v1;
+	}
+};
+
+struct VertexPairEq { bool operator() (VertexPair vs1, VertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
+struct UVertexPairEq { bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
+
 // Constructs a VertexPair
 struct VertexPairCons { VertexPair operator() (uintE v1, uintE v2) { return VertexPair(v1, v2); }};
+struct UVertexPairCons { UVertexPair operator() (uintE v1, uintE v2) { return UVertexPair(v1, v2); }};
 
 // Constructs a uintE form of a VertexPair
 struct VertexPairIntCons {
@@ -67,6 +98,13 @@ struct VertexPairIntCons {
   VertexPairIntCons(long _nu) : nu(_nu) {}
   uintE operator() (uintE v1, uintE v2) {
     return v1 <= v2 ? v1 * nu + v2 : v2 * nu + v1;
+  }
+};
+struct UVertexPairIntCons {
+  long nu;
+  UVertexPairIntCons(long _nu) : nu(_nu) {}
+  uintE operator() (uintE v1, uintE v2) {
+    return v1 * nu + v2;
   }
 };
 
@@ -177,6 +215,24 @@ t.reportTotal("\tgetWedges:");
   return wedges;
 }
 
+template <class T, class Cmp, class Eq>
+pair<uintE*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq) {
+  // Sort the wedges by the key
+  sampleSort(objs, num, cmp);
+
+  uintE* freqs = newA(uintE, num + 1);
+  freqs[0] = 0;
+  freqs[num] = num;
+  parallel_for(long i=1; i < num; ++i) {
+    if (!eq(objs[i-1],objs[i])) freqs[i] = i;
+    else freqs[i] = UINT_E_MAX;
+  }
+  uintE* freqs_f = newA(uintE, num+1);
+  long num_freqs_f = sequence::filter(freqs, freqs_f, num+1, nonMaxF());
+  free(freqs);
+  return make_pair(freqs_f, num_freqs_f);
+}
+
 //********************************************************************************************
 //********************************************************************************************
 
@@ -237,15 +293,16 @@ t.stop();
 //t.reportTotal("\tstoreButterfliesSortCE:");
 }
 
-
 // Retrieve frequency counts for all wedges with the same key, and for all wedges with the same first vertex
 // (if use_v1; otherwise, second vertex -- in comments, we assume first vertex)
 // First, retrieve a list of indices where consecutive wedges have different keys
 pair<uintE*, long> getWedgeFreqs(long nv, long nu, VertexPair* wedges, long num_wedges, bool use_v1) {
 timer t;
 t.start();
+if (use_v1) return getFreqs(wedges, num_wedges, VertexPairCmp(nu), VertexPairEq());
+  return getFreqs(wedges, num_wedges, VertexPairCmp2(nu), VertexPairEq());
   // Sort the wedges by the key (pair of two vertices in U)
-  if (use_v1) sampleSort(wedges, num_wedges, VertexPairCmp(nu)); //TODO check if num_wedges > 2^32 to see if overflow; if it is, compile w/env var LONG/EDGELONG
+  /*if (use_v1) sampleSort(wedges, num_wedges, VertexPairCmp(nu)); //TODO check if num_wedges > 2^32 to see if overflow; if it is, compile w/env var LONG/EDGELONG
   else sampleSort(wedges, num_wedges, VertexPairCmp2(nu));
 
   uintE* wedge_freqs = newA(uintE, num_wedges+1);
@@ -261,7 +318,7 @@ t.start();
   uintE* wedge_freqs_f = newA(uintE, num_wedges+1);
   long num_wedge_freqs_f = sequence::filter(wedge_freqs, wedge_freqs_f, num_wedges+1, nonMaxF());
   free(wedge_freqs);
-  return make_pair(wedge_freqs_f, num_wedge_freqs_f);
+  return make_pair(wedge_freqs_f, num_wedge_freqs_f);*/
 t.stop();
 t.reportTotal("\tgetWedgeFreqs:");
 }
@@ -270,6 +327,7 @@ void countButterfliesSortCE(uintE* butterflies, long nv, long nu, VertexPair* we
             long num_wedge_freqs_f, bool use_v1) {
 timer t;
 t.start();
+//TODO use getFreqs
   // Given this list wedge_freqs_f, retrieve a list of indices for wedge_freqs_f such that
   // consecutive wedges have different first vertices
   // That is to say, the list we construct par_idxs_f is a list of indices on wedge_freqs_f,
@@ -327,14 +385,11 @@ t.reportTotal("\tcountButterfliesSort:");
 
 // This is the original compute function, without the more cache-efficient sorting method
 template <class vertex>
-void ComputeSort(bipartiteGraph<vertex> GA, commandLine P) {
-  pair<bool,long> use_v = cmpWedgeCounts(GA);
-  const long nv = use_v.first ? GA.nv : GA.nu;
-  const long nu = use_v.first ? GA.nu : GA.nv;
-  const vertex* V = use_v.first ? GA.V : GA.U;
-  const vertex* U = use_v.first ? GA.U : GA.V;
-
-  long num_wedges = use_v.second;
+uintE* ComputeSort(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, commandLine P) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
 
   VertexPair* wedges = getWedges<VertexPair>(nv, V, VertexPairCons());
 
@@ -354,21 +409,18 @@ void ComputeSort(bipartiteGraph<vertex> GA, commandLine P) {
   /*for (long i=0; i < nu; ++i) {
   	cout << i << ", " << butterflies[i] << "\n";
   }*/
-  free(butterflies);
+  //free(butterflies);
   free(wedges);
+  return butterflies;
 }
 
 // This is the new compute function, with cache efficient sorting
 template <class vertex>
-void ComputeSortCE(bipartiteGraph<vertex> GA, commandLine P) {
-  pair<bool,long> use_v = cmpWedgeCounts(GA);
-  const long nv = use_v.first ? GA.nv : GA.nu;
-  const long nu = use_v.first ? GA.nu : GA.nv;
-  const vertex* V = use_v.first ? GA.V : GA.U;
-  const vertex* U = use_v.first ? GA.U : GA.V;
-
-  // TODO if 0? make sure doesn't break
-  long num_wedges = use_v.second;
+uintE* ComputeSortCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, commandLine P) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
 
   VertexPair* wedges = getWedges<VertexPair>(nv, V, VertexPairCons());
 
@@ -390,8 +442,9 @@ void ComputeSortCE(bipartiteGraph<vertex> GA, commandLine P) {
   /*for (long i=0; i < nu; ++i) {
     cout << i << ", " << butterflies[i] << "\n";
   }*/
-  free(butterflies);
+  //free(butterflies);
   free(wedges);
+  return butterflies;
 
 }
 
@@ -419,14 +472,12 @@ t.reportTotal("\tgetWedgesHash:");
 }
 
 template <class vertex>
-void ComputeHash(bipartiteGraph<vertex> GA, commandLine P) {
-  pair<bool,long> use_v = cmpWedgeCounts(GA);
-  const long nv = use_v.first ? GA.nv : GA.nu;
-  const long nu = use_v.first ? GA.nu : GA.nv;
-  const vertex* V = use_v.first ? GA.V : GA.U;
-  const vertex* U = use_v.first ? GA.U : GA.V;
+uintE* ComputeHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, commandLine P) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
 
-  long num_wedges = use_v.second;
   // TODO fix prob don't need that ceil stuff just divide w/float -- for mem on hash table
   float f = ((float)num_wedges)/((float) (nv*nu+nu));
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(nv*nu + nu,f,
@@ -459,20 +510,19 @@ t.reportTotal("\tcountButterfliesHash:");
   	cout << i << ", " << butterflies[i] << "\n";
   }*/
 
-  free(butterflies);
+  //free(butterflies);
   wedge_freqs.del();
   wedges.del();
+  return butterflies;
 }
 
 template <class vertex>
-void ComputeHashCE(bipartiteGraph<vertex> GA, commandLine P) {
-  pair<bool,long> use_v = cmpWedgeCounts(GA);
-  const long nv = use_v.first ? GA.nv : GA.nu;
-  const long nu = use_v.first ? GA.nu : GA.nv;
-  const vertex* V = use_v.first ? GA.V : GA.U;
-  const vertex* U = use_v.first ? GA.U : GA.V;
+uintE* ComputeHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, commandLine P) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
 
-  long num_wedges = use_v.second;
   // TODO fix prob don't need that ceil stuff just divide w/float -- for mem on hash table
   float f = ((float)num_wedges)/((float) (nv*nu+nu));
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(nv*nu + nu,f,
@@ -512,11 +562,12 @@ t.reportTotal("\tcountButterfliesHashCE:");
   	cout << i << ", " << butterflies[i] << "\n";
   }*/
 
-  free(butterflies);
+  //free(butterflies);
   //butterflies.del();
   butterflies_set.del();
   wedge_freqs.del();
   wedges.del();
+  return butterflies;
 }
 
 //********************************************************************************************
@@ -525,14 +576,11 @@ t.reportTotal("\tcountButterfliesHashCE:");
 
 // TODO use more efficient hist from laxman
 template <class vertex>
-void ComputeHist(bipartiteGraph<vertex> GA, bool gbbs, commandLine P) {
-  pair<bool,long> use_v = cmpWedgeCounts(GA);
-  const long nv = use_v.first ? GA.nv : GA.nu;
-  const long nu = use_v.first ? GA.nu : GA.nv;
-  const vertex* V = use_v.first ? GA.V : GA.U;
-  const vertex* U = use_v.first ? GA.U : GA.V;
-
-  long num_wedges = use_v.second;
+uintE* ComputeHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, bool gbbs, commandLine P) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
 
   uintE* wedges_list = getWedges<uintE>(nv, V, VertexPairIntCons(nu));
   pbbsa::sequence<uintE> wedges_seq = pbbsa::sequence<uintE>(wedges_list,num_wedges);
@@ -586,9 +634,10 @@ t.reportTotal("\tcountButterfliesHist:");
     cout << i << ", " << butterflies[i] << "\n";
   }*/
 
-  free(butterflies);
+  //free(butterflies);
   free(wedge_freqs);
   free(wedges_list);
+  return butterflies;
 }
 
 template<class E, class K>
@@ -603,14 +652,11 @@ tuple<K,E> chooseAddReduce (tuple<K,E> curr, tuple<K,E> v) {
 
 // TODO use more efficient hist from laxman
 template <class vertex>
-void ComputeHistCE(bipartiteGraph<vertex> GA, commandLine P) {
-  pair<bool,long> use_v = cmpWedgeCounts(GA);
-  const long nv = use_v.first ? GA.nv : GA.nu;
-  const long nu = use_v.first ? GA.nu : GA.nv;
-  const vertex* V = use_v.first ? GA.V : GA.U;
-  const vertex* U = use_v.first ? GA.U : GA.V;
-
-  long num_wedges = use_v.second;
+uintE* ComputeHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, commandLine P) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
 
   uintE* wedges_list = getWedges<uintE>(nv, V, VertexPairIntCons(nu));
   pbbsa::sequence<uintE> wedges_seq = pbbsa::sequence<uintE>(wedges_list,num_wedges);
@@ -653,12 +699,290 @@ t2.reportTotal("\thistWedgesCE:");
     cout << i << ", " << butterflies[i] << "\n";
   }*/
 
-  free(butterflies);
+  //free(butterflies);
   free(wedge_freqs);
   free(wedges_list);
+
+  return butterflies;
 }
 
-int parallel_main(int argc, char* argv[]){
+
+//********************************************************************************************
+//********************************************************************************************
+
+template<class seagull, class vertex, class seagullCons>
+pair<seagull*, long> getSeagulls(vertexSubset active, vertex* V, vertex* U, seagullCons cons) {
+  // sg_idx is index of seagulls for each active vertex; nbhd_idx is index of seagulls for each neighbor of 
+  // each active vertex, in a 2d nested array
+  long* sg_idxs = newA(long, active.size() + 1);
+  using T = long*;
+  T* nbhd_idxs = newA(T, active.size());
+  sg_idxs[active.size()] = 0;
+  parallel_for(long i=0; i < active.size(); ++i) {
+    uintE u_idx = active.vtx(i);
+    const vertex u = U[u_idx];
+    const uintE u_deg = u.getOutDegree();
+    nbhd_idxs[i] = newA(long, u_deg + 1);
+    (nbhd_idxs[i])[u_deg] = 0;
+    parallel_for(long j=0; j < u_deg; ++j) {
+      (nbhd_idxs[i])[j] = V[u.getOutNeighbor(j)].getOutDegree()-1;
+    }
+    sequence::plusScan(nbhd_idxs[i], nbhd_idxs[i], u_deg+1);
+    sg_idxs[i] = (nbhd_idxs[i])[u_deg];
+  }
+  sequence::plusScan(sg_idxs, sg_idxs, active.size() + 1);
+  long num_sg = sg_idxs[active.size()];
+  seagull* seagulls = newA(seagull, num_sg);
+  parallel_for(long i=0; i < active.size(); ++i) {
+    uintE u_idx = active.vtx(i);
+    const vertex u = U[u_idx];
+    const uintE u_deg = u.getOutDegree();
+    long sg_idx = sg_idxs[i];
+    parallel_for(long j=0; j < u_deg; ++j) {
+      const vertex v = V[u.getOutNeighbor(j)];
+      const uintE v_deg = v.getOutDegree();
+      long nbhd_idx = (nbhd_idxs[i])[j];
+      long idx = 0;
+      for (long k = 0; k < v_deg; ++k) {
+        uintE u2_idx = v.getOutNeighbor(k);
+        if (u2_idx != u_idx) {
+          seagulls[sg_idx+nbhd_idx+idx] = cons(u_idx,u2_idx);
+          ++idx;
+        }
+      }
+    }
+  }
+  parallel_for(long i=0; i<active.size();++i) { free(nbhd_idxs[i]); }
+  free(nbhd_idxs);
+  free(sg_idxs);
+
+  return make_pair(seagulls, num_sg);
+}
+
+struct uintELt {bool operator () (uintE a, uintE b) {return a < b;};};
+struct uintEEq {bool operator() (uintE a, uintE b) {return a == b;};};
+struct uintETupleLt {bool operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) {return get<0>(a) < get<0>(b);} };
+struct uintETupleEq {bool operator() (tuple<uintE,uintE> a,tuple<uintE,uintE> b) {return get<0>(a) == get<0>(b); }};
+struct uintETupleAdd {
+  tuple<uintE,uintE> operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) const {
+    return make_tuple(get<0>(a), get<1>(a) + get<1>(b));
+  };
+};
+
+pair<tuple<uintE, uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs, uintE* butterflies) {
+  using X = tuple<uintE,uintE>;
+  // Retrieve frequency counts on sorted seagulls
+  pair<uintE*, long> freq_pair = getFreqs(seagulls, num_sgs, UVertexPairCmp(nu), UVertexPairEq());
+  // This will hold our seagull frequencies choose 2, in (seagull end, frequency choose 2) tuples
+  long num_sg_freqs = freq_pair.second - 1;
+  X* sg_freqs = newA(X, num_sg_freqs);
+  parallel_for(long i=1; i < freq_pair.second; ++i) {
+    uintE num = freq_pair.first[i] - freq_pair.first[i-1];
+    num = num * (num-1) / 2;
+    uintE idx = seagulls[freq_pair.first[i-1]].v2;
+    sg_freqs[i-1] = make_tuple(idx, num);
+  }
+  free(freq_pair.first);
+  
+  // Now, we have to collate our seagulls again
+  pair<uintE*, long> sg_freq_pair = getFreqs(sg_freqs, num_sg_freqs, uintETupleLt(), uintETupleEq());
+  long num_sg_freqs_f = sg_freq_pair.second - 1;
+  X* sg_freqs_f = newA(X, num_sg_freqs_f);
+  parallel_for(long i=1; i < sg_freq_pair.second; ++i) {
+    uintE num_freq = sg_freq_pair.first[i] - sg_freq_pair.first[i-1];
+    X sg_freq = sequence::reduce(&(sg_freqs[sg_freq_pair.first[i-1]]), num_freq, uintETupleAdd());
+    uintE u_idx = get<0>(sg_freq);//get<0>(sg_freqs[sg_freq_pair.first[i-1]]); //
+    butterflies[u_idx] -= get<1>(sg_freq);
+    sg_freqs_f[i-1] = make_tuple(u_idx, butterflies[u_idx]);
+  }
+  free(sg_freq_pair.first);
+  return make_pair(sg_freqs_f, num_sg_freqs_f);
+}
+
+pair<tuple<uintE, uintE>*, long> getSeagullFreqsHist(const long nu, uintE* seagulls, long num_sgs, uintE* butterflies) {
+  using X = tuple<uintE,uintE>;
+  pbbsa::sequence<uintE> sgs_seq = pbbsa::sequence<uintE>(seagulls,num_sgs);
+  //JS: one optimization is to fuse getWedgesInt into the histogram
+  //code, instead of creating a new sequence, so that we don't need to
+  //actually write out all the wedges.
+  tuple<size_t,X*> sgs_tuple = pbbsa::sparse_histogram<uintE,uintE>(sgs_seq,nu);
+  X* sgs_freqs = get<1>(sgs_tuple);
+  size_t sgs_freqs_n = get<0>(sgs_tuple);
+  parallel_for(long i=0; i < sgs_freqs_n; ++i) {
+    uintE num = get<1>(sgs_freqs[i]);
+    sgs_freqs[i] = make_tuple(get<0>(sgs_freqs[i]) / nu, num * (num-1) / 2);
+  }
+
+  // Now, we have to collate our seagulls again
+  pbbsa::sequence<X> sgs_freqs_seq = pbbsa::sequence<X>(sgs_freqs,sgs_freqs_n);
+  tuple<size_t,X*> sgs_freqs_tuple = 
+    pbbsa::sparse_histogram_f<uintE,uintE>(sgs_freqs_seq,nu,chooseAdd<uintE,uintE>,chooseAddReduce<uintE,uintE>);
+  X* sgs_freqs_f = get<1>(sgs_freqs_tuple);
+  size_t num_sgs_freqs_f = get<0>(sgs_freqs_tuple);
+
+  parallel_for(long i=0; i < num_sgs_freqs_f; ++i) {
+    uintE u_idx = get<0>(sgs_freqs_f[i]);
+    butterflies[u_idx] -= get<1>(sgs_freqs_f[i]);
+    sgs_freqs_f[i] = make_tuple(u_idx, butterflies[u_idx]);
+  }
+
+  return make_pair(sgs_freqs_f, (long) num_sgs_freqs_f);
+}
+
+
+template<class vertex>
+void getSeagullFreqsHash(sparseAdditiveSet<uintE>& seagulls_total, vertexSubset active, vertex* V, vertex* U, const long nu) {
+  parallel_for (long i=0; i < active.size(); ++i) {
+      uintE u_idx = active.vtx(i);
+      const vertex u = U[u_idx];
+      const uintE u_deg = u.getOutDegree();
+      float f = ((float) u_deg) / ((float) nu);
+      sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(nu,f,UINT_E_MAX);
+      parallel_for (long j=0; j < u_deg; ++j ) {
+        const vertex v = V[u.getOutNeighbor(j)];
+        const uintE v_deg = v.getOutDegree();
+        parallel_for (long k=0; k < v_deg; ++k) {
+          const uintE u2_idx = v.getOutNeighbor(k);
+          if (u2_idx != u_idx) wedges.insert(pair<uintE,uintE>(u2_idx, 1));
+        }
+      }
+      _seq<pair<uintE,uintE>> wedge_freqs = wedges.entries();
+      parallel_for (long j=0; j < wedge_freqs.n; ++j) {
+  	    pair<uintE,uintE> wedge_freq_pair = wedge_freqs.A[j];
+  	    uintE num_butterflies = wedge_freq_pair.second;
+        num_butterflies = num_butterflies * (num_butterflies - 1)/2;
+        uintE u2_idx = wedge_freq_pair.first;
+        seagulls_total.insert(pair<uintE,uintE>(u2_idx, num_butterflies));
+      }
+      wedge_freqs.del();
+      wedges.del();
+    }
+}
+
+template<class vertex>
+pair<tuple<uintE, uintE>*, long> PeelSort(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
+  pair<UVertexPair*, long> sg_pair = getSeagulls<UVertexPair>(active, V, U, UVertexPairCons()); 
+  return getSeagullFreqs(nu, sg_pair.first , sg_pair.second, butterflies);
+}
+
+template<class vertex>
+pair<tuple<uintE, uintE>*, long> PeelHist(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
+  pair<uintE*, long> sg_pair = getSeagulls<uintE>(active, V, U, UVertexPairIntCons(nu)); 
+  return getSeagullFreqsHist(nu, sg_pair.first , sg_pair.second, butterflies);
+}
+
+template<class vertex>
+pair<tuple<uintE, uintE>*, long> PeelHash(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
+    sparseAdditiveSet<uintE> wedges_total = sparseAdditiveSet<uintE>(nu,(float) 1,UINT_E_MAX);
+    getSeagullFreqsHash(wedges_total, active, V, U, nu);
+    
+    //TODO go through wedges, and for each entry, we add to S a tuple with idx and val orig val - (n choose 2)
+    _seq<pair<uintE,uintE>> wedge_freqs = wedges_total.entries();
+    using X = tuple<uintE,uintE>;
+    X* update = newA(X, wedge_freqs.n);
+
+    parallel_for (long i=0; i < wedge_freqs.n; ++i) {
+  	  pair<uintE,uintE> wedge_freq_pair = wedge_freqs.A[i];
+  	  uintE num_butterflies = wedge_freq_pair.second;
+      uintE u = wedge_freq_pair.first;
+
+      butterflies[u] -= num_butterflies;
+      update[i] = make_tuple(u, butterflies[u]);
+    }
+    wedge_freqs.del();
+    wedges_total.del();
+    return make_pair(update, wedge_freqs.n);
+}
+
+
+template <class vertex>
+array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflies, long type=0, size_t num_buckets=128) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  vertex* V = use_v ? GA.V : GA.U;
+  vertex* U = use_v ? GA.U : GA.V; // butterflies are on nu
+
+  auto D = array_imap<uintE>(nu, [&] (size_t i) { return butterflies[i]; });
+
+  auto b = make_buckets(nu, D, increasing, num_buckets);
+
+  size_t finished = 0;
+  while (finished != nu) {
+    auto bkt = b.next_bucket();
+    auto active = bkt.identifiers;
+    uintE k = bkt.id;
+    finished += active.size();
+
+    pair<tuple<uintE, uintE>*, long> update_pair;
+    if (type ==0) update_pair = PeelHash(active,butterflies,V,U,nu);
+    else if(type==1) update_pair = PeelSort(active, butterflies, V,U,nu);
+    else update_pair=PeelHist(active,butterflies,V,U,nu);
+
+    vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(nu, update_pair.second, update_pair.first);
+
+    b.update_buckets(moved.get_fn_repr(), moved.size());
+    
+    moved.del(); active.del();
+    //free(update_pair.first);
+  }
+  return D;
+}
+
+template <class vertex>
+void Compute(hypergraph<vertex>& GA, commandLine P) {
+    std::string iFileConst = P.getOptionValue("-i", "");
+    char* iFile = new char[iFileConst.length()+1];
+    strcpy(iFile, iFileConst.c_str());
+    long ty = P.getOptionLongValue("-t",0);
+    long tp = P.getOptionLongValue("-tp",0);
+  	long nv = P.getOptionLongValue("-nv", 10);
+  	long nu = P.getOptionLongValue("-nu", 10);
+	bipartiteGraph<symmetricVertex> G = (iFileConst.length() != 0) ? 
+		bpGraphFromFile<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
+  delete [] iFile;
+
+  uintE* butterflies;
+  pair<bool,long> use_v_pair = cmpWedgeCounts(G);
+  bool use_v = use_v_pair.first;
+  long num_wedges = use_v_pair.second;
+
+  timer t;
+  t.start();
+  if (ty == 0) butterflies=ComputeSort(G,use_v, num_wedges,P);
+  else if (ty==1) butterflies=ComputeSortCE(G,use_v, num_wedges,P);
+  else if (ty==2) butterflies=ComputeHash(G,use_v, num_wedges,P);
+  else if (ty==3) butterflies=ComputeHashCE(G,use_v, num_wedges,P);
+  else if(ty==4) butterflies=ComputeHist(G,use_v, num_wedges,false,P);
+  else if(ty==5) butterflies=ComputeHist(G,use_v, num_wedges,true,P);
+  else butterflies=ComputeHistCE(G,use_v, num_wedges,P);
+	t.stop();
+
+  if (ty==0) t.reportTotal("Sort:");
+  else if (ty==1) t.reportTotal("SortCE:");
+  else if (ty==2) t.reportTotal("Hash:");
+  else if (ty==3) t.reportTotal("HashCE:");
+  else if (ty==4) t.reportTotal("Hist:");
+  else if (ty==5) t.reportTotal("HistNT:");
+  else t.reportTotal("HistCE:"); 
+
+  timer t2;
+  t2.start();
+  auto cores = Peel(G, use_v, butterflies, tp);
+  t2.stop();
+  if (tp ==0) t2.reportTotal("Hash Peel:");
+  else if (tp==1) t2.reportTotal("Sort Peel:");
+  else t2.reportTotal("Hist Peel:");
+
+  long num_idxs = use_v ? G.nu : G.nv;
+  uintE mc = 0;
+  for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
+  cout << "### Max core: " << mc << endl;
+
+  free(butterflies);
+	G.del();
+}
+
+/*int parallel_main(int argc, char* argv[]){
 	commandLine P(argc,argv," [-i <ingraph>] [-t <type>] [-nv <numleftvertices>] [-nu <numrightvertices>] <inFile>");
   	std::string iFileConst = P.getOptionValue("-i", "");
     char* iFile = new char[iFileConst.length()+1];
@@ -670,15 +994,17 @@ int parallel_main(int argc, char* argv[]){
 		bpGraphFromFile<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
   delete [] iFile;
 
+  uintE* butterflies;
+
   timer t;
   t.start();
-  if (ty == 0) ComputeSort(G,P);
-  else if (ty==1) ComputeSortCE(G,P);
-  else if (ty==2) ComputeHash(G,P);
-  else if (ty==3) ComputeHashCE(G,P);
-  else if(ty==4) ComputeHist(G,false,P);
-  else if(ty==5) ComputeHist(G,true,P);
-  else ComputeHistCE(G,P);
+  if (ty == 0) butterflies=ComputeSort(G,P);
+  else if (ty==1) butterflies=ComputeSortCE(G,P);
+  else if (ty==2) butterflies=ComputeHash(G,P);
+  else if (ty==3) butterflies=ComputeHashCE(G,P);
+  else if(ty==4) butterflies=ComputeHist(G,false,P);
+  else if(ty==5) butterflies=ComputeHist(G,true,P);
+  else butterflies=ComputeHistCE(G,P);
 	t.stop();
 
   if (ty==0) t.reportTotal("Sort:");
@@ -690,4 +1016,4 @@ int parallel_main(int argc, char* argv[]){
   else t.reportTotal("HistCE:");
 
 	G.del();
-}
+}*/

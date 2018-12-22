@@ -72,4 +72,32 @@ void quickSort(E* A, intT n, BinPred f) {
   }
 }
 
+template <class... Args, class BinPred, class intT>
+void quickSort(tuple<Args...>* A, intT n, BinPred f) {
+  using E = tuple<Args...>;
+  if (n < ISORT) insertionSort(A, n, f);
+  else {
+    //E p = std::__median(A[n/4],A[n/2],A[(3*n)/4],f);
+    E p = median(A[n/4],A[n/2],A[(3*n)/4],f);
+    E* L = A;   // below L are less than pivot
+    E* M = A;   // between L and M are equal to pivot
+    E* R = A+n-1; // above R are greater than pivot
+    while (1) {
+      while (!f(p,*M)) {
+	if (f(*M,p)) (*M).std::tuple<Args...>::swap(*(L++));
+	if (M >= R) break; 
+	M++;
+      }
+      while (f(p,*R)) R--;
+      if (M >= R) break; 
+      (*M).std::tuple<Args...>::swap(*R--); 
+      if (f(*M,p)) (*M).std::tuple<Args...>::swap(*(L++));
+      M++;
+    }
+    cilk_spawn quickSort(A, L-A, f);
+    quickSort(M, A+n-M, f); // Exclude all elts that equal pivot
+    cilk_sync;
+  }
+}
+
 #endif // _A_QSORT_INCLUDED
