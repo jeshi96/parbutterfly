@@ -14,7 +14,6 @@
 
 using namespace std;
 
-
 // Takes the elements of a vertex array, and returns the out degree choose 2
 template <class vertex, class E>
 struct chooseV { 
