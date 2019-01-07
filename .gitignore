@@ -1,3 +1,12 @@
+# Ignore all
+*
+
+# Unignore all with extensions
+!*.*
+
+# Unignore all dirs
+!*/
+
 apps/hyper/ligra.h
 apps/hyper/graph.h
 apps/hyper/compressedVertex.h
@@ -47,12 +56,3 @@ utils/transpose.h
 apps/hyper/._BipartiteButterflies.C
 apps/hyper/._butterfly_utils.h
 apps/hyper/._butterfly_count.h
-
-# Ignore all
-*
-
-# Unignore all with extensions
-!*.*
-
-# Unignore all dirs
-!*/
