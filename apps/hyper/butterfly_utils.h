@@ -1,17 +1,7 @@
-#ifndef BF_UTIL_H
-#define BF_UTIL_H
-
 #include <iostream>
 #include <math.h>
 #include <stdlib.h>
 #include <string>
-#include <assert.h>
-
-//trying kcore stuff
-#include "hygra.h"
-#include "index_map.h"
-#include "bucket.h"
-#include "edgeMapReduce.h"
 
 #include "parallel.h"
 #include "gettime.h"
@@ -21,14 +11,6 @@
 #include "parseCommandLine.h"
 #include "vertex.h"
 #include "sequence.h"
-#include "sparseSet.h"
-#include "sampleSort.h"
-#include "../../lib/histogram.h"
-#include "../../lib/gbbs-histogram.h"
-
-#define clean_errno() (errno == 0 ? "None" : strerror(errno))
-#define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
-#define assertf(A, M, ...) if(!(A)) {log_error(M, ##__VA_ARGS__); assert(A); }
 
 using namespace std;
 
@@ -44,19 +26,21 @@ struct chooseV {
   }
 };
 
-// Represents a pair of vertices on one side of a bipartite graph
+// Represents a pair of vertices on one side of a bipartite graph (ordered, with least vertex first)
 struct VertexPair {
 	uintE v1;
 	uintE v2;
 	VertexPair(uintE _v1, uintE _v2) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1) {}
 };
 
+// Represents a pair of vertices on one side of a bipartite graph (unordered, stored based on constructor order)
 struct UVertexPair {
 	uintE v1;
 	uintE v2;
 	UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
 };
 
+// Comparer for VertexPair based on least vertex in pair and then greatest vertex in pair
 struct VertexPairCmp {
 	long nv;
 	VertexPairCmp(long _nv) : nv(_nv) {}
@@ -65,6 +49,7 @@ struct VertexPairCmp {
 	}
 };
 
+// Comparer for VertexPair based on greatest vertex in pair and then least vertex in pair
 struct VertexPairCmp2 {
 	long nv;
 	VertexPairCmp2(long _nv) : nv(_nv) {}
@@ -73,6 +58,7 @@ struct VertexPairCmp2 {
 	}
 };
 
+// Comparer for UVertexPair
 struct UVertexPairCmp {
 	long nv;
 	UVertexPairCmp(long _nv) : nv(_nv) {}
@@ -81,14 +67,15 @@ struct UVertexPairCmp {
 	}
 };
 
+// Equality for VertexPair and UVertexPair
 struct VertexPairEq { bool operator() (VertexPair vs1, VertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 struct UVertexPairEq { bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 
-// Constructs a VertexPair
+// Constructs a VertexPair and UVertexPair
 struct VertexPairCons { VertexPair operator() (uintE v1, uintE v2) { return VertexPair(v1, v2); }};
 struct UVertexPairCons { UVertexPair operator() (uintE v1, uintE v2) { return UVertexPair(v1, v2); }};
 
-// Constructs a uintE form of a VertexPair
+// Constructs a uintE form of a VertexPair and UVertexPair
 struct VertexPairIntCons {
   long nu;
   VertexPairIntCons(long _nu) : nu(_nu) {}
@@ -172,4 +159,29 @@ bipartiteGraph<vertex> bpGraphFromFile(char* iFile){
 	Uncompressed_Membipartitegraph<vertex>* mem = new Uncompressed_Membipartitegraph<vertex>(v,u,nv,nu);
 	return bipartiteGraph<vertex>(v,u,nv,nu,mem);
 
+}
+
+//***********************************************************
+// general utils
+
+// Sort objects using cmp
+// Then, retrieve indices of where consecutive objects are not equal (as given by eq)
+// If we let arr be the returned array, arr[i+1] - arr[i] is the frequency of objs[arr[i]]
+// Iterating from 0 (inclusive) to the returned length-1 (exclusive) will give all frequency counts
+template <class T, class Cmp, class Eq>
+pair<uintE*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq) {
+  // Sort the wedges by the key
+  sampleSort(objs, num, cmp);
+
+  uintE* freqs = newA(uintE, num + 1);
+  freqs[0] = 0;
+  freqs[num] = num;
+  parallel_for(long i=1; i < num; ++i) {
+    if (!eq(objs[i-1],objs[i])) freqs[i] = i;
+    else freqs[i] = UINT_E_MAX;
+  }
+  uintE* freqs_f = newA(uintE, num+1);
+  long num_freqs_f = sequence::filter(freqs, freqs_f, num+1, nonMaxF());
+  free(freqs);
+  return make_pair(freqs_f, num_freqs_f);
 }
