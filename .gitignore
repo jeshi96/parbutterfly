@@ -44,6 +44,9 @@ utils/parallel.h
 utils/quickSort.h
 utils/blockRadixSort.h
 utils/transpose.h
+apps/hyper/._BipartiteButterflies.C
+apps/hyper/._butterfly_utils.h
+apps/hyper/._butterfly_count.h
 
 # Ignore all
 *
