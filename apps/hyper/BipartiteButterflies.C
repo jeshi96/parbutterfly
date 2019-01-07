@@ -25,142 +25,9 @@
 #include "../../lib/histogram.h"
 #include "../../lib/gbbs-histogram.h"
 
-
-
-#include <assert.h>
-
-
-
-#define clean_errno() (errno == 0 ? "None" : strerror(errno))
-#define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
-#define assertf(A, M, ...) if(!(A)) {log_error(M, ##__VA_ARGS__); assert(A); }
+#include "butterfly_utils.h"
 
 using namespace std;
-
-// Takes the elements of a vertex array, and returns the out degree choose 2
-template <class vertex, class E>
-struct chooseV { 
-  vertex* V;
-  chooseV(vertex* _V) : V(_V) {}
-  E operator() (const E& i) const {
-    uintE v_deg = V[i].getOutDegree();
-    return (E) ((v_deg * (v_deg-1)) / 2); 
-  }
-};
-
-// Represents a pair of vertices on one side of a bipartite graph
-struct VertexPair {
-	uintE v1;
-	uintE v2;
-	VertexPair(uintE _v1, uintE _v2) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1) {}
-};
-
-struct UVertexPair {
-	uintE v1;
-	uintE v2;
-	UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
-};
-
-struct VertexPairCmp {
-	long nv;
-	VertexPairCmp(long _nv) : nv(_nv) {}
-	bool operator() (VertexPair vs1, VertexPair vs2) {
-		return vs1.v1 * nv + vs1.v2 < vs2.v1 * nv + vs2.v2;
-	}
-};
-
-struct VertexPairCmp2 {
-	long nv;
-	VertexPairCmp2(long _nv) : nv(_nv) {}
-	bool operator() (VertexPair vs1, VertexPair vs2) {
-		return vs1.v2 * nv + vs1.v1 < vs2.v2 * nv + vs2.v1;
-	}
-};
-
-struct UVertexPairCmp {
-	long nv;
-	UVertexPairCmp(long _nv) : nv(_nv) {}
-	bool operator() (UVertexPair vs1, UVertexPair vs2) {
-		return vs1.v2 * nv + vs1.v1 < vs2.v2 * nv + vs2.v1;
-	}
-};
-
-struct VertexPairEq { bool operator() (VertexPair vs1, VertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
-struct UVertexPairEq { bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
-
-// Constructs a VertexPair
-struct VertexPairCons { VertexPair operator() (uintE v1, uintE v2) { return VertexPair(v1, v2); }};
-struct UVertexPairCons { UVertexPair operator() (uintE v1, uintE v2) { return UVertexPair(v1, v2); }};
-
-// Constructs a uintE form of a VertexPair
-struct VertexPairIntCons {
-  long nu;
-  VertexPairIntCons(long _nu) : nu(_nu) {}
-  uintE operator() (uintE v1, uintE v2) {
-    return v1 <= v2 ? v1 * nu + v2 : v2 * nu + v1;
-  }
-};
-struct UVertexPairIntCons {
-  long nu;
-  UVertexPairIntCons(long _nu) : nu(_nu) {}
-  uintE operator() (uintE v1, uintE v2) {
-    return v1 * nu + v2;
-  }
-};
-
-// Returns a complete bipartite graph with nv vertices on one side and nu vertices on the other
-template<class vertex>
-bipartiteGraph<vertex> bpGraphComplete(long nv, long nu){
-  	vertex* v = newA(vertex,nv+1);
-  	vertex* u = newA(vertex,nu+1);
-  	parallel_for(int i=0;i<nv;++i) {
-  		uintE* neighbors_v = newA(uintE,nu);
-  		parallel_for(int j=0;j<nu;++j) {
-  			neighbors_v[j] = j;
-  		}
-  		v[i] = vertex(neighbors_v,nu);
-  	}
-  	parallel_for(int i=0;i<nu;++i) {
-  		uintE* neighbors_u = newA(uintE,nv);
-  		parallel_for(int j=0;j<nv;++j) {
-  			neighbors_u[j] = j;
-  		}
-  		u[i] = vertex(neighbors_u,nv);
-  	}
-
-	Uncompressed_Membipartitegraph<vertex>* mem =
-      new Uncompressed_Membipartitegraph<vertex>(v,u,nv,nu);
-
-  	return bipartiteGraph<vertex>(v,u,nv,nu,mem);
-}
-
-// Reads a bipartite graph from file iFile (builds off of readHypergraphFromFile) -- not terribly efficient
-template<class vertex>
-bipartiteGraph<vertex> bpGraphFromFile(char* iFile){
-	hypergraph<vertex> G = readHypergraphFromFile<vertex>(iFile,1,0);
-	long nv = G.nv;
-	long nu = G.nh;
-	vertex* v = newA(vertex,nv);
-	vertex* u = newA(vertex,nu);
-	parallel_for(int i=0;i<nv;++i) {
-		uintE* neighbors_v = newA(uintE,G.V[i].getOutDegree());
-		parallel_for(int j=0;j<G.V[i].getOutDegree();++j) {
-			neighbors_v[j] = G.V[i].getOutNeighbor(j);
-		}
-		v[i] = vertex(neighbors_v, G.V[i].getOutDegree());
-	}
-	parallel_for(int i=0;i<nu;++i) {
-		uintE* neighbors_u = newA(uintE,G.H[i].getInDegree());
-		parallel_for(int j=0;j<G.H[i].getInDegree();++j) {
-			neighbors_u[j] = G.H[i].getInNeighbor(j);
-		}
-		u[i] = vertex(neighbors_u, G.H[i].getInDegree());
-	}
-	G.del();
-	Uncompressed_Membipartitegraph<vertex>* mem = new Uncompressed_Membipartitegraph<vertex>(v,u,nv,nu);
-	return bipartiteGraph<vertex>(v,u,nv,nu,mem);
-
-}
 
 // Returns the number of wedges on all vertices on one side of our bipartite graph, as specified by V
 template<class vertex>
@@ -562,8 +429,6 @@ t.reportTotal("\tcountButterfliesHashCE:");
   	cout << i << ", " << butterflies[i] << "\n";
   }*/
 
-  //free(butterflies);
-  //butterflies.del();
   butterflies_set.del();
   wedge_freqs.del();
   wedges.del();
@@ -759,16 +624,6 @@ pair<seagull*, long> getSeagulls(vertexSubset active, vertex* V, vertex* U, seag
   return make_pair(seagulls, num_sg);
 }
 
-struct uintELt {bool operator () (uintE a, uintE b) {return a < b;};};
-struct uintEEq {bool operator() (uintE a, uintE b) {return a == b;};};
-struct uintETupleLt {bool operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) {return get<0>(a) < get<0>(b);} };
-struct uintETupleEq {bool operator() (tuple<uintE,uintE> a,tuple<uintE,uintE> b) {return get<0>(a) == get<0>(b); }};
-struct uintETupleAdd {
-  tuple<uintE,uintE> operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) const {
-    return make_tuple(get<0>(a), get<1>(a) + get<1>(b));
-  };
-};
-
 pair<tuple<uintE, uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs, uintE* butterflies) {
   using X = tuple<uintE,uintE>;
   // Retrieve frequency counts on sorted seagulls
@@ -783,6 +638,8 @@ pair<tuple<uintE, uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* sea
     sg_freqs[i-1] = make_tuple(idx, num);
   }
   free(freq_pair.first);
+
+  num_sg_freqs = sequence::filter(sg_freqs, sg_freqs, num_sg_freqs, nonZeroF());
   
   // Now, we have to collate our seagulls again
   pair<uintE*, long> sg_freq_pair = getFreqs(sg_freqs, num_sg_freqs, uintETupleLt(), uintETupleEq());
@@ -807,10 +664,11 @@ pair<tuple<uintE, uintE>*, long> getSeagullFreqsHist(const long nu, uintE* seagu
   //actually write out all the wedges.
   tuple<size_t,X*> sgs_tuple = pbbsa::sparse_histogram<uintE,uintE>(sgs_seq,nu);
   X* sgs_freqs = get<1>(sgs_tuple);
-  size_t sgs_freqs_n = get<0>(sgs_tuple);
+  size_t sgs_freqs_n = sequence::filter(sgs_freqs, sgs_freqs, get<0>(sgs_tuple), greaterOneF());
+  //size_t sgs_freqs_n = get<0>(sgs_tuple);
   parallel_for(long i=0; i < sgs_freqs_n; ++i) {
     uintE num = get<1>(sgs_freqs[i]);
-    sgs_freqs[i] = make_tuple(get<0>(sgs_freqs[i]) / nu, num * (num-1) / 2);
+    sgs_freqs[i] = make_tuple(get<0>(sgs_freqs[i]) % nu, num * (num-1) / 2);
   }
 
   // Now, we have to collate our seagulls again
@@ -850,9 +708,9 @@ void getSeagullFreqsHash(sparseAdditiveSet<uintE>& seagulls_total, vertexSubset 
       parallel_for (long j=0; j < wedge_freqs.n; ++j) {
   	    pair<uintE,uintE> wedge_freq_pair = wedge_freqs.A[j];
   	    uintE num_butterflies = wedge_freq_pair.second;
-        num_butterflies = num_butterflies * (num_butterflies - 1)/2;
+        //num_butterflies = num_butterflies * (num_butterflies - 1)/2;
         uintE u2_idx = wedge_freq_pair.first;
-        seagulls_total.insert(pair<uintE,uintE>(u2_idx, num_butterflies));
+        if (num_butterflies > 1) seagulls_total.insert(pair<uintE,uintE>(u2_idx, num_butterflies * (num_butterflies - 1)/2));
       }
       wedge_freqs.del();
       wedges.del();
@@ -981,39 +839,3 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   free(butterflies);
 	G.del();
 }
-
-/*int parallel_main(int argc, char* argv[]){
-	commandLine P(argc,argv," [-i <ingraph>] [-t <type>] [-nv <numleftvertices>] [-nu <numrightvertices>] <inFile>");
-  	std::string iFileConst = P.getOptionValue("-i", "");
-    char* iFile = new char[iFileConst.length()+1];
-    strcpy(iFile, iFileConst.c_str());
-    long ty = P.getOptionLongValue("-t",0);
-  	long nv = P.getOptionLongValue("-nv", 100);
-  	long nu = P.getOptionLongValue("-nu", 100);
-	bipartiteGraph<symmetricVertex> G = (iFileConst.length() != 0) ? 
-		bpGraphFromFile<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
-  delete [] iFile;
-
-  uintE* butterflies;
-
-  timer t;
-  t.start();
-  if (ty == 0) butterflies=ComputeSort(G,P);
-  else if (ty==1) butterflies=ComputeSortCE(G,P);
-  else if (ty==2) butterflies=ComputeHash(G,P);
-  else if (ty==3) butterflies=ComputeHashCE(G,P);
-  else if(ty==4) butterflies=ComputeHist(G,false,P);
-  else if(ty==5) butterflies=ComputeHist(G,true,P);
-  else butterflies=ComputeHistCE(G,P);
-	t.stop();
-
-  if (ty==0) t.reportTotal("Sort:");
-  else if (ty==1) t.reportTotal("SortCE:");
-  else if (ty==2) t.reportTotal("Hash:");
-  else if (ty==3) t.reportTotal("HashCE:");
-  else if (ty==4) t.reportTotal("Hist:");
-  else if (ty==5) t.reportTotal("HistNT:");
-  else t.reportTotal("HistCE:");
-
-	G.del();
-}*/
