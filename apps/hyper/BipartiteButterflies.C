@@ -274,27 +274,30 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
   return D;
 }
 
+// Note: must be invoked with symmetricVertex
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
-    std::string iFileConst = P.getOptionValue("-i", "");
-    char* iFile = new char[iFileConst.length()+1];
-    strcpy(iFile, iFileConst.c_str());
-    long ty = P.getOptionLongValue("-t",0);
-    long tp = P.getOptionLongValue("-tp",0);
-  	long nv = P.getOptionLongValue("-nv", 10);
-  	long nu = P.getOptionLongValue("-nu", 10);
-	bipartiteGraph<symmetricVertex> G = (iFileConst.length() != 0) ? 
-		bpGraphFromFile<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
-  delete [] iFile;
+  // Method type for counting + peeling
+  long ty = P.getOptionLongValue("-t",0);
+  long tp = P.getOptionLongValue("-tp",0);
 
-  uintE* butterflies;
+  // Number of vertices if generating complete graph
+  long nv = P.getOptionLongValue("-nv", 10);
+  long nu = P.getOptionLongValue("-nu", 10);
+
+  // 0 if using input file, 1 if using generated graph
+  long gen = P.getOptionLongValue("-i",0);
+    
+	bipartiteGraph<symmetricVertex> G = (gen != 0) ? 
+		bpGraphFromFile<symmetricVertex>(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
+
   pair<bool,long> use_v_pair = cmpWedgeCounts(G);
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
 
   timer t;
   t.start();
-  butterflies=Count(G,use_v, num_wedges,ty);
+  uintE* butterflies = Count(G,use_v, num_wedges,ty);
 	t.stop();
 
   if (ty==0) t.reportTotal("Sort:");

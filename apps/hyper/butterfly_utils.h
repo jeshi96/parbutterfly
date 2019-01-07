@@ -135,8 +135,7 @@ bipartiteGraph<vertex> bpGraphComplete(long nv, long nu){
 
 // Reads a bipartite graph from file iFile (builds off of readHypergraphFromFile) -- not terribly efficient
 template<class vertex>
-bipartiteGraph<vertex> bpGraphFromFile(char* iFile){
-	hypergraph<vertex> G = readHypergraphFromFile<vertex>(iFile,1,0);
+bipartiteGraph<vertex> bpGraphFromFile(hypergraph<vertex> G){
 	long nv = G.nv;
 	long nu = G.nh;
 	vertex* v = newA(vertex,nv);
