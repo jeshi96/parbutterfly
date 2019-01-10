@@ -29,6 +29,21 @@
 using namespace std;
 
 /*
+ *  Counts the number of seagulls on vertices in active. The vertices in active are assumed to
+ *  be a subset of U, and V represents the other bipartition of the bipartite graph.
+ * 
+ *  V     : One bipartition of vertices
+ *  U     : The other bipartition of vertices
+ *  active: Set of active vertices (subset of U)
+ * 
+ *  Returns: Number of seagulls on vertices in active
+ */
+template<class vertex>
+long countSeagulls(vertex* V, vertex* U, vertexSubset active) {
+  return sequence::reduce<long>((long) 0, (long) active.size(), addF<long>(), seagullSum<vertex, long>(V,U,active.s));
+}
+
+/*
  *  Retrieves all seagulls associated with the vertices in active (paths of length two with an endpoint
  *  in active), and stores the two endpoints using the constructor cons. The vertices in active are
  *  assumed to be a subset of U, and V represents the other bipartition of the bipartite graph.
@@ -106,13 +121,53 @@ pair<seagull*, long> getSeagulls(vertexSubset active, vertex* V, vertex* U, seag
   return make_pair(seagulls, num_sg);
 }
 
+
+/*
+ *  Retrieves all seagulls associated with the vertices in active (paths of length two with an endpoint
+ *  in active), and stores an integer representation of the two endpoints in a hash table. The vertices
+ *  in active are assumed to be a subset of U, and V represents the other bipartition of the bipartite
+ *  graph.
+ * 
+ *  active: Set of active vertices (subset of U)
+ *  V     : One bipartition of vertices
+ *  U     : The other bipartition of vertices
+ *  nu    : The number of vertices in U
+ * 
+ *  Returns: Hash table of seagulls
+ */
+template<class vertex>
+sparseAdditiveSet<uintE> getSeagullsHash(vertexSubset active, vertex* V, vertex* U, const long nu) {
+  // Set up hash table
+  long num_seagulls = countSeagulls(V,U,active);
+  float f = ((float) num_seagulls) / ((float) (nu*nu+nu));
+  sparseAdditiveSet<uintE> seagulls = sparseAdditiveSet<uintE>(nu*nu+nu,1,UINT_E_MAX);
+
+  parallel_for(long i=0; i < active.size(); ++i){
+    // Set up for each active vertex
+    uintE u_idx = active.vtx(i);
+    const vertex u = U[u_idx];
+    const uintE u_deg = u.getOutDegree();
+
+    parallel_for (long j=0; j < u_deg; ++j ) {
+        const vertex v = V[u.getOutNeighbor(j)];
+        const uintE v_deg = v.getOutDegree();
+        // Find all seagulls with center v and endpoint u
+        for (long k=0; k < v_deg; ++k) {
+          const uintE u2_idx = v.getOutNeighbor(k);
+          if (u2_idx != u_idx) seagulls.insert(pair<uintE,uintE>(u_idx * nu + u2_idx, 1));
+        }
+    }
+  }
+  return seagulls;
+}
+
 //***************************************************************************************************
 //***************************************************************************************************
 
 /*
  *  Retrieves the number of butterflies remaining on each non-active vertex (where the number of 
  *  butterflies has changed), given an array of seagulls (constructed from some set of active vertices).
- *  Uses repeated sorting to obtain these counts.
+ *  Uses sorting to obtain these counts.
  * 
  *  nu         : The number of vertices in U, which represents one bipartition of vertices, of which 
  *               the active vertices are taken to be a subset of
@@ -123,7 +178,7 @@ pair<seagull*, long> getSeagulls(vertexSubset active, vertex* V, vertex* U, seag
  *  butterflies: An updated array containing the number of butterflies on each vertex in U (where
  *               the vertex is given by the index in butterflies)
  * 
- *  Returns: Array of vertex indices on which the butterfly counts change
+ *  Returns: Array of butterfly count changes, including both vertex indices and the changed values
  */
 pair<tuple<uintE,uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs) {
   using X = tuple<uintE,uintE>;
@@ -143,10 +198,24 @@ pair<tuple<uintE,uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* seag
   // Filter out any entries that have 0 butterflies to be removed (bucketing cannot handle these)
   X* sg_freqs_filter = newA(X,num_sg_freqs);
   num_sg_freqs = sequence::filter(sg_freqs,sg_freqs_filter,num_sg_freqs,nonZeroF());
+
   free(sg_freqs);
   return make_pair(sg_freqs_filter,num_sg_freqs);
 }
 
+/*
+ *  Collates butterfly count updates on each non-active vertex, and updates butterflies with
+ *  these values.
+ *  Uses sorting to collate these updated counts.
+ * 
+ *  sg_freqs    : Array of butterfly counts to be removed from corresponding vertex indices.
+ *                Vertex indices are not necessarily distinct amongst entries.
+ *  num_sg_freqs: Length of sg_freqs
+ *  butterflies : An updated array containing the number of butterflies on each vertex in U (where
+ *                the vertex is given by the index in butterflies)
+ * 
+ *  Returns: Array of vertex indices on which the butterfly counts change
+ */
 pair<uintE*, long> getUpdates(tuple<uintE,uintE>* sg_freqs, long num_sg_freqs, uintE* butterflies) {
   using X = tuple<uintE,uintE>;
   // Now, collate all butterflies to be removed with the same non-active endpoint
@@ -171,7 +240,7 @@ pair<uintE*, long> getUpdates(tuple<uintE,uintE>* sg_freqs, long num_sg_freqs, u
 }
 
 /*
- *  Precisely getSeagullFreqs, but using histograms instead of repeated sortings.
+ *  Precisely getSeagullFreqs, but using histograms instead of sorting.
  */
 pair<tuple<uintE,uintE>*, long> getSeagullFreqsHist(const long nu, uintE* seagulls, long num_sgs) {
   using X = tuple<uintE,uintE>;
@@ -197,6 +266,9 @@ pair<tuple<uintE,uintE>*, long> getSeagullFreqsHist(const long nu, uintE* seagul
   return make_pair(sg_freqs_filter, num_sg_freqs);
 }
 
+/*
+ *  Precisely getUpdates, but using histograms instead of sorting.
+ */
 pair<uintE*, long> getUpdatesHist(tuple<uintE,uintE>* sg_freqs, long num_sg_freqs, const long nu, uintE* butterflies) {
   using X = tuple<uintE,uintE>;
   // Now, collate all butterflies to be removed with the same non-active endpoint
@@ -220,53 +292,10 @@ pair<uintE*, long> getUpdatesHist(tuple<uintE,uintE>* sg_freqs, long num_sg_freq
   return make_pair(update, (long)num_updates);
 }
 
+
 /*
- *  Assuming that the vertices in active are removed, computes the number of butterflies that are
- *  deleted by this removal from non-active vertices (where active and non-active vertices are in
- *  the same bipartition of the bipartite graph). Stores the number of removed butterflies in a 
- *  hash table seagulls_total, where the key is the non-active vertex. The vertices in active are 
- *  assumed to be a subset of U, and V represents the other bipartition of the bipartite graph.
- * 
- *  seagulls_total: Hash table to store the number of removed butterflies, where the key is the
- *                  non-active vertex
- *  active        : Set of active vertices (susbet of U)
- *  V             : One bipartition of vertices
- *  U             : The other bipartition of vertices
- *  nu            : The number of vertices in U
- * 
- *  Returns: None
+ *  Precisely getSeagullFreqs, but using hash tables instead of sorting.
  */
-
-template<class vertex>
-long countSeagulls(vertex* V, vertex* U, vertexSubset active) {
-  return sequence::reduce<long>((long) 0, (long) active.size(), addF<long>(), seagullSum<vertex, long>(V,U,active.s));
-}
-
-template<class vertex>
-sparseAdditiveSet<uintE> getSeagullsHash(vertexSubset active, vertex* V, vertex* U, const long nu) {
-  long num_seagulls = countSeagulls(V,U,active);
-  float f = ((float) num_seagulls) / ((float) (nu*nu+nu));
-  sparseAdditiveSet<uintE> seagulls = sparseAdditiveSet<uintE>(nu*nu+nu,1,UINT_E_MAX);
-
-  parallel_for(long i=0; i < active.size(); ++i){
-    uintE u_idx = active.vtx(i);
-    const vertex u = U[u_idx];
-    const uintE u_deg = u.getOutDegree();
-
-    parallel_for (long j=0; j < u_deg; ++j ) {
-        const vertex v = V[u.getOutNeighbor(j)];
-        const uintE v_deg = v.getOutDegree();
-        // Find all seagulls with center v
-        for (long k=0; k < v_deg; ++k) {
-          const uintE u2_idx = v.getOutNeighbor(k);
-          if (u2_idx != u_idx) seagulls.insert(pair<uintE,uintE>(u_idx * nu + u2_idx, 1));
-
-        }
-    }
-  }
-  return seagulls;
-}
-
 sparseAdditiveSet<uintE> getSeagullFreqsHash(sparseAdditiveSet<uintE>& seagulls, const long nu) {
   sparseAdditiveSet<uintE> update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
   _seq<pair<uintE,uintE>> sg_freqs = seagulls.entries();
@@ -279,12 +308,14 @@ sparseAdditiveSet<uintE> getSeagullFreqsHash(sparseAdditiveSet<uintE>& seagulls,
   return update_hash;
 }
 
+/*
+ *  Precisely getUpdates, but using hash tables instead of sorting.
+ */
 pair<uintE*, long> getUpdatesHash(sparseAdditiveSet<uintE>& update_hash, uintE* butterflies) {
   _seq<pair<uintE,uintE>> update_seq = update_hash.entries();
   long num_updates = update_seq.n;
   uintE* update = newA(uintE, num_updates);
 
-  // Compute the updated butterfly counts, given the number of butterflies to be removed
   parallel_for (long i=0; i < num_updates; ++i) {
     pair<uintE,uintE> update_pair = update_seq.A[i];
     uintE u_idx = update_pair.first;
@@ -319,8 +350,10 @@ pair<uintE*, long> PeelSort(vertexSubset active, uintE* butterflies, vertex* V, 
   // Retrieve all seagulls
   pair<UVertexPair*, long> sg_pair = getSeagulls<UVertexPair>(active, V, U, UVertexPairCons()); 
   pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqs(nu, sg_pair.first, sg_pair.second);
+
   // Compute updated butterfly counts
   pair<uintE*, long> ret = getUpdates(sg_freqs_pair.first, sg_freqs_pair.second, butterflies);
+
   free(sg_pair.first);
   free(sg_freqs_pair.first);
   return ret;
@@ -334,8 +367,10 @@ pair<uintE*, long> PeelHist(vertexSubset active, uintE* butterflies, vertex* V, 
   // Retrieve all seagulls
   pair<uintE*, long> sg_pair = getSeagulls<uintE>(active, V, U, UVertexPairIntCons(nu)); 
   pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist(nu, sg_pair.first, sg_pair.second);
+
   // Compute updated butterfly counts
   pair<uintE*, long> ret = getUpdatesHist(sg_freqs_pair.first, sg_freqs_pair.second, nu, butterflies);
+
   free(sg_pair.first);
   free(sg_freqs_pair.first);
   return ret;
@@ -346,10 +381,11 @@ pair<uintE*, long> PeelHist(vertexSubset active, uintE* butterflies, vertex* V, 
  */
 template<class vertex>
 pair<uintE*, long> PeelHash(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
-  // Compute number of butterflies to be removed
-
+  // Retrieve all seagulls
   sparseAdditiveSet<uintE> seagulls = getSeagullsHash(active, V, U, nu);
   sparseAdditiveSet<uintE> update_hash = getSeagullFreqsHash(seagulls, nu);
+
+  // Compute updated butterfly counts
   pair<uintE*, long> ret = getUpdatesHash(update_hash, butterflies);
 
   seagulls.del();
@@ -369,9 +405,6 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
   vertex* U = use_v ? GA.U : GA.V;
   
   using X = tuple<uintE,uintE>;
-
-  //uintE* b_buckets = newA(uintE, nu);
-  //parallel_for(long i=0; i < nu; ++i) { b_buckets[i] = butterflies[i];}
 
   auto D = array_imap<uintE>(nu, [&] (size_t i) { return butterflies[i]; });
 
@@ -393,7 +426,7 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
     long num_updates = update_pair.second;
     X* update = newA(X,num_updates);
 
-    // Filter for bucket updates (b_buckets will always have the right buckets, butterflies will always have right butterfly counts)
+    // Filter for bucket updates
     parallel_for(long i=0; i < num_updates; ++i) {
       const uintE u_idx = update_pair.first[i];
       uintE old_b = D.s[u_idx];
@@ -406,7 +439,6 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
       }
       else {update[i] = make_tuple(UINT_E_MAX,UINT_E_MAX);}
     }
-
     free(update_pair.first);
 
     X* update_filter = newA(X,num_updates);
@@ -414,9 +446,8 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
     free(update);
 
     vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(nu, num_updates, update_filter);
-
     b.update_buckets(moved.get_fn_repr(), moved.size());
-    
+
     moved.del(); active.del();
   }
   return D;
@@ -433,9 +464,9 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   long nv = P.getOptionLongValue("-nv", 10);
   long nu = P.getOptionLongValue("-nu", 10);
 
-  // 0 if using input file, 1 if using generated graph
+  // 1 if using input file, 0 if using generated graph
   long gen = P.getOptionLongValue("-i",0);
-    
+
   bipartiteGraph<symmetricVertex> G = (gen != 0) ? 
     bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
   
@@ -444,10 +475,10 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
 
-  timer t;
-  t.start();
+timer t;
+t.start();
   uintE* butterflies = Count(G,use_v, num_wedges,ty);
-  t.stop();
+t.stop();
 
   if (ty==0) t.reportTotal("Sort:");
   else if (ty==1) t.reportTotal("SortCE:");
@@ -457,11 +488,11 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   else if (ty==5) t.reportTotal("HistNT:");
   else t.reportTotal("HistCE:"); 
 
-long num_idxs = use_v ? G.nu : G.nv;
-    uintE mc = 0;
-  for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, butterflies[i]); }
-  cout << "### Max core1: " << mc << endl;
-  mc = 0;
+//long num_idxs = use_v ? G.nu : G.nv;
+//    uintE mc = 0;
+//  for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, butterflies[i]); }
+// cout << "### Max core1: " << mc << endl;
+//  mc = 0;
 
   timer t2;
   t2.start();
@@ -473,8 +504,8 @@ long num_idxs = use_v ? G.nu : G.nv;
 
   
   //uintE mc = 0;
-  for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;
+  //for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
+  //cout << "### Max core: " << mc << endl;
 
   free(butterflies);
   G.del();

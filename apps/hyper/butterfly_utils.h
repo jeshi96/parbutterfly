@@ -25,8 +25,6 @@ struct chooseV {
   }
 };
 
-
-
 template <class vertex, class E>
 struct seagullSumHelper { 
   vertex* V;
@@ -45,7 +43,6 @@ struct seagullSum {
   seagullSum(vertex* _V,vertex* _U, uintE* _active) : V(_V),U(_U),active(_active) {}
   E operator() (const E& i) const {
 	uintE u_idx = active[i];
-	// want to sum V[U[i].getOutNeighbor(j)].getOutDegree() - 1
 	return sequence::reduce<E>((E) 0, (long) U[i].getOutDegree(), addF<E>(),seagullSumHelper<vertex,E>(V,U[i]));
   }
 };
@@ -162,6 +159,7 @@ tuple<K,E> getAddReduce (tuple<K,E> curr, tuple<K,E> v) {
 
 
 //***********************************************************************************************
+//***********************************************************************************************
 // Graph construction + reading
 
 /*
@@ -241,8 +239,8 @@ bipartiteGraph<symmetricVertex> bpGraphFromHypergraph(hypergraph<vertex> G){
 
 }
 
-//***********************************************************
-// general utils
+//***********************************************************************************************
+//***********************************************************************************************
 
 /*
  *  Sort objects using cmp, and then retrieve indices of where consecutive objects are
