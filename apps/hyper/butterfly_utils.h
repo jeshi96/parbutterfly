@@ -43,7 +43,7 @@ struct seagullSum {
   seagullSum(vertex* _V,vertex* _U, uintE* _active) : V(_V),U(_U),active(_active) {}
   E operator() (const E& i) const {
 	uintE u_idx = active[i];
-	return sequence::reduce<E>((E) 0, (long) U[i].getOutDegree(), addF<E>(),seagullSumHelper<vertex,E>(V,U[i]));
+	return sequence::reduce<E>((E) 0, (long) U[u_idx].getOutDegree(), addF<E>(),seagullSumHelper<vertex,E>(V,U[u_idx]));
   }
 };
 

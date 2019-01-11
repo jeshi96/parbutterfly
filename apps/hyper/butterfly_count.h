@@ -190,8 +190,8 @@ void countButterfliesSortCE(uintE* butterflies, long nv, long nu, VertexPair* we
 }
 
 void countButterfliesSort(uintE* butterflies, VertexPair* wedges, uintE* wedge_freqs_f, long num_wedge_freqs_f) {
-timer t;
-t.start();
+//timer t;
+//t.start();
   // Then, retrieve the frequency counts for each distinct key by taking the difference between
   // these indices
   // Take the frequency count choose 2 to receive the number of butterflies on that key
@@ -207,8 +207,8 @@ t.start();
     writeAdd(&butterflies[vs.v1],num_butterflies); 
     writeAdd(&butterflies[vs.v2],num_butterflies);
   }
-t.stop();
-t.reportTotal("\tcountButterfliesSort:");
+//t.stop();
+//t.reportTotal("\tcountButterfliesSort:");
 }
 
 // This is the original compute function, without the more cache-efficient sorting method

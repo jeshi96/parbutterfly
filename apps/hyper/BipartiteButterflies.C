@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string>
+#include <assert.h>
 
 #define HYPER 1
 #define LONG 1
@@ -25,6 +26,10 @@
 #include "../../lib/gbbs-histogram.h"
 
 #include "butterfly_count.h"
+
+#define clean_errno() (errno == 0 ? "None" : strerror(errno))
+#define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
+#define assertf(A, M, ...) if(!(A)) {log_error(M, ##__VA_ARGS__); assert(A); }
 
 using namespace std;
 
@@ -139,8 +144,9 @@ template<class vertex>
 sparseAdditiveSet<uintE> getSeagullsHash(vertexSubset active, vertex* V, vertex* U, const long nu) {
   // Set up hash table
   long num_seagulls = countSeagulls(V,U,active);
-  float f = ((float) num_seagulls) / ((float) (nu*nu+nu));
-  sparseAdditiveSet<uintE> seagulls = sparseAdditiveSet<uintE>(nu*nu+nu,1,UINT_E_MAX);
+  //float f = ((float) num_seagulls) / ((float) (nu*nu+nu));
+  //sparseAdditiveSet<uintE> seagulls = sparseAdditiveSet<uintE>(nu*nu+nu,f,UINT_E_MAX); // TODO
+  sparseAdditiveSet<uintE> seagulls = sparseAdditiveSet<uintE>(num_seagulls,1,UINT_E_MAX);
 
   parallel_for(long i=0; i < active.size(); ++i){
     // Set up for each active vertex
@@ -366,8 +372,8 @@ template<class vertex>
 pair<uintE*, long> PeelHist(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
   // Retrieve all seagulls
   pair<uintE*, long> sg_pair = getSeagulls<uintE>(active, V, U, UVertexPairIntCons(nu)); 
-  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist(nu, sg_pair.first, sg_pair.second);
 
+  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist(nu, sg_pair.first, sg_pair.second);
   // Compute updated butterfly counts
   pair<uintE*, long> ret = getUpdatesHist(sg_freqs_pair.first, sg_freqs_pair.second, nu, butterflies);
 
