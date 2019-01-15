@@ -1,3 +1,6 @@
+#ifndef _BUTILS_
+#define _BUTILS_
+
 #include <iostream>
 #include <math.h>
 #include <stdlib.h>
@@ -47,6 +50,33 @@ struct seagullSum {
   }
 };
 
+struct WedgeIntCons {
+  long nu;
+  WedgeIntCons(long _nu) : nu(_nu) {}
+  tuple<uintE,uintE> operator() (uintE v1, uintE v2, uintE c) {
+    return make_tuple(v1 <= v2 ? v1 * nu + v2 : v2 * nu + v1, c);
+  }
+};
+
+struct Wedge {
+  uintE v1;
+  uintE v2;
+  uintE u;
+  Wedge(uintE _v1, uintE _v2, uintE _u) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1), u(_u) {}
+};
+
+struct WedgeCons { Wedge operator() (uintE v1, uintE v2, uintE c) { return Wedge(v1, v2, c); }};
+
+struct WedgeCmp {
+  long nv;
+  WedgeCmp(long _nv) : nv(_nv) {}
+  bool operator() (Wedge vs1, Wedge vs2) {
+    return vs1.v1 * nv + vs1.v2 < vs2.v1 * nv + vs2.v2;
+  }
+};
+
+struct WedgeEq { bool operator() (Wedge vs1, Wedge vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
+
 // Represents a pair of vertices on one side of a bipartite graph (ordered, with least vertex first)
 struct VertexPair {
   uintE v1;
@@ -93,14 +123,14 @@ struct VertexPairEq { bool operator() (VertexPair vs1, VertexPair vs2) { return 
 struct UVertexPairEq { bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 
 // Constructs a VertexPair and UVertexPair
-struct VertexPairCons { VertexPair operator() (uintE v1, uintE v2) { return VertexPair(v1, v2); }};
+struct VertexPairCons { VertexPair operator() (uintE v1, uintE v2, uintE c) { return VertexPair(v1, v2); }};
 struct UVertexPairCons { UVertexPair operator() (uintE v1, uintE v2) { return UVertexPair(v1, v2); }};
 
 // Constructs a uintE form of a VertexPair and UVertexPair
 struct VertexPairIntCons {
   long nu;
   VertexPairIntCons(long _nu) : nu(_nu) {}
-  uintE operator() (uintE v1, uintE v2) {
+  uintE operator() (uintE v1, uintE v2, uintE c) {
     return v1 <= v2 ? v1 * nu + v2 : v2 * nu + v1;
   }
 };
@@ -145,6 +175,31 @@ struct uintETupleAdd {
   tuple<uintE,uintE> operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) const {
     return make_tuple(get<0>(a), get<1>(a) + get<1>(b));
   };
+};
+
+template<class T> struct refl{T operator() (T obj) {return obj;}};
+template<class T> struct reflCount{long operator() (T obj) {return 1;}};
+struct UVertexPairV2{uintE operator() (UVertexPair obj) {return obj.v2;}};
+struct choose2{uintE operator() (uintE obj) {return obj*(obj-1)/2;}};
+struct uintETupleGet0{uintE operator() (tuple<uintE,uintE> obj) {return get<0>(obj);}};
+struct uintECount{long operator() (tuple<uintE,uintE> obj) {return get<1>(obj);}};
+
+template <class E>
+struct writeAddArr {
+  E* arr;
+  writeAddArr(E* _arr) : arr(_arr) {}
+  void operator() (long idx, E num) {
+    writeAdd(&arr[idx], num);
+  }
+};
+
+template <class E>
+struct writeAddSet {
+  sparseAdditiveSet<E> set;
+  writeAddSet(sparseAdditiveSet<E> _set) : set(_set) {}
+  void operator() (long idx, E num) {
+    set.insert(pair<uintE, E>(idx, num));
+  }
 };
 
 template<class E, class K>
@@ -246,7 +301,7 @@ bipartiteGraph<symmetricVertex> bpGraphFromHypergraph(hypergraph<vertex> G){
  *  Sort objects using cmp, and then retrieve indices of where consecutive objects are
  *  not equal (as given by eq) to give frequency counts of each object in objs.
  *  In other words, if we let arr be the returned array, arr[i+1] - arr[i] is the 
- *  frequency of objs[arr[i]].
+ *  frequency of objs[arr[i]] (objs[arr[i]] = ... = objs[arr[i+1]-1]).
  *  Iterating from 0 (inclusive) to the returned length - 1 (exclusive) will give
  *  all frequency counts.
  * 
@@ -278,3 +333,136 @@ pair<uintE*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, bool sort=true) {
   free(freqs);
   return make_pair(freqs_f, num_freqs_f);
 }
+
+template <class S, class T, class Cmp, class Eq, class OpT, class OpuintE, class OpCount>
+pair<tuple<S,uintE>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
+  OpuintE opuinte=refl<uintE>(), OpCount opcount=reflCount<T>()) {
+  if(sort) sampleSort(objs, num, cmp);
+
+  using X = tuple<S,uintE>;
+  X* freqs = newA(X, num);
+  T prev = objs[0];
+  T curr = objs[0];
+  long idx = 0;
+  long count = opcount(prev);
+  for(long i=1; i < num; ++i) {
+    curr = objs[i];
+    if (!eq(prev, curr)) {
+      freqs[idx] = make_tuple(opt(prev), opuinte(count));
+      idx++;
+      count = opcount(curr);
+      prev = curr;
+    }
+    else {
+      count += opcount(curr);
+    }
+  }
+  freqs[idx] = make_tuple(opt(curr), opuinte(count));
+  return make_pair(freqs, idx + 1);
+}
+
+//********************************************************************************************
+//********************************************************************************************
+
+/*
+ *  Computes the total number of wedges on all vertices on one bipartition of our graph, as 
+ *  specified by V (note that the vertices of V are considered the centers of the wedges).
+ * 
+ *  nv: Number of vertices in our bipartition V
+ *  V : Bipartition of vertices that forms the center of our wedges
+ * 
+ *  Returns: Number of total wedges
+ */
+template<class vertex>
+long countWedges(long nv, vertex* V) {
+  return sequence::reduce<long>((long) 0, nv, addF<long>(), chooseV<vertex, long>(V));
+}
+
+/*
+ *  Compares the total number of wedges on all vertices on one bipartition of our graph
+ *  to the other bipartition. Returns the side with the least number of wedges, and
+ *  the total number of wedges on that side.
+ * 
+ *  GA: Bipartite graph
+ * 
+ *  Returns: True if GA.V is the side with the least number of wedges total. False
+ *           otherwise. Also, returns the total number of wedges on the corresponding
+ *           side.
+ */
+template <class vertex>
+pair<bool,long> cmpWedgeCounts(bipartiteGraph<vertex> GA) {
+  const long nv = GA.nv, nu = GA.nu;
+  long num_wedges_v = countWedges<vertex>(nv,GA.V);
+  long num_wedges_u = countWedges<vertex>(nu, GA.U);
+  return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
+}
+
+/*
+ *  Retrieves all wedges on the bipartition V of our graph, where the vertices V are 
+ *  taken to be the center of the wedges. Stores these wedges using the constructor 
+ *  cons on the two endpoints that make up the wedge.
+ * 
+ *  nv  : Number of vertices in our bipartition V
+ *  V   : Bipartition of vertices that forms the center of our wedges
+ *  cons: Constructor to create wedge objects, given two endpoints of a wedge + center
+ * 
+ *  Returns: Array of wedges on bipartition V
+ */
+template<class wedge, class vertex, class wedgeCons>
+wedge* getWedges(const long nv, const vertex* V, wedgeCons cons) {
+//timer t;
+//t.start();
+  // Retrieve the indices of each wedge associated with each vertex in V
+  long* wedge_idxs = newA(long,nv+1);
+  parallel_for(long i=0;i<nv+1;++i){
+    wedge_idxs[i] = 0;
+  }
+  parallel_for (long i = 0; i < nv; ++i) {
+    uintE v_deg = V[i].getOutDegree();
+    if (v_deg >= 2)
+      wedge_idxs[i] = v_deg * (v_deg - 1)/2;
+  }
+  sequence::plusScan(wedge_idxs, wedge_idxs, nv+1);
+  long num_wedges = wedge_idxs[nv];
+
+  // Retrieve each wedge associated with each vertex in V
+  wedge* wedges = newA(wedge,num_wedges);
+  parallel_for (long i = 0; i < nv; ++i) {
+    const vertex v = V[i];
+    const uintE v_deg = v.getOutDegree();
+    long wedge_idx = wedge_idxs[i];
+    long idx = 0;
+    for (long j = 0; j < v_deg; ++j) {
+      for (long k = j+1; k < v_deg; ++k) {
+        wedges[wedge_idx + idx] = cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i);
+        ++idx;
+      }
+    }
+  }
+  free(wedge_idxs);
+//t.stop();
+//t.reportTotal("\tgetWedges:");
+
+  return wedges;
+}
+
+
+template<class vertex, class wedgeCons>
+void getWedgesHash(sparseAdditiveSet<uintE>& wedges, long nv, vertex* V, wedgeCons cons) {
+//timer t;
+//t.start();
+// Count number of wedges by their key
+  parallel_for (long i = 0; i < nv; ++i) {
+    const vertex v = V[i];
+    const uintE v_deg = v.getOutDegree();
+    for (long j = 0; j < v_deg; ++j) {
+      for (long k = j+1; k < v_deg; ++k) {
+        wedges.insert(pair<uintE,uintE>(cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i), 1));
+      }
+    }
+  }
+//t.stop();
+//t.reportTotal("\tgetWedgesHash:");
+}
+
+#endif

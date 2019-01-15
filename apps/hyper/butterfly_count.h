@@ -18,91 +18,6 @@
 
 using namespace std;
 
-/*
- *  Computes the total number of wedges on all vertices on one bipartition of our graph, as 
- *  specified by V (note that the vertices of V are considered the centers of the wedges).
- * 
- *  nv: Number of vertices in our bipartition V
- *  V : Bipartition of vertices that forms the center of our wedges
- * 
- *  Returns: Number of total wedges
- */
-template<class vertex>
-long countWedges(long nv, vertex* V) {
-  return sequence::reduce<long>((long) 0, nv, addF<long>(), chooseV<vertex, long>(V));
-}
-
-/*
- *  Compares the total number of wedges on all vertices on one bipartition of our graph
- *  to the other bipartition. Returns the side with the least number of wedges, and
- *  the total number of wedges on that side.
- * 
- *  GA: Bipartite graph
- * 
- *  Returns: True if GA.V is the side with the least number of wedges total. False
- *           otherwise. Also, returns the total number of wedges on the corresponding
- *           side.
- */
-template <class vertex>
-pair<bool,long> cmpWedgeCounts(bipartiteGraph<vertex> GA) {
-  const long nv = GA.nv, nu = GA.nu;
-  long num_wedges_v = countWedges<vertex>(nv,GA.V);
-  long num_wedges_u = countWedges<vertex>(nu, GA.U);
-  return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
-}
-
-/*
- *  Retrieves all wedges on the bipartition V of our graph, where the vertices V are 
- *  taken to be the center of the wedges. Stores these wedges using the constructor 
- *  cons on the two endpoints that make up the wedge.
- * 
- *  nv  : Number of vertices in our bipartition V
- *  V   : Bipartition of vertices that forms the center of our wedges
- *  cons: Constructor to create wedge objects, given two endpoints of a wedge
- * 
- *  Returns: Array of wedges on bipartition V
- */
-template<class wedge, class vertex, class wedgeCons>
-wedge* getWedges(const long nv, const vertex* V, wedgeCons cons) {
-//timer t;
-//t.start();
-  // Retrieve the indices of each wedge associated with each vertex in V
-  long* wedge_idxs = newA(long,nv+1);
-  parallel_for(long i=0;i<nv+1;++i){
-    wedge_idxs[i] = 0;
-  }
-  parallel_for (long i = 0; i < nv; ++i) {
-    uintE v_deg = V[i].getOutDegree();
-    if (v_deg >= 2)
-      wedge_idxs[i] = v_deg * (v_deg - 1)/2;
-  }
-  sequence::plusScan(wedge_idxs, wedge_idxs, nv+1);
-  long num_wedges = wedge_idxs[nv];
-
-  // Retrieve each wedge associated with each vertex in V
-  wedge* wedges = newA(wedge,num_wedges);
-  parallel_for (long i = 0; i < nv; ++i) {
-    const vertex v = V[i];
-    const uintE v_deg = v.getOutDegree();
-    long wedge_idx = wedge_idxs[i];
-    long idx = 0;
-    for (long j = 0; j < v_deg; ++j) {
-      for (long k = j+1; k < v_deg; ++k) {
-        wedges[wedge_idx + idx] = cons(v.getOutNeighbor(j), v.getOutNeighbor(k));
-        ++idx;
-      }
-    }
-  }
-  free(wedge_idxs);
-//t.stop();
-//t.reportTotal("\tgetWedges:");
-
-  return wedges;
-}
-
-//********************************************************************************************
-//********************************************************************************************
-
 // Not parallel
 void storeButterfliesSortCE_seq(uintE* butterflies, VertexPair* wedges, uintE* wedge_freqs_f, 
                             uintE* par_idxs_f, long i, bool use_v1) {
@@ -284,25 +199,6 @@ uintE* CountSortCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
 //********************************************************************************************
 
 
-template<class vertex>
-void getWedgesHash(sparseAdditiveSet<uintE>& wedges, long nv, long nu,vertex* V) {
-//timer t;
-//t.start();
-// Count number of wedges by their key
-  parallel_for (long i = 0; i < nv; ++i) {
-    const vertex v = V[i];
-    const uintE v_deg = v.getOutDegree();
-    for (long j = 0; j < v_deg; ++j) {
-      for (long k = j+1; k < v_deg; ++k) {
-        VertexPair vs = VertexPair(v.getOutNeighbor(j), v.getOutNeighbor(k));
-        wedges.insert(pair<uintE,uintE>(vs.v1 * nu + vs.v2, 1));
-      }
-    }
-  }
-//t.stop();
-//t.reportTotal("\tgetWedgesHash:");
-}
-
 template <class vertex>
 uintE* CountHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   const long nv = use_v ? GA.nv : GA.nu;
@@ -310,10 +206,9 @@ uintE* CountHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  float f = ((float)num_wedges)/((float) (nu*nu+nu));
-  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(nu*nu + nu,f,
-    UINT_E_MAX);
-  getWedgesHash(wedges,nv, nu,V);
+  //float f = ((float)num_wedges)/((float) (nu*nu+nu));
+  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(num_wedges, 1, UINT_E_MAX);
+  getWedgesHash(wedges,nv, V, VertexPairIntCons(nu));
   
   _seq<pair<uintE,uintE>> wedge_freqs = wedges.entries();
   uintE* butterflies = newA(uintE, nu);
@@ -349,10 +244,9 @@ uintE* CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  float f = ((float)num_wedges)/((float) (nu*nu+nu));
-  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(nu*nu + nu,f,
-    UINT_E_MAX);
-  getWedgesHash(wedges,nv, nu,V);
+  //float f = ((float)num_wedges)/((float) (nu*nu+nu));
+  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(num_wedges,1,UINT_E_MAX);
+  getWedgesHash(wedges, nv, V, VertexPairIntCons(nu));
   
   _seq<pair<uintE,uintE>> wedge_freqs = wedges.entries();
   sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);

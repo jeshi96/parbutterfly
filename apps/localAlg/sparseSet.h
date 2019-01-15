@@ -167,4 +167,135 @@ class sparseAdditiveSet {
     cout << endl;
   }
 };
+
+template <class E>
+class sparseSet : public sparseAdditiveSet<E> {
+  typedef pair<uintE,E> kvPair;
+
+  public:
+  sparseSet(long size, float _loadFactor, E zero) : sparseAdditiveSet<E>(size, _loadFactor, zero) {}
+
+  // nondeterministic insert no add
+  bool insert(kvPair v) {
+    uintE vkey = v.first;
+    uintT h = this->firstIndex(vkey); 
+    while (1) {
+      //kvPair c;
+      int cmp;
+      bool swapped = 0;
+      //c = TA[h];
+      if((this->TA)[h].first == UINT_E_MAX && CAS(&(this->TA[h]),this->empty,v)) {
+	      return 1; //return true if value originally didn't exist
+      }
+      else if ((this->TA[h]).first == vkey) {
+	      //do nothing
+	      return 0;
+      }
+    
+      // move to next bucket
+      h = this->incrementIndex(h); 
+    }
+    return 0; // should never get here
+  }
+};
+
+template <class E>
+class sparseKeySet : public sparseSet<E> {
+  public:
+  uintE mas_key;
+  sparseKeySet(long size, float _loadFactor, E zero, uintE _mas_key) : sparseSet<E>(size, _loadFactor, zero) {mas_key = _mas_key;}
+};
+
+template <class E>
+class sparseListSet {
+  typedef sparseKeySet<E>* kvPair;
+ public:
+  uintT m;
+  intT mask;
+  kvPair empty;
+  kvPair* TA;
+  float loadFactor;
+
+  // needs to be in separate routine due to Cilk bugs
+  static void clearA(kvPair* A, long n, kvPair v) {
+    parallel_for (long i=0; i < n; i++) A[i] = v;
+  }
+
+  struct notEmptyF { 
+    kvPair e; notEmptyF(kvPair _e) : e(_e) {} 
+    int operator() (kvPair a) {return a != NULL;}};
+
+  inline uintT hashToRange(uintT h) {return h & mask;}
+  inline uintT firstIndex(uintT v) {return hashToRange(hashInt(v));}
+  inline uintT incrementIndex(uintT h) {return hashToRange(h+1);}
+
+  // Size is the maximum number of values the hash table will hold.
+  // Overfilling the table could put it into an infinite loop.
+ sparseListSet(long size, float _loadFactor) :
+  loadFactor(_loadFactor),
+    m((uintT) 1 << log2RoundUp((uintT)(_loadFactor*size)+100)),
+    mask(m-1),
+    TA(newA(kvPair,m)),
+    empty(NULL) 
+      { clearA(TA,m,empty); }
+
+  // Deletes the allocated arrays
+  void del() {
+    free(TA); 
+  }
+
+  // nondeterministic insert
+  bool insert(kvPair v) {
+    uintE vkey = v->mas_key;
+    uintT h = firstIndex(vkey); 
+    while (1) {
+      //kvPair c;
+      int cmp;
+      bool swapped = 0;
+      //c = TA[h];
+      if(!TA[h] && CAS(&TA[h],empty,v)) {
+	return 1; //return true if value originally didn't exist
+      }
+      else if (TA[h]->mas_key == vkey) {
+	//add residual values on duplicate
+	//writeAdd(&(TA[h].second),v.second);
+	return 0;
+      }
+    
+      // move to next bucket
+      h = incrementIndex(h); 
+    }
+    return 0; // should never get here
+  }
+
+
+  kvPair find(uintE v) {
+    uintT h = firstIndex(v);
+    kvPair c = TA[h]; 
+    while (1) {
+      if (!c) return empty; 
+      else if (v == c->mas_key)
+	return c;
+      h = incrementIndex(h);
+      c = TA[h];
+    }
+  }
+
+
+  // returns all the current entries compacted into a sequence
+  _seq<kvPair> entries() {
+    bool *FL = newA(bool,m);
+    parallel_for (long i=0; i < m; i++) 
+      FL[i] = (TA[i] != NULL);
+    _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
+    //sequence::pack(TA,(entry*)NULL,FL,m);
+    free(FL);
+    return R;
+  }
+
+  // returns the number of entries
+  intT count() {
+    return sequence::mapReduce<intT>(TA,m,addF<intT>(),notEmptyF(empty));
+  }
+};
 #endif

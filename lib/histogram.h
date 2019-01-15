@@ -329,7 +329,7 @@ namespace pbbsa {
   }
 
 //****************************************************************************************
-// A should be a sequence of key value tuples
+
 
 template <class E, class V>
 struct TupleCmp {
@@ -412,6 +412,120 @@ struct TupleCmp {
     }
 
   };
+
+  template <typename s_size_t, typename ct_t, typename E, typename V>
+  tuple<size_t, tuple<s_size_t,sequentialHT<ct_t,uintE>*>* > seq_sparse_histogram_list(sequence<tuple<E,V>> A, size_t m, size_t max) {
+    sequentialHTList<s_size_t, ct_t> tab(nullptr, A.size(), 1.0, make_tuple(numeric_limits<s_size_t>::max(), nullptr), max);
+    for (size_t i = 0; i < A.size(); i++) {
+      tab.insert(A[i]);
+    }
+    auto out = tab.compact();
+    tab.del();
+    return out;
+  }
+
+  // n = A.size(): number of elements to histogram
+  // m: elements are in the range [0, m)
+  // Returns a sequence S of pairs of (elm, count) of size <= n.
+  // TODO: maybe not a good idea to have sizes -- just do max size? see which is faster?
+  // , tuple<E,uintE>* sizes, size_t total_num
+  template <typename s_size_t, typename ct_t, typename E, typename V>
+  tuple<size_t, tuple<s_size_t,sequentialHT<ct_t,uintE>*>* > sparse_histogram_list(sequence<tuple<E,V>> A, size_t m, size_t max) {
+    //using E = typename Seq::T;
+    size_t n = A.size();
+    size_t bits;
+
+    if (n < (1 << 27)) bits = (log2_up(n) - 7)/2;
+    // for large n selected so each bucket fits into cache
+    else bits = (log2_up(n) - 17);
+    size_t num_buckets = (1<<bits);
+    if (n < (1 << 13)) {
+      return seq_sparse_histogram_list<s_size_t, ct_t>(A , m, max);
+    }
+
+    // generate sample
+    get_bucket_f<E,V> x(A.as_array(), n, bits-1);
+    auto get_buckets = make_sequence<size_t>(n, x);
+
+    timer t; t.start();
+    // first buckets based on hash, except for low 4 bits
+    sequence<size_t> bucket_offsets
+      = count_sort(A, A, get_buckets, num_buckets);
+    t.stop(); // t.total();
+
+    sequence<size_t> offs(num_buckets+1);
+    parallel_for_1(size_t i=0; i<num_buckets+1; i++) {
+      if (i < num_buckets/2) {
+        offs[i] =
+          (size_t)(1 << pbbs::log2_up((bucket_offsets[i+1] - bucket_offsets[i]) + 100));
+      } else if (bucket_offsets[i+1] > bucket_offsets[i]) {
+        offs[i] = 1;
+      } else {
+        offs[i] = 0;
+      }
+    }
+    offs[num_buckets] = 0;
+    scan_add(offs, offs);
+
+    //using outT = tuple<s_size_t, ct_t>;
+    using outT = tuple<s_size_t,sequentialHT<ct_t,uintE>*>;
+    outT* tmp = new_array_no_init<outT>(offs[num_buckets]);
+    outT empty = make_tuple(numeric_limits<s_size_t>::max(), nullptr);
+
+    sequence<size_t> c_offs(num_buckets+1);
+    parallel_for(size_t i=0; i<offs[num_buckets]; i++) {
+      tmp[i] = empty;
+    }
+
+    // now sequentially process each bucket
+    parallel_for_1(size_t i = 0; i < num_buckets; i++) {
+      size_t start = bucket_offsets[i];
+      size_t end = bucket_offsets[i+1];
+      size_t t_size = (size_t)(1 << pbbs::log2_up(end - start + 100));
+      outT* tab = tmp + offs[i];
+      if (i < num_buckets/2) {
+        auto table = sequentialHTList<s_size_t, ct_t>(tab, t_size, 1, empty, max);
+        // light
+        for (size_t j = start; j < end; j++) {
+          table.insert(A[j]);
+        }
+        c_offs[i] = table.n_elms;
+      } else if (end > start) {
+        // heavy
+        //*tab = make_tuple(A[start], end - start);
+
+        sequentialHT<ct_t, uintE>* ht = new sequentialHT<ct_t, uintE>(nullptr,end-start,1.0,make_tuple(numeric_limits<ct_t>::max(), 0));
+        for (size_t l =start; l < end; ++l) {ht->insertAdd(get<1>(A[l]));}
+        *tab = make_tuple(get<0>(A[start]), ht);
+        //*tab = make_tuple(get<0>(A[start]), end - start);
+        c_offs[i] = 1;
+      } else {
+        c_offs[i] = 0;
+      }
+    }
+    c_offs[num_buckets] = 0;
+    scan_add(c_offs, c_offs);
+
+    outT* out = new_array_no_init<outT>(c_offs[num_buckets]);
+    parallel_for_1(size_t i=0; i<num_buckets; i++) {
+      size_t start = bucket_offsets[i];
+      size_t end = bucket_offsets[i+1];
+      size_t t_size = (size_t)(1 << pbbs::log2_up(end - start + 100));
+      auto tab = tmp + offs[i];
+      size_t out_off = c_offs[i];
+      if (i < num_buckets/2) {
+        auto table = sequentialHTList<s_size_t, ct_t>(tab, t_size, 1, empty, max);
+        table.compactInto(out + out_off);
+      } else {
+        out[out_off] = tmp[offs[i]];
+      }
+    }
+    free(tmp);
+    return make_tuple(c_offs[num_buckets], out);
+  }
+
+//****************************************************************************************
+// A should be a sequence of key value tuples
 
   template <typename s_size_t, typename ct_t, typename E, typename V, typename F>
   tuple<size_t, tuple<s_size_t, ct_t>* > seq_sparse_histogram_f(sequence<tuple<E,V>> A, size_t m, F& f) {
