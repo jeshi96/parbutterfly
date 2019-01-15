@@ -21,6 +21,59 @@
 using namespace std;
 
 template <class vertex>
+uintE* CountEHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
+
+  using X = tuple<uintE,uintE>;
+  X* wedges_list = getWedges<X>(nv, V, WedgeIntCons(nu));
+  pbbsa::sequence<X> wedges_seq = pbbsa::sequence<X>(wedges_list,num_wedges);
+
+  auto wedges_tuple = pbbsa::sparse_histogram_list<uintE, uintE>(wedges_seq, nu*nu + nu, nv); //TODO this last one could be better
+  tuple<uintE, pbbsa::sequentialHT<uintE,uintE>*>* wedge_freqs = get<1>(wedges_tuple);
+  size_t wedge_freqs_n = get<0>(wedges_tuple);
+
+  X* b_freqs = newA(X, 2*num_wedges);
+  long idx = 0;
+  for (long i=0; i < wedge_freqs_n; ++i) {
+    auto t = wedge_freqs[i];
+    uintE v1 = get<0>(t) % nu;
+    uintE v2 = get<0>(t) / nu;
+    auto lst = get<1>(t)->compact();
+    uintE num = get<0>(lst) - 1;
+    for(long j=0; j < get<0>(lst); ++j) {
+      uintE u = get<0>(get<1>(lst)[j]);
+      b_freqs[idx++] = make_tuple(nv*u + v1, num);
+      b_freqs[idx++] = make_tuple(nv*u + v2, num);
+    }
+    free(get<1>(lst));
+    get<1>(t)->del();
+  }
+  free(wedge_freqs);
+  free(wedges_list);
+
+  pbbsa::sequence<tuple<uintE, uintE>> b_freqs_seq = pbbsa::sequence<tuple<uintE,uintE>>(b_freqs, 2*num_wedges);
+  tuple<size_t,tuple<uintE, uintE>*> butterflies_tuple = 
+    pbbsa::sparse_histogram_f<uintE,uintE>(b_freqs_seq, nu*nv, getAdd<uintE,uintE>, getAddReduce<uintE,uintE>);
+  tuple<uintE,uintE>* butterflies_l = get<1>(butterflies_tuple);
+  size_t butterflies_n = get<0>(butterflies_tuple);
+
+  uintE* butterflies = newA(uintE, nu*nv);
+  parallel_for(long i=0;i<nu*nv;++i){
+    butterflies[i] = 0;
+  }
+  parallel_for (long i=0; i < butterflies_n; ++i) {
+    butterflies[get<0>(butterflies_l[i])] = get<1>(butterflies_l[i]);
+  }
+
+  free(b_freqs);
+
+  return butterflies;
+}
+
+template <class vertex>
 uintE* CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -41,13 +94,13 @@ uintE* CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
     butterflies[i] = 0;
   }
 
-  for (long i=0; i < wedge_freqs_n; ++i) {
+  parallel_for (long i=0; i < wedge_freqs_n; ++i) {
     auto t = wedge_freqs[i];
     uintE v1 = get<0>(t) % nu;
     uintE v2 = get<0>(t) / nu;
     auto lst = get<1>(t)->compact();
     uintE num = get<0>(lst) - 1;
-    for(long j=0; j < get<0>(lst); ++j) {
+    parallel_for(long j=0; j < get<0>(lst); ++j) {
       uintE u = get<0>(get<1>(lst)[j]);
       writeAdd(&butterflies[nv * u + v1], num);
       writeAdd(&butterflies[nv * u + v2], num);
@@ -55,20 +108,6 @@ uintE* CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
     free(get<1>(lst));
     get<1>(t)->del();
   }
-
-  /*parallel_for (long i=0; i < wedge_freqs_n; ++i) {
-    tuple<uintE,uintE> wedge_freq_pair = wedge_freqs[i];
-    uintE num_butterflies = get<1>(wedge_freq_pair);
-    uintE wedge_freq_pair_first = get<0>(wedge_freq_pair);
-
-    uintE v2 = wedge_freq_pair_first % nu;
-    uintE v1 = wedge_freq_pair_first / nu;
-
-    num_butterflies = num_butterflies * (num_butterflies - 1)/2;
-
-    writeAdd(&butterflies[v1],num_butterflies);
-    writeAdd(&butterflies[v2],num_butterflies);
-  }*/
 
   free(wedge_freqs);
   free(wedges_list);
@@ -284,5 +323,6 @@ uintE* CountE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long type=
   else if (type == 1) return CountEHashCE(GA, use_v, num_wedges);
   else if (type == 2) return CountESort(GA, use_v, num_wedges);
   else if (type==3) return CountESortCE(GA, use_v, num_wedges);
-  else return CountEHist(GA, use_v, num_wedges);
+  else if (type==4) return CountEHist(GA, use_v, num_wedges);
+  else return CountEHistCE(GA, use_v, num_wedges);
 }

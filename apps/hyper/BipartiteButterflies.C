@@ -665,10 +665,11 @@ if(ty==0) t3.reportTotal("E Hash:");
 else if (ty == 1) t3.reportTotal("E HashCE:");
 else if (ty == 2) t3.reportTotal("E Sort:");
 else if (ty==3) t3.reportTotal("E SortCE:");
-else t3.reportTotal("E Hist:");
+else if (ty==4) t3.reportTotal("E Hist:");
+else t3.reportTotal("E HistCE:");
 
-//for (long i=0; i < nu*nv; ++i) {cout << ebutterflies[i] << ", ";}
-//cout << "\n";
+for (long i=0; i < nu*nv; ++i) {cout << ebutterflies[i] << ", ";}
+cout << "\n";
 
 /*
 timer t;
