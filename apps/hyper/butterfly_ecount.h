@@ -56,12 +56,12 @@ uintE* CountEHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
 
   pbbsa::sequence<tuple<uintE, uintE>> b_freqs_seq = pbbsa::sequence<tuple<uintE,uintE>>(b_freqs, 2*num_wedges);
   tuple<size_t,tuple<uintE, uintE>*> butterflies_tuple = 
-    pbbsa::sparse_histogram_f<uintE,uintE>(b_freqs_seq, nu*nv, getAdd<uintE,uintE>, getAddReduce<uintE,uintE>);
+    pbbsa::sparse_histogram_f<uintE,uintE>(b_freqs_seq, nv*nv+nu, getAdd<uintE,uintE>, getAddReduce<uintE,uintE>);
   tuple<uintE,uintE>* butterflies_l = get<1>(butterflies_tuple);
   size_t butterflies_n = get<0>(butterflies_tuple);
 
-  uintE* butterflies = newA(uintE, nu*nv);
-  parallel_for(long i=0;i<nu*nv;++i){
+  uintE* butterflies = newA(uintE, nv*nv+nu);
+  parallel_for(long i=0;i<nv*nv+nu;++i){
     butterflies[i] = 0;
   }
   parallel_for (long i=0; i < butterflies_n; ++i) {
@@ -89,8 +89,8 @@ uintE* CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   size_t wedge_freqs_n = get<0>(wedges_tuple);
 
 
-  uintE* butterflies = newA(uintE, nu*nv);
-  parallel_for(long i=0;i<nu*nv;++i){
+  uintE* butterflies = newA(uintE, nv*nv+nu);
+  parallel_for(long i=0;i<nv*nv+nu;++i){
     butterflies[i] = 0;
   }
 
@@ -145,8 +145,8 @@ uintE* CountESortCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   free(freq_arr);
   free(wedges);
 
-  uintE* butterflies = newA(uintE, nu*nv);
-  parallel_for(long i=0;i<nu*nv;++i){
+  uintE* butterflies = newA(uintE, nv*nv+nu);
+  parallel_for(long i=0;i<nv*nv+nu;++i){
     butterflies[i] = 0; 
   }
 
@@ -177,8 +177,8 @@ uintE* CountESort(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
 
   Wedge* wedges = getWedges<Wedge>(nv, V, WedgeCons());
 
-  uintE* butterflies = newA(uintE, nu*nv);
-  parallel_for(long i=0;i<nu*nv;++i){
+  uintE* butterflies = newA(uintE, nv*nv+nu);
+  parallel_for(long i=0;i<nv*nv+nu;++i){
     butterflies[i] = 0; 
   }
 
@@ -190,6 +190,7 @@ uintE* CountESort(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
     uintE num = freq_arr[i+1] - freq_arr[i] - 1;
     parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) {
+      fflush(stdout);
       writeAdd(&butterflies[nv * wedges[j].u + wedges[j].v1], num);
       writeAdd(&butterflies[nv * wedges[j].u + wedges[j].v2], num);
     }
@@ -265,8 +266,8 @@ uintE* CountEHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   sparseListSet<uintE> cwedges = allocateWedgesHash(wedges,nv,V,VertexPairIntCons(nu));
   
   //TODO this should be init to # of edges --> need a good way to index edges???? unless we do it on all pairs
-  uintE* butterflies = newA(uintE, nu*nv);
-  parallel_for(long i=0;i<nu*nv;++i){
+  uintE* butterflies = newA(uintE, nv*nv+nu);
+  parallel_for(long i=0;i<nv*nv+nu;++i){
     butterflies[i] = 0;
   }
 
@@ -290,7 +291,7 @@ uintE* CountEHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
   sparseListSet<uintE> cwedges = allocateWedgesHash(wedges,nv,V,VertexPairIntCons(nu));
   
   //TODO this should be init to # of edges --> need a good way to index edges???? unless we do it on all pairs
-  sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nu*nv,1,UINT_E_MAX);
+  sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nv*nv+nu,1,UINT_E_MAX);
 
   countButterfliesEHash(cwedges,nu,nv, writeAddSet<uintE>(butterflies_set));
 
@@ -299,8 +300,8 @@ uintE* CountEHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges) {
 
   _seq<pair<uintE,uintE>> butterflies_seq = butterflies_set.entries();
 
-  uintE* butterflies = newA(uintE, nu*nv);
-  parallel_for(long i=0;i<nu*nv;++i){
+  uintE* butterflies = newA(uintE, nv*nv+nu);
+  parallel_for(long i=0;i<nv*nv+nu;++i){
     butterflies[i] = 0;
   }
 

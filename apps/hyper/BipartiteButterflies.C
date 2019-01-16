@@ -668,7 +668,7 @@ else if (ty==3) t3.reportTotal("E SortCE:");
 else if (ty==4) t3.reportTotal("E Hist:");
 else t3.reportTotal("E HistCE:");
 
-for (long i=0; i < nu*nv; ++i) {cout << ebutterflies[i] << ", ";}
+for (long i=0; i < nv*nv+nu; ++i) {cout << ebutterflies[i] << ", ";}
 cout << "\n";
 
 /*
