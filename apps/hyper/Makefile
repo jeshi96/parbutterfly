@@ -25,7 +25,7 @@ endif
 #compilers
 ifdef CILK
 PCC = g++
-PCFLAGS = -ggdb -O0 -std=c++14 -fcilkplus -lcilkrts -O2 -DCILK $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
+PCFLAGS = -ggdb -std=c++14 -fcilkplus -lcilkrts -O2 -DCILK $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
 PLFLAGS = -fcilkplus -lcilkrts
 
 else ifdef MKLROOT
@@ -43,7 +43,7 @@ endif
 
 COMMON= ligra.h graph.h compressedVertex.h vertex.h utils.h IO.h parallel.h gettime.h index_map.h maybe.h sequence.h edgeMap_utils.h binary_search.h quickSort.h blockRadixSort.h transpose.h parseCommandLine.h byte.h byteRLE.h nibble.h byte-pd.h byteRLE-pd.h nibble-pd.h vertexSubset.h decoder.C hypergraphIO.h hygra.h bucket.h counting_sort.h dyn_arr.h edgeMapReduce.h sequentialHT.h hypergraphEncoder.C hypergraphDecoder.C
 LOCAL_COMMON = sparseSet.h sampleSort.h
-ALL= hypergraphEncoder hypergraphDecoder HyperReader WeightedHyperReader HyperBFS HyperCC HyperSSSP HyperPageRank HyperBC HyperBPath HyperMIS HyperKCore HyperKCore-Efficient
+ALL= hypergraphEncoder hypergraphDecoder HyperReader WeightedHyperReader HyperBFS HyperCC HyperSSSP HyperPageRank HyperBC HyperBPath HyperMIS HyperKCore HyperKCore-Efficient BipartiteButterflies
 
 all: $(ALL)
 

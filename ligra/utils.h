@@ -301,6 +301,12 @@ namespace sequence {
 
 }
 
+//ET should be 128 bits and 128-bit aligned
+template <class ET> 
+  inline bool CAS128(ET* a, ET b, ET c) {
+  return __sync_bool_compare_and_swap_16((__int128*)a,*((__int128*)&b),*((__int128*)&c));
+}
+
 template <class ET>
 inline bool CAS(ET *ptr, ET oldv, ET newv) {
   if (sizeof(ET) == 1) {
