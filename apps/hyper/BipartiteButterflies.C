@@ -27,6 +27,7 @@
 
 #include "butterfly_count.h"
 #include "butterfly_ecount.h"
+#include "butterfly_peel.h"
 
 #define clean_errno() (errno == 0 ? "None" : strerror(errno))
 #define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
@@ -535,54 +536,6 @@ pair<uintE*, long> PeelHash(vertexSubset active, uintE* butterflies, vertex* V, 
 //***************************************************************************************************
 //***************************************************************************************************
 
-pair<tuple<uintE,uintE>*,long> updateBuckets(uintE* update_idxs, long num_updates, uintE* butterflies, 
-  array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
-  using X = tuple<uintE,uintE>;
-  X* update = newA(X,num_updates);
-
-    // Filter for bucket updates
-  parallel_for(long i=0; i < num_updates; ++i) {
-    const uintE u_idx = update_idxs[i];
-    uintE old_b = D.s[u_idx];
-
-    if (old_b > k) {
-        uintE new_b = max(butterflies[u_idx],k);
-        D.s[u_idx] = new_b;
-        uintE new_bkt = b.get_bucket(old_b, new_b);
-        update[i] = make_tuple(u_idx, new_bkt);
-    }
-    else {update[i] = make_tuple(UINT_E_MAX,UINT_E_MAX);}
-  }
-
-  X* update_filter = newA(X, num_updates);
-  long num_updates_filter = sequence::filter(update,update_filter,num_updates, nonMaxTupleF());
-  free(update);
-  return make_pair(update_filter,  num_updates_filter);
-}
-
-pair<tuple<uintE,uintE>*,long> updateBuckets_seq(uintE* update_idxs, long num_updates, uintE* butterflies, 
-  array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
-  using X = tuple<uintE, uintE>;
-  X* update = newA(X, num_updates);
-  long idx = 0;
-  for(long i=0; i < num_updates; ++i) {
-    uintE u_idx = update_idxs[i];
-    uintE old_b = D.s[u_idx];
-
-    if(old_b > k) {
-      uintE new_b = max(butterflies[u_idx], k);
-      D.s[u_idx] = new_b;
-      uintE new_bkt = b.get_bucket(old_b, new_b);
-      update[idx] = make_tuple(u_idx, new_bkt);
-      ++idx;
-    }
-  }
-  return make_pair(update, idx);
-}
-
-//***************************************************************************************************
-//***************************************************************************************************
-
 template <class vertex>
 array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflies, long type=0, size_t num_buckets=128) {
   // Butterflies are assumed to be stored on U
@@ -668,8 +621,16 @@ else if (ty==3) t3.reportTotal("E SortCE:");
 else if (ty==4) t3.reportTotal("E Hist:");
 else t3.reportTotal("E HistCE:");
 
-for (long i=0; i < nv*nv+nu; ++i) {cout << ebutterflies[i] << ", ";}
-cout << "\n";
+//for (long i=0; i < nu*(nv-1)+nu-1; ++i) {cout << ebutterflies[i] << ", ";}
+//cout << "\n";
+
+timer t2;
+t2.start();
+auto cores = PeelE(G, use_v, ebutterflies, tp);
+t2.stop();
+if (tp ==0) t2.reportTotal("Hash Peel:");
+else if (tp==1) t2.reportTotal("Sort Peel:");
+else t2.reportTotal("Hist Peel:");
 
 /*
 timer t;
@@ -693,10 +654,10 @@ t.stop();
   else if (tp==1) t2.reportTotal("Sort Peel:");
   else t2.reportTotal("Hist Peel:");
 
-  //long num_idxs = use_v ? G.nu : G.nv;
-  //uintE mc = 0;
-  //for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  //cout << "### Max core: " << mc << endl;
+  long num_idxs = use_v ? G.nu : G.nv;
+  uintE mc = 0;
+  for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
+  cout << "### Max core: " << mc << endl;
 
   free(butterflies);*/
 

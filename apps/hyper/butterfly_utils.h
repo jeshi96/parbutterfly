@@ -14,6 +14,7 @@
 #include "parseCommandLine.h"
 #include "vertex.h"
 #include "sequence.h"
+#include "binary_search.h"
 
 using namespace std;
 
@@ -163,7 +164,9 @@ struct NestedVPEq {
 };
 
 struct nonZeroF{bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}};
+struct nonZeroPairF{bool operator() (pair<uintE,uintE> &a) {return (a.second != 0);}};
 struct greaterOneF{bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) > 1);}};
+template<class T> struct cmpF{bool operator() (T a, T b) {return a < b;}};
 
 struct nonMaxTupleF{bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}};
 
@@ -364,6 +367,111 @@ pair<tuple<S,uintE>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool
 //********************************************************************************************
 //********************************************************************************************
 
+template <class T>
+tuple<long, T*> intersect_seq(T* a, T* b, size_t num_a, size_t num_b) {
+  if (num_b < num_a) return intersect_seq(b, a, num_b, num_a);
+  //sampleSort(a,num_a,cmpF<T>());
+  uintE* ret = newA(uintE,num_a);
+  long idx = 0;
+
+  auto a_map = make_in_imap<uintT>(num_a, [&] (size_t i) { return a[i]; });
+  auto lt = [] (const T& l, const T& r) { return l < r; };
+
+  for(size_t i=0;i<num_b;++i) {
+    size_t find_idx = pbbs::linear_search(a_map, b[i], lt);
+    if(a[find_idx] == b[i]) ret[idx++] = b[i];
+  }
+  return make_tuple(idx, ret);
+}
+
+template <class T>
+tuple<long, T*> intersect(T* a, T* b, size_t num_a, size_t num_b) {
+  if (num_a < 1000 && num_b < 1000) return intersect_seq(a,b,num_a,num_b);
+  if (num_b < num_a) return intersect(b, a, num_b, num_a);
+
+  uintE* a_cpy = newA(uintE, num_a);
+  parallel_for(size_t i=0; i < num_a; ++i) {a_cpy[i] = a[i];};
+
+  sampleSort(a_cpy,num_a,cmpF<T>());
+  uintE* ret = newA(uintE,num_a);
+  long idx = 0;
+
+  auto a_map = make_in_imap<uintT>(num_a, [&] (size_t i) { return a_cpy[i]; });
+  auto lt = [] (const T& l, const T& r) { return l < r; };
+
+  for(size_t i=0;i<num_b;++i) {
+    size_t find_idx = pbbs::binary_search(a_map, b[i], lt);
+    if(a[find_idx] == b[i]) ret[idx++] = b[i];
+  }
+  return make_tuple(idx, ret);
+}
+
+tuple<long, uintE*> intersect_hist(uintE* a, uintE* b, size_t num_a, size_t num_b, uintE max) {
+  if (num_a < 1000 && num_b < 1000) return intersect_seq(a,b,num_a,num_b);
+  using X = tuple<uintE,uintE>;
+  size_t num_total = num_a + num_b;
+  uintE* total = newA(uintE, num_total);
+
+  parallel_for(long i=0; i < num_a; ++i) {total[i] = a[i]; }
+  parallel_for(long i=0; i < num_b; ++i) {total[i+num_a] = b[i]; }
+
+  pbbsa::sequence<uintE> seq_total = pbbsa::sequence<uintE>(total, num_total);
+  tuple<size_t,X*> hist_total = pbbsa::sparse_histogram<uintE,uintE>(seq_total, max);
+
+  X* arr = newA(X, get<0>(hist_total));
+  long len = sequence::filter(get<1>(hist_total), arr, get<0>(hist_total), greaterOneF());
+
+  uintE* ret = newA(uintE,len);
+  parallel_for(long i=0; i < len; ++i) { ret[i] = get<0>(arr[i]); }
+
+  free(total);
+  free(get<1>(hist_total));
+  free(arr);
+
+  return make_tuple(len, ret);
+}
+
+tuple<long, uintE*> intersect_hash_seq(uintE* a, uintE* b, size_t num_a, size_t num_b) {
+  if (num_b < num_a) return intersect_hash_seq(b, a, num_b, num_a);
+
+  sparseAdditiveSet<uintE> set = sparseAdditiveSet<uintE>(num_a, 1, UINT_E_MAX);
+  for(size_t i=0; i<num_a; ++i) { set.insert(make_pair(a[i],0)); }
+
+  uintE* ret = newA(uintE,num_a);
+  long idx = 0;
+  for(size_t i=0; i<num_b; ++i) {
+    if(set.find(b[i]).first != UINT_E_MAX) ret[idx++] = b[i];
+  }
+
+  set.del();
+  return make_tuple(idx, ret);
+}
+
+tuple<long, uintE*> intersect_hash(uintE* a, uintE* b, size_t num_a, size_t num_b) {
+  //if (num_b < num_a) return intersect_hash(b, a, num_b, num_a);
+  if (num_a < 1000 && num_b < 1000) return intersect_hash_seq(a,b,num_a,num_b);
+  using X=pair<uintE,uintE>;
+
+  sparseAdditiveSet<uintE> set = sparseAdditiveSet<uintE>(num_a, 1, UINT_E_MAX);
+  parallel_for(size_t i=0; i<num_a; ++i) { set.insert(make_pair(a[i],0)); }
+  parallel_for(size_t i=0; i<num_b; ++i) { set.insert(make_pair(b[i],1)); }
+
+  _seq<pair<uintE,uintE>> seq = set.entries();
+  X* seq_f = newA(X, seq.n);
+  long len = sequence::filter(seq.A, seq_f, seq.n, nonZeroPairF());
+
+  uintE* ret = newA(uintE,len);
+  parallel_for(long i=0; i < len; ++i) { ret[i] = seq_f[i].first; }
+
+  free(seq_f);
+  seq.del();
+  set.del();
+  return make_tuple(len, ret);
+}
+
+//********************************************************************************************
+//********************************************************************************************
+
 /*
  *  Computes the total number of wedges on all vertices on one bipartition of our graph, as 
  *  specified by V (note that the vertices of V are considered the centers of the wedges).
@@ -464,5 +572,54 @@ void getWedgesHash(sparseAdditiveSet<uintE>& wedges, long nv, vertex* V, wedgeCo
 //t.stop();
 //t.reportTotal("\tgetWedgesHash:");
 }
+
+//***************************************************************************************************
+//***************************************************************************************************
+
+pair<tuple<uintE,uintE>*,long> updateBuckets(uintE* update_idxs, long num_updates, uintE* butterflies, 
+  array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
+  using X = tuple<uintE,uintE>;
+  X* update = newA(X,num_updates);
+
+    // Filter for bucket updates
+  parallel_for(long i=0; i < num_updates; ++i) {
+    const uintE u_idx = update_idxs[i];
+    uintE old_b = D.s[u_idx];
+
+    if (old_b > k) {
+        uintE new_b = max(butterflies[u_idx],k);
+        D.s[u_idx] = new_b;
+        uintE new_bkt = b.get_bucket(old_b, new_b);
+        update[i] = make_tuple(u_idx, new_bkt);
+    }
+    else {update[i] = make_tuple(UINT_E_MAX,UINT_E_MAX);}
+  }
+
+  X* update_filter = newA(X, num_updates);
+  long num_updates_filter = sequence::filter(update,update_filter,num_updates, nonMaxTupleF());
+  free(update);
+  return make_pair(update_filter,  num_updates_filter);
+}
+
+pair<tuple<uintE,uintE>*,long> updateBuckets_seq(uintE* update_idxs, long num_updates, uintE* butterflies, 
+  array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
+  using X = tuple<uintE, uintE>;
+  X* update = newA(X, num_updates);
+  long idx = 0;
+  for(long i=0; i < num_updates; ++i) {
+    uintE u_idx = update_idxs[i];
+    uintE old_b = D.s[u_idx];
+
+    if(old_b > k) {
+      uintE new_b = max(butterflies[u_idx], k);
+      D.s[u_idx] = new_b;
+      uintE new_bkt = b.get_bucket(old_b, new_b);
+      update[idx] = make_tuple(u_idx, new_bkt);
+      ++idx;
+    }
+  }
+  return make_pair(update, idx);
+}
+
 
 #endif
