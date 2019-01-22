@@ -5,6 +5,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string>
+#include <assert.h>
 
 #include "parallel.h"
 #include "gettime.h"
@@ -15,6 +16,11 @@
 #include "vertex.h"
 #include "sequence.h"
 #include "binary_search.h"
+
+#define clean_errno() (errno == 0 ? "None" : strerror(errno))
+#define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
+#define assertf(A, M, ...) if(!(A)) {log_error(M, ##__VA_ARGS__); assert(A); }
+
 
 using namespace std;
 
@@ -85,6 +91,16 @@ struct VertexPair {
   VertexPair(uintE _v1, uintE _v2) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1) {}
 };
 
+struct VertexPairHash {
+  uintE v1;
+  uintE v2;
+  uintE hash;
+  VertexPairHash(uintE _v1, uintE _v2, uintE nu) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1) {
+    hash = v1 * nu + v2;
+  }
+  VertexPairHash() : v1(0), v2(0), hash(0) {};
+};
+
 // Represents a pair of vertices on one side of a bipartite graph (unordered, stored based on constructor order)
 struct UVertexPair {
   uintE v1;
@@ -92,12 +108,21 @@ struct UVertexPair {
   UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
 };
 
+//TODO get rid of legacy _nv
 // Comparer for VertexPair based on least vertex in pair and then greatest vertex in pair
 struct VertexPairCmp {
   long nv;
   VertexPairCmp(long _nv) : nv(_nv) {}
   bool operator() (VertexPair vs1, VertexPair vs2) {
-    return vs1.v1 * nv + vs1.v2 < vs2.v1 * nv + vs2.v2;
+    if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
+    return vs1.v1 < vs2.v1;
+  }
+};
+
+struct VertexPairHashCmp {
+  bool operator() (VertexPairHash vs1, VertexPairHash vs2) {
+    if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
+    return vs1.v1 < vs2.v1;
   }
 };
 
@@ -106,7 +131,8 @@ struct VertexPairCmp2 {
   long nv;
   VertexPairCmp2(long _nv) : nv(_nv) {}
   bool operator() (VertexPair vs1, VertexPair vs2) {
-    return vs1.v2 * nv + vs1.v1 < vs2.v2 * nv + vs2.v1;
+    if (vs1.v2 == vs2.v2) return vs1.v1 < vs2.v1;
+    return vs1.v2 < vs2.v2;
   }
 };
 
@@ -115,17 +141,33 @@ struct UVertexPairCmp {
   long nv;
   UVertexPairCmp(long _nv) : nv(_nv) {}
   bool operator() (UVertexPair vs1, UVertexPair vs2) {
-    return vs1.v2 * nv + vs1.v1 < vs2.v2 * nv + vs2.v1;
+    if (vs1.v2 == vs2.v2) return vs1.v1 < vs2.v1;
+    return vs1.v2 < vs2.v2;
   }
 };
 
 // Equality for VertexPair and UVertexPair
 struct VertexPairEq { bool operator() (VertexPair vs1, VertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 struct UVertexPairEq { bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
+struct VertexPairHashEq { bool operator() (VertexPairHash vs1, VertexPairHash vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 
 // Constructs a VertexPair and UVertexPair
 struct VertexPairCons { VertexPair operator() (uintE v1, uintE v2, uintE c) { return VertexPair(v1, v2); }};
 struct UVertexPairCons { UVertexPair operator() (uintE v1, uintE v2) { return UVertexPair(v1, v2); }};
+struct VertexPairHashCons {
+  long nu;
+  VertexPairHashCons(long _nu) : nu(_nu) {}
+  VertexPairHash* operator() (uintE v1, uintE v2, uintE c) {
+    return new VertexPairHash(v1, v2, nu);
+  }
+};
+struct VertexPairHashConsN {
+  long nu;
+  VertexPairHashConsN(long _nu) : nu(_nu) {}
+  VertexPairHash operator() (uintE v1, uintE v2, uintE c) {
+    return VertexPairHash(v1, v2, nu);
+  }
+};
 
 // Constructs a uintE form of a VertexPair and UVertexPair
 struct VertexPairIntCons {
@@ -554,9 +596,8 @@ wedge* getWedges(const long nv, const vertex* V, wedgeCons cons) {
   return wedges;
 }
 
-
-template<class vertex, class wedgeCons>
-void getWedgesHash(sparseAdditiveSet<uintE>& wedges, long nv, vertex* V, wedgeCons cons) {
+template<class vertex, class wedgeCons, class T>
+void getWedgesHash(T& wedges, long nv, vertex* V, wedgeCons cons) {
 //timer t;
 //t.start();
 // Count number of wedges by their key
@@ -565,12 +606,117 @@ void getWedgesHash(sparseAdditiveSet<uintE>& wedges, long nv, vertex* V, wedgeCo
     const uintE v_deg = v.getOutDegree();
     for (long j = 0; j < v_deg; ++j) {
       for (long k = j+1; k < v_deg; ++k) {
-        wedges.insert(pair<uintE,uintE>(cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i), 1));
+        wedges.insert(make_pair(cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i), 1));
       }
     }
   }
 //t.stop();
 //t.reportTotal("\tgetWedgesHash:");
+}
+
+// TODO when to use seq?
+template<class vertex>
+long getNextWedgeIdx_seq(long nv, vertex* V, long max_wedges, long curr_idx) {
+  for (long i=curr_idx; i < nv; ++i) {
+    uintE v_deg = V[i].getOutDegree();
+    uintE num = v_deg * (v_deg - 1) / 2;
+    if (num > max_wedges) {
+      if (i == curr_idx) {cout << "Space must accomodate max degree choose 2\n"; exit(0); }
+      return i;
+    }
+    else {
+      max_wedges -= num;
+    }
+  }
+  return nv;
+}
+
+template<class vertex>
+long getNextWedgeIdx(long nv, vertex* V, long max_wedges, long curr_idx) {
+  if (nv - curr_idx < 1000) return getNextWedgeIdx_seq(nv, V, max_wedges, curr_idx);
+  uintE* idxs = newA(uintE, nv - curr_idx + 1);
+  idxs[nv-curr_idx] = 0;
+  parallel_for(long i=curr_idx; i < nv; ++i) {
+    uintE v_deg = V[i].getOutDegree();
+    idxs[i-curr_idx] = v_deg * (v_deg - 1) / 2;
+  }
+  sequence::plusScan(idxs, idxs, nv - curr_idx + 1);
+
+  auto idx_map = make_in_imap<uintT>(nv - curr_idx, [&] (size_t i) { return idxs[i+1]; });
+  auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
+  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
+  free(idxs);
+  if (find_idx == curr_idx) {cout << "Space must accomodate max degree choose 2\n"; exit(0); }
+
+  return find_idx;
+}
+
+// TODO this is messy af
+template<class wedge, class vertex, class wedgeCons>
+pair<pair<wedge*, long>, long> getWedgesLimit(const long nv, const vertex* V, wedgeCons cons, long max_wedges, long curr_idx) {
+  long next_idx = getNextWedgeIdx(nv, V, max_wedges, curr_idx);
+
+  // Retrieve the indices of each wedge associated with each vertex in V
+  long* wedge_idxs = newA(long,next_idx-curr_idx+1);
+  parallel_for(long i=curr_idx;i<next_idx+1;++i){
+    wedge_idxs[i-curr_idx] = 0;
+  }
+  parallel_for (long i = curr_idx; i < next_idx; ++i) {
+    uintE v_deg = V[i].getOutDegree();
+    if (v_deg >= 2)
+      wedge_idxs[i-curr_idx] = v_deg * (v_deg - 1)/2;
+  }
+  sequence::plusScan(wedge_idxs, wedge_idxs, next_idx-curr_idx+1);
+  long num_wedges = wedge_idxs[next_idx-curr_idx];
+
+  // Retrieve each wedge associated with each vertex in V
+  wedge* wedges = newA(wedge, num_wedges);
+  parallel_for (long i = curr_idx; i < next_idx; ++i) {
+    const vertex v = V[i];
+    const uintE v_deg = v.getOutDegree();
+    long wedge_idx = wedge_idxs[i-curr_idx];
+    long idx = 0;
+    for (long j = 0; j < v_deg; ++j) {
+      for (long k = j+1; k < v_deg; ++k) {
+        wedges[wedge_idx + idx] = cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i);
+        ++idx;
+      }
+    }
+  }
+  free(wedge_idxs);
+
+  return make_pair(make_pair(wedges, num_wedges), next_idx);
+}
+
+template<class vertex, class wedgeCons, class T>
+long getWedgesHashLimit(T& wedges, long nv, vertex* V, wedgeCons cons, long max_wedges, long curr_idx) {
+  long next_idx = getNextWedgeIdx(nv, V, max_wedges, curr_idx);
+  // Count number of wedges by their key
+  parallel_for (long i = curr_idx; i < next_idx; ++i) {
+    const vertex v = V[i];
+    const uintE v_deg = v.getOutDegree();
+    for (long j = 0; j < v_deg; ++j) {
+      for (long k = j+1; k < v_deg; ++k) {
+        wedges.insert(make_pair(cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i), 1));
+      }
+    }
+  }
+  return next_idx;
+}
+
+template<class wedge, class vertex, class wedgeCons>
+pair<pair<wedge*,long>, long> getWedges(const long nv, const vertex* V, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges) {
+  if (max_wedges >= num_wedges) return make_pair(make_pair(getWedges<wedge>(nv, V, cons),num_wedges), nv);
+  else return getWedgesLimit<wedge>(nv, V, cons, max_wedges, curr_idx);
+}
+
+template<class vertex, class wedgeCons, class T>
+long getWedgesHash(T& wedges, long nv, vertex* V, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges) {
+  if (max_wedges >= num_wedges) {
+    getWedgesHash(wedges, nv, V, cons);
+    return nv;
+  }
+  else { return getWedgesHashLimit(wedges, nv, V, cons, max_wedges, curr_idx); }
 }
 
 //***************************************************************************************************

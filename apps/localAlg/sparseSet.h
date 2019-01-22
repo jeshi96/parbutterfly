@@ -199,6 +199,120 @@ class sparseSet : public sparseAdditiveSet<E> {
   }
 };
 
+
+// This is if your key absolutely can't fit in the ~8 byte space
+// Your struct T must have a hash field that returns an int (and that follows eq)
+template <class T, class E, class Eq>
+class sparsePointerAdditiveSet {
+  typedef pair<T*,E> kvPair;
+ public:
+  uintT m;
+  intT mask;
+  kvPair empty;
+  kvPair* TA;
+  float loadFactor;
+  Eq eq;
+
+  // needs to be in separate routine due to Cilk bugs
+  static void clearA(kvPair* A, long n, kvPair v) {
+    parallel_for (long i=0; i < n; i++) A[i] = v;
+  }
+
+  struct notEmptyF { 
+    kvPair e; notEmptyF(kvPair _e) : e(_e) {} 
+    int operator() (kvPair a) {return a.first != NULL;}};
+
+  inline uintT hashToRange(uintT h) {return h & mask;}
+  inline uintT firstIndex(T v) {return hashToRange(hashInt(v.hash));}
+  inline uintT incrementIndex(uintT h) {return hashToRange(h+1);}
+
+  // Size is the maximum number of values the hash table will hold.
+  // Overfilling the table could put it into an infinite loop.
+ sparsePointerAdditiveSet(long size, float _loadFactor, E zero, Eq _eq) :
+  loadFactor(_loadFactor), eq(_eq),
+    m((uintT) 1 << log2RoundUp((uintT)(_loadFactor*size)+100)),
+    mask(m-1),
+    TA(newA(kvPair,m)) 
+      { empty=pair<T*,E>(NULL,zero); clearA(TA,m,empty); }
+
+  // Deletes the allocated arrays
+  void del() {
+    free(TA); 
+  }
+
+  // nondeterministic insert
+  bool insert(kvPair v) {
+    T vkey = *(v.first);
+    uintT h = firstIndex(vkey); 
+    while (1) {
+      //kvPair c;
+      int cmp;
+      bool swapped = 0;
+      //c = TA[h];
+      if(TA[h].first == NULL && CAS(&TA[h],empty,v)) {
+	return 1; //return true if value originally didn't exist
+      }
+      else if (eq(*(TA[h].first),vkey)) {
+	//add residual values on duplicate
+	writeAdd(&(TA[h].second),v.second);
+	return 0;
+      }
+    
+      // move to next bucket
+      h = incrementIndex(h); 
+    }
+    return 0; // should never get here
+  }
+
+  kvPair find(T v) {
+    uintT h = firstIndex(v);
+    kvPair c = TA[h]; 
+    while (1) {
+      if (c.first == NULL) return empty; 
+      else if (eq(v, *(c.first)))
+	return c;
+      h = incrementIndex(h);
+      c = TA[h];
+    }
+  }
+
+  // returns all the current entries compacted into a sequence
+  _seq<kvPair> entries() {
+    bool *FL = newA(bool,m);
+    parallel_for (long i=0; i < m; i++) 
+      FL[i] = (TA[i].first != NULL);
+    _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
+    //sequence::pack(TA,(entry*)NULL,FL,m);
+    free(FL);
+    return R;
+  }
+
+  // returns all the current entries satisfying predicate f compacted into a sequence
+  template <class F>
+  _seq<kvPair> entries(F f) {
+    bool *FL = newA(bool,m);
+    parallel_for (long i=0; i < m; i++) 
+      FL[i] = (TA[i].first != NULL && f(TA[i]));
+    _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
+    //sequence::pack(TA,(entry*)NULL,FL,m);
+    free(FL);
+    return R;
+  }
+
+  // returns the number of entries
+  intT count() {
+    return sequence::mapReduce<intT>(TA,m,addF<intT>(),notEmptyF(empty));
+  }
+
+  void copy(sparseAdditiveSet<E> &A) {
+    parallel_for(long i=0;i<A.m;i++) {
+      if(A.TA[i].first != NULL) insert(A.TA[i]);
+    }
+  }
+};
+
+//*************************************************************************************************
+
 template <class E>
 class sparseKeySet : public sparseSet<E> {
   public:

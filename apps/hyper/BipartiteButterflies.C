@@ -6,6 +6,8 @@
 
 #define HYPER 1
 #define LONG 1
+#define EDGELONG 1
+#define MCX16 1
 
 #include "hygra.h"
 #include "index_map.h"
@@ -590,7 +592,6 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
 // Note: must be invoked with symmetricVertex
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
-
   // Method type for counting + peeling
   long ty = P.getOptionLongValue("-t",0);
   long tp = P.getOptionLongValue("-tp",0);
@@ -609,8 +610,9 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   pair<bool,long> use_v_pair = cmpWedgeCounts(G);
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
+  long max_wedges = num_wedges / 3;
 
-timer t3;
+/*timer t3;
 t3.start();
 uintE* ebutterflies = CountE(G, use_v, num_wedges, ty);
 t3.stop();
@@ -631,11 +633,11 @@ t2.stop();
 if (tp ==0) t2.reportTotal("Hash Peel:");
 else if (tp==1) t2.reportTotal("Sort Peel:");
 else t2.reportTotal("Hist Peel:");
+*/
 
-/*
 timer t;
 t.start();
-  uintE* butterflies = Count(G,use_v, num_wedges,ty);
+  uintE* butterflies = Count(G,use_v, num_wedges, max_wedges, ty);
 t.stop();
 
   if (ty==0) t.reportTotal("Sort:");
@@ -646,7 +648,14 @@ t.stop();
   else if (ty==5) t.reportTotal("HistNT:");
   else t.reportTotal("HistCE:"); 
 
-  timer t2;
+  long num_idxs = use_v ? G.nu : G.nv;
+  /*for (long i=0; i < num_idxs; ++i) {cout << butterflies[i] << ", ";}
+  cout << "\n";*/
+
+  //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
+  //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
+
+  /*timer t2;
   t2.start();
   auto cores = Peel(G, use_v, butterflies, tp);
   t2.stop();
@@ -654,13 +663,13 @@ t.stop();
   else if (tp==1) t2.reportTotal("Sort Peel:");
   else t2.reportTotal("Hist Peel:");
 
-  long num_idxs = use_v ? G.nu : G.nv;
+  //long num_idxs = use_v ? G.nu : G.nv;
   uintE mc = 0;
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;
+  cout << "### Max core: " << mc << endl;*/
 
-  free(butterflies);*/
+  free(butterflies);
 
-  free(ebutterflies);
+  //free(ebutterflies);
   G.del();
 }

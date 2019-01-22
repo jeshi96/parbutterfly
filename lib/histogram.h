@@ -330,6 +330,190 @@ namespace pbbsa {
 
 //****************************************************************************************
 
+// struct is E; must have field hash
+  template <typename E, typename Cmp, typename Eq>
+  struct get_bucket_struct {
+    pair<E,int>* hash_table;
+    size_t table_mask;
+    size_t low_mask;
+    size_t bucket_mask;
+    int num_buckets;
+    int k;
+    E* I;
+    Cmp cmp;
+    Eq eq;
+    E empty;
+
+    pair<E*,int> heavy_hitters(E* A, size_t n, size_t count) {
+      E* sample = new E[count];
+      for (size_t i = 0; i < count; i++) {
+      	sample[i] = A[hash64(i)%n];
+      }
+      std::sort(sample,sample+count,cmp);
+
+      // only keep those with at least two copies
+      int k = 0;
+      int c = 0;
+      for (size_t i = 1; i < count; i++) {
+      	if (eq(sample[i], sample[i-1])) {
+      	  if (c++ == 0) {
+            sample[k++] = sample[i];
+          }
+      	} else {
+          c = 0;
+        }
+      }
+      return make_pair(sample,k);
+    }
+
+    pair<E,int>* make_hash_table(E* entries, size_t n,
+				 size_t table_size, size_t table_mask) {
+      auto table = new pair<E,int>[table_size];
+      for (size_t i=0; i < table_size; i++) {
+        table[i] = make_pair(empty,-1); //TODO lol idk about this
+      }
+      for (size_t i = 0; i < n; i++) {
+        table[hash64(entries[i].hash)&table_mask] = make_pair(entries[i],i);
+      }
+      return table;
+    }
+
+    get_bucket_struct(E* A, size_t n, size_t bits, Cmp _cmp, Eq _eq, E _empty) :I(A), cmp(_cmp), eq(_eq), empty(_empty) {
+      num_buckets = 1 << bits;
+      bucket_mask = num_buckets-1;
+      low_mask = ~((size_t) 15);
+      int count = 2 * num_buckets;
+      int table_size = 4 * count;
+      table_mask = table_size-1;
+
+      pair<E*,int> heavy = heavy_hitters(A, n, count);
+      k = heavy.second;
+      E* sample = heavy.first;
+
+      hash_table = make_hash_table(heavy.first,k, table_size, table_mask);
+      delete[] sample;
+    }
+
+    ~get_bucket_struct() {
+      free(hash_table); }
+
+    size_t operator() (size_t i) {
+      if (k > 0) {
+      	pair<E,int> h = hash_table[hash64(I[i].hash)&table_mask];
+      	if (h.second != -1) {
+      	  return h.second + num_buckets;
+        }
+      }
+      return pbbs::hash64(I[i].hash & low_mask) & bucket_mask;
+    }
+
+  };
+
+  template <typename s_size_t, typename ct_t, typename Seq, typename Eq, typename E>
+  tuple<size_t, tuple<s_size_t, ct_t>* > seq_sparse_histogram_struct(Seq A, size_t m, Eq eq, E empty) {
+    sequentialHTStruct<s_size_t, ct_t, Eq> tab(nullptr, A.size(), 1.0, make_tuple(empty, 0), eq);
+    for (size_t i = 0; i < A.size(); i++) {
+      tab.insertAdd(A[i]);
+    }
+    auto out = tab.compact();
+    tab.del();
+    return out;
+  }
+
+  // n = A.size(): number of elements to histogram
+  // m: elements are in the range [0, m)
+  // Returns a sequence S of pairs of (elm, count) of size <= n.
+  template <typename s_size_t, typename ct_t, typename Seq, typename Cmp, typename Eq, typename E>
+  tuple<size_t, tuple<s_size_t, ct_t>* > sparse_histogram_struct(Seq A, size_t m, Cmp cmp, Eq eq, E empty_struct) {
+    //using E = typename Seq::T;
+    size_t n = A.size();
+    size_t bits;
+
+    if (n < (1 << 27)) bits = (log2_up(n) - 7)/2;
+    // for large n selected so each bucket fits into cache
+    else bits = (log2_up(n) - 17);
+    size_t num_buckets = (1<<bits);
+    if (n < (1 << 13)) {
+      return seq_sparse_histogram_struct<s_size_t, ct_t>(A , m, eq, empty_struct);
+    }
+
+    // generate sample
+    get_bucket_struct<E, Cmp, Eq> x(A.as_array(), n, bits-1, cmp, eq, empty_struct);
+    auto get_buckets = make_sequence<size_t>(n, x);
+
+    timer t; t.start();
+    // first buckets based on hash, except for low 4 bits
+    sequence<size_t> bucket_offsets
+      = count_sort(A, A, get_buckets, num_buckets);
+    t.stop(); // t.total();
+
+    sequence<size_t> offs(num_buckets+1);
+    parallel_for_1(size_t i=0; i<num_buckets+1; i++) {
+      if (i < num_buckets/2) {
+        offs[i] =
+          (size_t)(1 << pbbs::log2_up((bucket_offsets[i+1] - bucket_offsets[i]) + 100));
+      } else if (bucket_offsets[i+1] > bucket_offsets[i]) {
+        offs[i] = 1;
+      } else {
+        offs[i] = 0;
+      }
+    }
+    offs[num_buckets] = 0;
+    scan_add(offs, offs);
+
+    using outT = tuple<s_size_t, ct_t>;
+    outT* tmp = new_array_no_init<outT>(offs[num_buckets]);
+    outT empty = make_tuple(empty_struct, 0);
+
+    sequence<size_t> c_offs(num_buckets+1);
+    parallel_for(size_t i=0; i<offs[num_buckets]; i++) {
+      tmp[i] = empty;
+    }
+
+    // now sequentially process each bucket
+    parallel_for_1(size_t i = 0; i < num_buckets; i++) {
+      size_t start = bucket_offsets[i];
+      size_t end = bucket_offsets[i+1];
+      size_t t_size = (size_t)(1 << pbbs::log2_up(end - start + 100));
+      outT* tab = tmp + offs[i];
+      if (i < num_buckets/2) {
+        auto table = sequentialHTStruct<s_size_t, ct_t, Eq>(tab, t_size, 1, empty, eq);
+        // light
+        for (size_t j = start; j < end; j++) {
+          table.insertAdd(A[j]);
+        }
+        c_offs[i] = table.n_elms;
+      } else if (end > start) {
+        // heavy
+        *tab = make_tuple(A[start], end - start);
+        c_offs[i] = 1;
+      } else {
+        c_offs[i] = 0;
+      }
+    }
+    c_offs[num_buckets] = 0;
+    scan_add(c_offs, c_offs);
+
+    outT* out = new_array_no_init<outT>(c_offs[num_buckets]);
+    parallel_for_1(size_t i=0; i<num_buckets; i++) {
+      size_t start = bucket_offsets[i];
+      size_t end = bucket_offsets[i+1];
+      size_t t_size = (size_t)(1 << pbbs::log2_up(end - start + 100));
+      auto tab = tmp + offs[i];
+      size_t out_off = c_offs[i];
+      if (i < num_buckets/2) {
+        auto table = sequentialHTStruct<s_size_t, ct_t, Eq>(tab, t_size, 1, empty, eq);
+        table.compactInto(out + out_off);
+      } else {
+        out[out_off] = tmp[offs[i]];
+      }
+    }
+    free(tmp);
+    return make_tuple(c_offs[num_buckets], out);
+  }
+
+//****************************************************************************************
+
 
 template <class E, class V>
 struct TupleCmp {

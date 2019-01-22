@@ -301,11 +301,13 @@ namespace sequence {
 
 }
 
+#if defined(MCX16)
 //ET should be 128 bits and 128-bit aligned
 template <class ET> 
   inline bool CAS128(ET* a, ET b, ET c) {
   return __sync_bool_compare_and_swap_16((__int128*)a,*((__int128*)&b),*((__int128*)&c));
 }
+#endif
 
 template <class ET>
 inline bool CAS(ET *ptr, ET oldv, ET newv) {
@@ -316,6 +318,11 @@ inline bool CAS(ET *ptr, ET oldv, ET newv) {
   } else if (sizeof(ET) == 8) {
     return __sync_bool_compare_and_swap((long*)ptr, *((long*)&oldv), *((long*)&newv));
   }
+#if defined(MCX16)
+  else if (sizeof(ET) == 16) {
+    return CAS128(ptr, oldv, newv);
+  }
+#endif
   else {
     std::cout << "CAS bad length : " << sizeof(ET) << std::endl;
     abort();
