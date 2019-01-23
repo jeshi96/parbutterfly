@@ -202,7 +202,7 @@ long CountHashOverflow(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, u
   const vertex* U = use_v ? GA.U : GA.V;
 
   sparsePointerAdditiveSet<UVertexPairHash,uintE,UVertexPairHashEq> wedges =
-    sparsePointerAdditiveSet<UVertexPairHash,uintE,UVertexPairHashEq>(max_wedges, 1, UINT_E_MAX, UVertexPairHashEq());
+    sparsePointerAdditiveSet<UVertexPairHash,uintE,UVertexPairHashEq>(min(max_wedges,num_wedges), 1, UINT_E_MAX, UVertexPairHashEq());
   //long next_idx = getWedgesHash(wedges, nv, V, VertexPairHashCons(nu), max_wedges, curr_idx, num_wedges);
   long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairHashCons(nu), max_wedges, curr_idx, num_wedges);
   
@@ -239,7 +239,7 @@ long CountHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* bu
 
   //float f = ((float)num_wedges)/((float) (nu*nu+nu));
   if (nu > UINT_E_MAX / nu) return CountHashOverflow(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
-  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(max_wedges, 1, UINT_E_MAX);
+  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(max_wedges,num_wedges), 1, UINT_E_MAX);
   //long next_idx = getWedgesHash(wedges,nv, V, VertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
   long next_idx = getWedgesHash2(wedges,nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
   
@@ -277,7 +277,7 @@ long CountHashCEOverflow(bipartiteGraph<vertex> GA, bool use_v, long num_wedges,
   const vertex* U = use_v ? GA.U : GA.V;
 
   sparsePointerAdditiveSet<UVertexPairHash,uintE,UVertexPairHashEq> wedges =
-    sparsePointerAdditiveSet<UVertexPairHash,uintE,UVertexPairHashEq>(max_wedges, 1, UINT_E_MAX, UVertexPairHashEq());
+    sparsePointerAdditiveSet<UVertexPairHash,uintE,UVertexPairHashEq>(min(max_wedges,num_wedges), 1, UINT_E_MAX, UVertexPairHashEq());
   //long next_idx = getWedgesHash(wedges, nv, V, VertexPairHashCons(nu), max_wedges, curr_idx, num_wedges);
   long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairHashCons(nu), max_wedges, curr_idx, num_wedges);
   
@@ -322,7 +322,7 @@ long CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
   if (nu > UINT_E_MAX / nu) return CountHashCEOverflow(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
 
   //float f = ((float)num_wedges)/((float) (nu*nu+nu));
-  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(num_wedges,1,UINT_E_MAX);
+  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges),1,UINT_E_MAX);
   //long next_idx = getWedgesHash(wedges, nv, V, VertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
   long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
   
@@ -590,7 +590,7 @@ uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_we
     return butterflies;
   }
   long curr_idx = 0;
-  while(curr_idx < nv) {
+  while(curr_idx < nu) {
     if (type == 0) curr_idx = CountSort(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
     else if (type == 1) curr_idx = CountSortCE(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
     else if (type == 2) curr_idx = CountHash(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);

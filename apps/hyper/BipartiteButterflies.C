@@ -49,6 +49,7 @@ using namespace std;
  */
 template<class vertex>
 long countSeagulls(vertex* V, vertex* U, vertexSubset active) {
+  if (active.size() < 1000) return countSeagulls_seq(V, U, active);
   return sequence::reduce<long>((long) 0, (long) active.size(), addF<long>(), seagullSum<vertex, long>(V,U,active.s));
 }
 
@@ -64,45 +65,6 @@ long countSeagulls_seq(vertex* V, vertex* U, vertexSubset active) {
   return num_sg;
 }
 
-template<class vertex>
-long getNextSeagullIdx_seq(vertexSubset active, vertex* V, vertex* U, long max_wedges, long curr_idx) {
-  for(long i=curr_idx; i < active.size(); ++i) {
-    vertex u = U[active.vtx(i)];
-    for(long j=0; j < u.getOutDegree(); ++j) {
-      uintE num = V[u.getOutNeighbor(j)].getOutDegree() - 1;
-      if (num > max_wedges) {
-        if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
-        return i;
-      }
-      else { max_wedges -= num; }
-    }
-  }
-  return active.size();
-}
-
-template<class vertex>
-long getNextSeagullIdx(vertexSubset active, vertex* V, vertex* U, long max_wedges, long curr_idx) {
-  if (active.size() - curr_idx < 1000) return getNextSeagullIdx_seq(active, V, U, max_wedges, curr_idx);
-  uintE* idxs = newA(uintE, active.size() - curr_idx + 1);
-  idxs[active.size()-curr_idx] = 0;
-  parallel_for(long i=curr_idx; i < active.size(); ++i) {
-    vertex u = U[active.vtx(i)];
-    idxs[i-curr_idx] = 0;
-    for(long j=0; j < u.getOutDegree(); ++j) {
-      idxs[i-curr_idx] += V[u.getOutNeighbor(j)].getOutDegree() - 1;
-    }
-  }
-  sequence::plusScan(idxs, idxs, active.size() - curr_idx + 1);
-
-  auto idx_map = make_in_imap<uintT>(active.size() - curr_idx, [&] (size_t i) { return idxs[i+1]; });
-  auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
-  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
-  free(idxs);
-  if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
-
-  return find_idx;
-}
-
 /*
  *  Retrieves all seagulls associated with the vertices in active (paths of length two with an endpoint
  *  in active), and stores the two endpoints using the constructor cons. The vertices in active are
@@ -116,94 +78,6 @@ long getNextSeagullIdx(vertexSubset active, vertex* V, vertex* U, long max_wedge
  * 
  *  Returns: Array of seagulls and the number of seagulls
  */
-template<class seagull, class vertex, class seagullCons>
-pair<seagull*, long> getSeagulls(vertexSubset active, vertex* V, vertex* U, seagullCons cons) {
-  // First, we must retrive the indices at which to store each seagull (so that storage can be parallelized)
-  // Array of indices associated with seagulls for each active vertex
-  long* sg_idxs = newA(long, active.size() + 1);
-  sg_idxs[active.size()] = 0;
-
-  // 2D array of indices associated with seagulls for each neighbor of each active vertex
-  using T = long*;
-  T* nbhd_idxs = newA(T, active.size()); 
-
-  parallel_for(long i=0; i < active.size(); ++i) {
-    // Set up for each active vertex
-    uintE u_idx = active.vtx(i);
-    const vertex u = U[u_idx];
-    const uintE u_deg = u.getOutDegree();
-    // Allocate space for indices associated with each neighbor of u
-    nbhd_idxs[i] = newA(long, u_deg + 1);
-    (nbhd_idxs[i])[u_deg] = 0;
-    // Assign indices associated with each neighbor of u
-    parallel_for(long j=0; j < u_deg; ++j) {
-      (nbhd_idxs[i])[j] = V[u.getOutNeighbor(j)].getOutDegree()-1;
-    }
-    sequence::plusScan(nbhd_idxs[i], nbhd_idxs[i], u_deg+1);
-    // Set up indices associated with u
-    sg_idxs[i] = (nbhd_idxs[i])[u_deg];
-  }
-  // Assign indices associated with each active vertex
-  sequence::plusScan(sg_idxs, sg_idxs, active.size() + 1);
-
-  // Allocate space for seagull storage
-  long num_sg = sg_idxs[active.size()];
-  seagull* seagulls = newA(seagull, num_sg);
-
-  // Store seagulls in parallel
-  parallel_for(long i=0; i < active.size(); ++i) {
-    uintE u_idx = active.vtx(i);
-    const vertex u = U[u_idx];
-    const uintE u_deg = u.getOutDegree();
-    long sg_idx = sg_idxs[i];
-    // Consider each neighbor v of active vertex u
-    parallel_for(long j=0; j < u_deg; ++j) {
-      const vertex v = V[u.getOutNeighbor(j)];
-      const uintE v_deg = v.getOutDegree();
-      long nbhd_idx = (nbhd_idxs[i])[j];
-      long idx = 0;
-      // Find neighbors (not equal to u) of v
-      for (long k = 0; k < v_deg; ++k) {
-        uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx != u_idx) {
-          seagulls[sg_idx+nbhd_idx+idx] = cons(u_idx,u2_idx);
-          ++idx;
-        }
-      }
-    }
-  }
-
-  // Cleanup
-  parallel_for(long i=0; i<active.size();++i) { free(nbhd_idxs[i]); }
-  free(nbhd_idxs);
-  free(sg_idxs);
-
-  return make_pair(seagulls, num_sg);
-}
-
-template<class seagull, class vertex, class seagullCons>
-pair<seagull*, long> getSeagulls_seq(vertexSubset active, vertex* V, vertex* U, seagullCons cons) {
-  long num_sg = countSeagulls_seq(V, U, active);
-  seagull* seagulls = newA(seagull, num_sg);
-  long idx = 0;
-  for(long i=0; i < active.size(); ++i) {
-    uintE u_idx = active.vtx(i);
-    vertex u = U[u_idx];
-    for(long j=0; j < u.getOutDegree(); ++j) {
-      vertex v = V[u.getOutNeighbor(j)];
-      // Find neighbors (not equal to u) of v
-      for (long k = 0; k < v.getOutDegree(); ++k) {
-        uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx != u_idx) {
-          seagulls[idx] = cons(u_idx, u2_idx);
-          ++idx;
-        }
-      }
-    }
-  }
-  return make_pair(seagulls, num_sg);
-}
-
 
 /*
  *  Retrieves all seagulls associated with the vertices in active (paths of length two with an endpoint
@@ -218,34 +92,7 @@ pair<seagull*, long> getSeagulls_seq(vertexSubset active, vertex* V, vertex* U, 
  * 
  *  Returns: Hash table of seagulls
  */
-template<class vertex>
-sparseAdditiveSet<uintE> getSeagullsHash(vertexSubset active, vertex* V, vertex* U, const long nu) {
-  // Set up hash table
-  long num_seagulls = countSeagulls(V,U,active);
-  //float f = ((float) num_seagulls) / ((float) (nu*nu+nu));
-  //sparseAdditiveSet<uintE> seagulls = sparseAdditiveSet<uintE>(nu*nu+nu,f,UINT_E_MAX); // TODO
-  sparseAdditiveSet<uintE> seagulls = sparseAdditiveSet<uintE>(num_seagulls,1,UINT_E_MAX);
 
-  //parallel_for(long i=0; i < active.size(); ++i){
-  granular_for(i,0,active.size(),(active.size()>1000), {
-    // Set up for each active vertex
-    uintE u_idx = active.vtx(i);
-    const vertex u = U[u_idx];
-    const uintE u_deg = u.getOutDegree();
-
-    //parallel_for (long j=0; j < u_deg; ++j ) {
-    granular_for( j,0,u_deg,(u_deg>1000),{
-        const vertex v = V[u.getOutNeighbor(j)];
-        const uintE v_deg = v.getOutDegree();
-        // Find all seagulls with center v and endpoint u
-        for (long k=0; k < v_deg; ++k) {
-          const uintE u2_idx = v.getOutNeighbor(k);
-          if (u2_idx != u_idx) seagulls.insert(pair<uintE,uintE>(u_idx * nu + u2_idx, 1));
-        }
-    });
-  });
-  return seagulls;
-}
 
 //***************************************************************************************************
 //***************************************************************************************************
@@ -499,71 +346,85 @@ pair<uintE*, long> getUpdatesHash(sparseAdditiveSet<uintE>& update_hash, uintE* 
  *           such changes
  */
 template<class vertex>
-pair<uintE*, long> PeelSort(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
+pair<pair<uintE*, long>, long> PeelSort(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
-  pair<UVertexPair*, long> sg_pair = getSeagulls<UVertexPair>(active, V, U, UVertexPairCons()); 
-  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqs(nu, sg_pair.first, sg_pair.second);
+  auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
+  pair<pair<UVertexPair*, long>,long> sg_pair = getWedges2<UVertexPair>(active_map, active.size(), V, U, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
+  long next_idx = sg_pair.second;
+
+  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqs(nu, sg_pair.first.first, sg_pair.first.second);
 
   // Compute updated butterfly counts
   pair<uintE*, long> ret = getUpdates(sg_freqs_pair.first, sg_freqs_pair.second, butterflies);
 
-  free(sg_pair.first);
+  free(sg_pair.first.first);
   free(sg_freqs_pair.first);
-  return ret;
+  return make_pair(ret, next_idx);
 }
 
 template<class vertex>
-pair<uintE*, long> PeelSort_seq(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
+pair<pair<uintE*, long>, long> PeelSort_seq(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
-  pair<UVertexPair*, long> sg_pair = getSeagulls_seq<UVertexPair>(active, V, U, UVertexPairCons()); 
-  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqs_seq(nu, sg_pair.first, sg_pair.second);
+  auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
+  pair<pair<UVertexPair*, long>,long> sg_pair = getWedges2<UVertexPair>(active_map, active.size(), V, U, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
+  long next_idx = sg_pair.second;
+
+  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqs_seq(nu, sg_pair.first.first, sg_pair.first.second);
 
   // Compute updated butterfly counts
   pair<uintE*, long> ret = getUpdates_seq(sg_freqs_pair.first, sg_freqs_pair.second, butterflies);
 
-  free(sg_pair.first);
+  free(sg_pair.first.first);
   free(sg_freqs_pair.first);
-  return ret;
+  return make_pair(ret, next_idx);
 }
 
 /*
  *  Precisely PeelSort, but using histograms instead of repeated sortings.
  */
 template<class vertex>
-pair<uintE*, long> PeelHist(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
+pair<pair<uintE*, long>, long> PeelHist(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
-  pair<uintE*, long> sg_pair = getSeagulls<uintE>(active, V, U, UVertexPairIntCons(nu)); 
+  auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
+  pair<pair<uintE*, long>, long> sg_pair = getWedges2<uintE>(active_map, active.size(), V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+  long next_idx = sg_pair.second;
 
-  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist(nu, sg_pair.first, sg_pair.second);
+  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist(nu, sg_pair.first.first, sg_pair.first.second);
   // Compute updated butterfly counts
   pair<uintE*, long> ret = getUpdatesHist(sg_freqs_pair.first, sg_freqs_pair.second, nu, butterflies);
 
-  free(sg_pair.first);
+  free(sg_pair.first.first);
   free(sg_freqs_pair.first);
-  return ret;
+  return make_pair(ret, next_idx);
 }
 
 template<class vertex>
-pair<uintE*, long> PeelHist_seq(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
+pair<pair<uintE*, long>, long> PeelHist_seq(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
-  pair<uintE*, long> sg_pair = getSeagulls_seq<uintE>(active, V, U, UVertexPairIntCons(nu)); 
+  auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
+  pair<pair<uintE*, long>, long> sg_pair = getWedges2<uintE>(active_map, active.size(), V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+  long next_idx = sg_pair.second;
 
-  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist_seq(nu, sg_pair.first, sg_pair.second);
+  pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist_seq(nu, sg_pair.first.first, sg_pair.first.second);
   // Compute updated butterfly counts
   pair<uintE*, long> ret = getUpdatesHist_seq(sg_freqs_pair.first, sg_freqs_pair.second, nu, butterflies);
 
-  free(sg_pair.first);
+  free(sg_pair.first.first);
   free(sg_freqs_pair.first);
-  return ret;
+  return make_pair(ret, next_idx);
 }
 
 /*
  *  Precisely PeelSort, but using hash tables instead of repeated sortings.
  */
 template<class vertex>
-pair<uintE*, long> PeelHash(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu) {
+pair<pair<uintE*, long>, long> PeelHash(vertexSubset active, uintE* butterflies, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
-  sparseAdditiveSet<uintE> seagulls = getSeagullsHash(active, V, U, nu);
+  sparseAdditiveSet<uintE> seagulls = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges),1,UINT_E_MAX);
+  
+  auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
+  long next_idx = getWedgesHash2(seagulls, active_map, active.size(), V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+
   sparseAdditiveSet<uintE> update_hash = getSeagullFreqsHash(seagulls, nu);
 
   // Compute updated butterfly counts
@@ -571,14 +432,38 @@ pair<uintE*, long> PeelHash(vertexSubset active, uintE* butterflies, vertex* V, 
 
   seagulls.del();
   update_hash.del();
-  return ret;
+  return make_pair(ret, next_idx);
 }
 
 //***************************************************************************************************
 //***************************************************************************************************
 
 template <class vertex>
-array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflies, long type=0, size_t num_buckets=128) {
+pair<uintE*, long> PeelButterflies(vertexSubset active, uintE* butterflies, vertex* V, vertex* U, const long nu, long max_wedges, long type=0) {
+    bool is_seq = (active.size() < 1000);
+
+    // Obtain butterfly updates based on desired method
+    long num_wedges = countSeagulls(V,U,active);
+    if (max_wedges >= num_wedges) {
+      if (type == 0) { return PeelHash(active, butterflies, V, U, nu, num_wedges, max_wedges).first; }
+      else if(type == 1){
+        if (is_seq) return PeelSort_seq(active, butterflies, V, U, nu, num_wedges, max_wedges).first;
+        else return PeelSort(active, butterflies, V, U, nu, num_wedges, max_wedges).first;
+      }
+      else {
+        if (is_seq) return PeelHist_seq(active, butterflies, V, U, nu, num_wedges, max_wedges).first;
+        else return PeelHist(active, butterflies, V, U, nu, num_wedges, max_wedges).first;
+      }
+    }
+    long curr_idx = 0;
+    while(curr_idx < active.size()) {
+      cout << "ERROR\n";
+      exit(0);
+    }
+}
+
+template <class vertex>
+array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflies, long max_wedges, long type=0, size_t num_buckets=128) {
   // Butterflies are assumed to be stored on U
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -597,22 +482,9 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
     auto active = bkt.identifiers;
     uintE k = bkt.id;
     finished += active.size();
-
     bool is_seq = (active.size() < 1000);
 
-    // Obtain butterfly updates based on desired method
-    pair<uintE*, long> update_pair;
-    if (type == 0) {
-      update_pair = PeelHash(active, butterflies, V, U, nu);
-    }
-    else if(type == 1){
-      if (is_seq) update_pair = PeelSort_seq(active, butterflies, V, U, nu);
-      else update_pair = PeelSort(active, butterflies, V, U, nu);
-    }
-    else {
-      if (is_seq) update_pair = PeelHist_seq(active, butterflies, V, U, nu);
-      else update_pair = PeelHist(active, butterflies, V, U, nu);
-    }
+    pair<uintE*, long> update_pair = PeelButterflies(active, butterflies, V, U, nu, max_wedges, type);
 
     pair<tuple<uintE,uintE>*,long> bucket_pair;
     if (is_seq) bucket_pair = updateBuckets_seq(update_pair.first, update_pair.second, butterflies, D, b, k);
@@ -649,7 +521,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   pair<bool,long> use_v_pair = cmpWedgeCounts(G);
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
-  long max_wedges = num_wedges/3;
+  long max_wedges = num_wedges / 2; //LONG_MAX;//num_wedges;
 
 /*timer t3;
 t3.start();
@@ -688,24 +560,23 @@ t.stop();
   else t.reportTotal("HistCE:"); 
 
   long num_idxs = use_v ? G.nu : G.nv;
-  for (long i=0; i < num_idxs; ++i) {cout << butterflies[i] << ", ";}
-  cout << "\n";
+  /*for (long i=0; i < num_idxs; ++i) {cout << butterflies[i] << ", ";}
+  cout << "\n";*/
 
   //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
 
-  /*timer t2;
+  timer t2;
   t2.start();
-  auto cores = Peel(G, use_v, butterflies, tp);
+  auto cores = Peel(G, use_v, butterflies, max_wedges, tp);
   t2.stop();
   if (tp ==0) t2.reportTotal("Hash Peel:");
   else if (tp==1) t2.reportTotal("Sort Peel:");
   else t2.reportTotal("Hist Peel:");
 
-  //long num_idxs = use_v ? G.nu : G.nv;
   uintE mc = 0;
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;*/
+  cout << "### Max core: " << mc << endl;
 
   free(butterflies);
 
