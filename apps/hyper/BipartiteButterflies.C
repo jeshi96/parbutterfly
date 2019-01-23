@@ -64,6 +64,45 @@ long countSeagulls_seq(vertex* V, vertex* U, vertexSubset active) {
   return num_sg;
 }
 
+template<class vertex>
+long getNextSeagullIdx_seq(vertexSubset active, vertex* V, vertex* U, long max_wedges, long curr_idx) {
+  for(long i=curr_idx; i < active.size(); ++i) {
+    vertex u = U[active.vtx(i)];
+    for(long j=0; j < u.getOutDegree(); ++j) {
+      uintE num = V[u.getOutNeighbor(j)].getOutDegree() - 1;
+      if (num > max_wedges) {
+        if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
+        return i;
+      }
+      else { max_wedges -= num; }
+    }
+  }
+  return active.size();
+}
+
+template<class vertex>
+long getNextSeagullIdx(vertexSubset active, vertex* V, vertex* U, long max_wedges, long curr_idx) {
+  if (active.size() - curr_idx < 1000) return getNextSeagullIdx_seq(active, V, U, max_wedges, curr_idx);
+  uintE* idxs = newA(uintE, active.size() - curr_idx + 1);
+  idxs[active.size()-curr_idx] = 0;
+  parallel_for(long i=curr_idx; i < active.size(); ++i) {
+    vertex u = U[active.vtx(i)];
+    idxs[i-curr_idx] = 0;
+    for(long j=0; j < u.getOutDegree(); ++j) {
+      idxs[i-curr_idx] += V[u.getOutNeighbor(j)].getOutDegree() - 1;
+    }
+  }
+  sequence::plusScan(idxs, idxs, active.size() - curr_idx + 1);
+
+  auto idx_map = make_in_imap<uintT>(active.size() - curr_idx, [&] (size_t i) { return idxs[i+1]; });
+  auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
+  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
+  free(idxs);
+  if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
+
+  return find_idx;
+}
+
 /*
  *  Retrieves all seagulls associated with the vertices in active (paths of length two with an endpoint
  *  in active), and stores the two endpoints using the constructor cons. The vertices in active are
@@ -230,7 +269,7 @@ sparseAdditiveSet<uintE> getSeagullsHash(vertexSubset active, vertex* V, vertex*
 pair<tuple<uintE,uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs) {
   using X = tuple<uintE,uintE>;
   // Sort seagulls (considering both active + non-active endpoints), and retrieve frequency counts
-  pair<uintE*, long> freq_pair = getFreqs(seagulls, num_sgs, UVertexPairCmp(nu), UVertexPairEq());
+  pair<uintE*, long> freq_pair = getFreqs(seagulls, num_sgs, UVertexPairCmp2(nu), UVertexPairEq());
   long num_sg_freqs = freq_pair.second - 1;
   X* sg_freqs = newA(X, num_sg_freqs);
   // When retrieving frequency counts, store the frequency choose 2 with the non-active endpoint
@@ -251,7 +290,7 @@ pair<tuple<uintE,uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* seag
 }
 
 pair<tuple<uintE,uintE>*, long> getSeagullFreqs_seq(const long nu, UVertexPair* seagulls, long num_sgs) {
-  return getFreqs_seq<uintE>(seagulls, num_sgs, UVertexPairCmp(nu), UVertexPairEq(), true,
+  return getFreqs_seq<uintE>(seagulls, num_sgs, UVertexPairCmp2(nu), UVertexPairEq(), true,
     UVertexPairV2(), choose2(), reflCount<UVertexPair>());
 }
 
@@ -610,7 +649,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   pair<bool,long> use_v_pair = cmpWedgeCounts(G);
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
-  long max_wedges = num_wedges / 3;
+  long max_wedges = num_wedges/3;
 
 /*timer t3;
 t3.start();
@@ -649,8 +688,8 @@ t.stop();
   else t.reportTotal("HistCE:"); 
 
   long num_idxs = use_v ? G.nu : G.nv;
-  /*for (long i=0; i < num_idxs; ++i) {cout << butterflies[i] << ", ";}
-  cout << "\n";*/
+  for (long i=0; i < num_idxs; ++i) {cout << butterflies[i] << ", ";}
+  cout << "\n";
 
   //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
