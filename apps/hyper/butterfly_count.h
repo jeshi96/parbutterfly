@@ -65,6 +65,8 @@ void storeButterfliesSortCE(uintE* butterflies, long nu, UVertexPair* wedges, ui
   UVertexPair start_vs = wedges[wedge_freqs_f[par_idxs_f[i]]];
   if (use_v1) butterflies[start_vs.v1] += sum;
   else butterflies[start_vs.v2] += sum;
+
+  free(butterflies_v);
 }
 
 // Retrieve frequency counts for all wedges with the same key, and for all wedges with the same first vertex
@@ -99,6 +101,7 @@ void countButterfliesSortCE(uintE* butterflies, long nv, long nu, UVertexPair* w
     if (range > 10000) storeButterfliesSortCE(butterflies,nu,wedges,wedge_freqs_f,par_idxs_f,i,use_v1);
     else storeButterfliesSortCE_seq(butterflies,wedges,wedge_freqs_f,par_idxs_f,i,use_v1); //TODO set threshold var
   }
+  free(par_idxs_f);
 
 //t.stop();
 //t.reportTotal("\tcountButterfliesSortCE:");
@@ -431,6 +434,9 @@ using X = tuple<uintE,uintE>;
     //wedge_freqs_i[2*i + 1] = make_tuple(wedge_num.v1, num);
     wedge_freqs_i[i] = make_tuple(wedge_num.v1, num);
   }
+  free(wedge_freqs);
+  free(wedges_list);
+
   //pbbsa::sequence<tuple<uintE, uintE>> wedge_freqs_i_seq = pbbsa::sequence<tuple<uintE,uintE>>(wedge_freqs_i,2*wedge_freqs_n);
   pbbsa::sequence<tuple<uintE, uintE>> wedge_freqs_i_seq = pbbsa::sequence<tuple<uintE,uintE>>(wedge_freqs_i,wedge_freqs_n);
   tuple<size_t,tuple<uintE, uintE>*> butterflies_tuple = 
@@ -441,9 +447,8 @@ using X = tuple<uintE,uintE>;
   parallel_for (long i=0; i < butterflies_n; ++i) {
     butterflies[get<0>(butterflies_l[i])] += get<1>(butterflies_l[i]);
   }
-
-  free(wedge_freqs);
-  free(wedges_list);
+  free(wedge_freqs_i);
+  free(butterflies_l);
 
   return wedges_list_pair.second;
 }
@@ -545,6 +550,9 @@ using X = tuple<uintE,uintE>;
     //wedge_freqs_i[2*i + 1] = make_tuple(wedge_num / nu, num);
     wedge_freqs_i[i] = make_tuple(wedge_num / nu, num);
   }
+  free(wedge_freqs);
+  free(wedges_list);
+
   //pbbsa::sequence<X> wedge_freqs_i_seq = pbbsa::sequence<X>(wedge_freqs_i,2*wedge_freqs_n);
   pbbsa::sequence<X> wedge_freqs_i_seq = pbbsa::sequence<X>(wedge_freqs_i,wedge_freqs_n);
   tuple<size_t, X*> butterflies_tuple = 
@@ -557,9 +565,9 @@ using X = tuple<uintE,uintE>;
   parallel_for (long i=0; i < butterflies_n; ++i) {
     butterflies[get<0>(butterflies_l[i])] += get<1>(butterflies_l[i]);
   }
-
-  free(wedge_freqs);
-  free(wedges_list);
+  
+  free(wedge_freqs_i);
+  free(butterflies_l);
 
   return wedges_list_pair.second;
 }

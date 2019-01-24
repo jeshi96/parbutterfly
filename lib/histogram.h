@@ -159,7 +159,7 @@ namespace pbbsa {
     }
 
     ~get_bucket() {
-      free(hash_table); }
+      delete[] hash_table; }
 
     size_t operator() (size_t i) {
       if (k > 0) {

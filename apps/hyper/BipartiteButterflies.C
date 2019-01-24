@@ -542,6 +542,9 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   // 1 if using input file, 0 if using generated graph
   long gen = P.getOptionLongValue("-i",0);
 
+  // # of max wedges
+  long max_wedges = P.getOptionLongValue("-m",2577500000);
+
   bipartiteGraph<symmetricVertex> G = (gen != 0) ? 
     bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
   
@@ -549,7 +552,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   pair<bool,long> use_v_pair = cmpWedgeCounts(G);
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
-  long max_wedges = 2577500000; //0LONG_MAX;//num_wedges;
+  //long max_wedges = ; //0LONG_MAX;//num_wedges;
 
 /*timer t3;
 t3.start();
@@ -594,7 +597,7 @@ t.stop();
   //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
 
-  timer t2;
+  /*timer t2;
   t2.start();
   auto cores = Peel(G, use_v, butterflies, max_wedges, tp);
   t2.stop();
@@ -604,7 +607,7 @@ t.stop();
 
   uintE mc = 0;
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;
+  cout << "### Max core: " << mc << endl;*/
 
   free(butterflies);
 
