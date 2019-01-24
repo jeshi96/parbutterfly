@@ -923,7 +923,6 @@ pair<long,long> getNextWedgeIdx2(Sequence I, long nu, vertex* V, vertex* U, long
   size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
   free(idxs);
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
-
   return make_pair(find_idx, idxs[find_idx - curr_idx]); //TODO make sure right
 }
 
