@@ -28,7 +28,7 @@
 
 //pass -w flag for weighted input
 int parallel_main(int argc, char* argv[]) {
-  commandLine P(argc,argv,"[-w] <input hyperedge file> <output Ligra file>");
+  commandLine P(argc,argv,"[-w] [-n] <input hyperedge file> <output Ligra file>");
   char* iFile = P.getArgument(1);
   char* oFile = P.getArgument(0);
   bool wgh = P.getOption("-w");

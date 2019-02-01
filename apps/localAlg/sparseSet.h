@@ -74,6 +74,10 @@ class sparseAdditiveSet {
     free(TA); 
   }
 
+  void clear() {
+    clearA(TA, m, empty);
+  }
+
   // nondeterministic insert
   bool insert(kvPair v) {
     uintE vkey = v.first;
@@ -90,6 +94,30 @@ class sparseAdditiveSet {
 	//add residual values on duplicate
 	writeAdd(&(TA[h].second),v.second);
 	return 0;
+      }
+    
+      // move to next bucket
+      h = incrementIndex(h); 
+    }
+    return 0; // should never get here
+  }
+
+  E insertAndReturn(kvPair v) {
+    uintE vkey = v.first;
+    uintT h = firstIndex(vkey); 
+    while (1) {
+      //kvPair c;
+      int cmp;
+      bool swapped = 0;
+      //c = TA[h];
+      if(TA[h].first == UINT_E_MAX && CAS(&TA[h],empty,v)) {
+	      return 0; //return true if value originally didn't exist
+      }
+      else if (TA[h].first == vkey) {
+	      //add residual values on duplicate
+        E ret = TA[h].second;
+	      writeAdd(&(TA[h].second),v.second);
+	      return ret;
       }
     
       // move to next bucket
@@ -131,6 +159,17 @@ class sparseAdditiveSet {
     _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
     //sequence::pack(TA,(entry*)NULL,FL,m);
     free(FL);
+    return R;
+  }
+
+
+// note that FL has to be init to size m; also init out to size m prob
+  _seq<kvPair> entries_no_init(bool* FL, kvPair* out) {
+    //bool *FL = newA(bool,m);
+    parallel_for (long i=0; i < m; i++) 
+      FL[i] = (TA[i].first != UINT_E_MAX);
+    _seq<kvPair> R = pack(out, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
+    //free(FL);
     return R;
   }
 
@@ -240,6 +279,10 @@ class sparsePointerAdditiveSet {
     free(TA); 
   }
 
+  void clear() {
+    clearA(TA, m, empty);
+  }
+
   // nondeterministic insert
   bool insert(kvPair v) {
     T vkey = *(v.first);
@@ -286,6 +329,17 @@ class sparsePointerAdditiveSet {
     free(FL);
     return R;
   }
+
+// note that FL has to be init to size m; also init out to size m prob
+  _seq<kvPair> entries_no_init(bool* FL, kvPair* out) {
+    //bool *FL = newA(bool,m);
+    parallel_for (long i=0; i < m; i++) 
+      FL[i] = (TA[i].first != NULL);
+    _seq<kvPair> R = pack(out, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
+    //free(FL);
+    return R;
+  }
+
 
   // returns all the current entries satisfying predicate f compacted into a sequence
   template <class F>

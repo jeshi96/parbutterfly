@@ -1010,16 +1010,31 @@ namespace benchIO {
     
     parallel_for(long i=0;i<S.n-k;i++) S2[i] = S.A[k+i];
     S.del();
+
+    long spaces = 0;
+    bool prev_space = true;
+    long t = 0;
+    while(1) {
+      if (!isSpace(S2[t]) && prev_space) {
+        prev_space = false;
+        spaces++;
+      }
+      else if(isspace(S2[t])) {
+        prev_space = true;
+      }
+      if(S2[t] == '\n') break;
+      t++;
+    }
     
     words W = stringToWords(S2, S.n-k);
-    long m = W.m/2;
+    long m = W.m/spaces;
     edge<intT> *VE = newA(edge<intT>,m);
     edge<intT> *HE = newA(edge<intT>,m);
 
     {parallel_for(long i=0; i < m; i++) {
-  VE[i] = edge<intT>(atol(W.Strings[2*i]), 
-        atol(W.Strings[2*i + 1]));
-  HE[i] = edge<intT>(atol(W.Strings[2*i+1]),atol(W.Strings[2*i]));
+  VE[i] = edge<intT>(atol(W.Strings[spaces*i]), 
+        atol(W.Strings[spaces*i + 1]));
+  HE[i] = edge<intT>(atol(W.Strings[spaces*i+1]),atol(W.Strings[spaces*i]));
       }}
     W.del();
 

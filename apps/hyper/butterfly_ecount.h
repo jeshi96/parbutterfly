@@ -327,3 +327,74 @@ uintE* CountE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long type=
   else if (type==4) return CountEHist(GA, use_v, num_wedges);
   else return CountEHistCE(GA, use_v, num_wedges);
 }
+
+template <class vertex>
+struct edgeToIdx { 
+  long nv;
+  long nu;
+  vertex* V;
+  vertex* U;
+  bool overflow;
+  long num_edges;
+  long max_wedges;
+  sparseAdditiveSet<uintE> edges;
+  sparsePointerAdditiveSet<UVertexPairHash, uintE, UVertexPairHashEq> edges_overflow;
+
+  edgeToIdx(long _nv, long _nu, vertex* _V, vertex* _U, long _max_wedges) : nv(_nv), nu(_nu), V(_V), U(_U), max_wedges(_max_wedges) {
+    overflow = (nu > UINT_E_MAX / nu);
+  
+    if (nv < nu) num_edges = sequence::reduce<long>((long) 0, (long) nv, addF<long>(), getV<vertex, long>(V));
+    else num_edges = sequence::reduce<long>((long) 0, (long) nu, addF<long>(), getV<vertex, long>(U));
+  
+    if (overflow)
+      edges_overflow = sparsePointerAdditiveSet<UVertexPairHash, uintE, UVertexPairHashEq>(num_edges, 1, UINT_E_MAX, UVertexPairHashEq());
+    else
+      edges = sparseAdditiveSet<uintE>(num_edges, 1, UINT_E_MAX);
+    
+    if (!overflow && nu*nv < max_wedges) {
+// go through edges in an array
+      bool* edges_bool = newA(bool, nu*(nv-1)+nu-1);
+      parallel_for(long i=0; i < nv; ++i) {
+        for (long j = 0; j < V[i].getOutDegree(); ++j) {
+          edges_bool[nu*i + V[i].getOutNeighbor(j)] = true;
+        }
+      }
+      auto f = [&] (size_t i) { return edges_bool[i]; };
+      auto f_in = make_in_imap<bool>(nu*(nv-1)+nu-1, f);
+      auto out = pbbs::pack_index<uintE>(f_in);
+      out.alloc = false;
+      free(edges_bool);
+
+      parallel_for(long i=0; i < out.size(); ++i) {
+        edges.insert(make_pair(out.s[i], i));
+      }
+
+      free(out.s);
+    }
+    else {
+// hash edges sequentially
+      uintE idx = 0;
+      UVertexPairHashCons overflow_cons = UVertexPairHashCons(nu);
+      for (long i=0; i < nv; ++i) {
+        for (long j=0; j < V[i].getOutDegree(); ++j) {
+          if (overflow) edges_overflow.insert(make_pair(overflow_cons(i, V[i].getOutNeighbor(j), 0), idx));
+          else edges.insert(make_pair(nu*i + V[i].getOutNeighbor(j), idx));
+          idx++;
+        }
+      }
+    }
+  }
+
+  void del() {
+    if (overflow) edges_overflow.del();
+    else edges.del();
+  }
+
+  uintE operator() (const uintE& i, const uintE& j) {
+    if (overflow) {
+      UVertexPairHashConsN overflow_cons = UVertexPairHashConsN(nu);
+      return (edges_overflow.find(overflow_cons(i, j, 0))).second;
+    }
+    return (edges.find((uintE) (nu*i + j))).second;
+  }
+};
