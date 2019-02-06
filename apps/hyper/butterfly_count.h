@@ -223,7 +223,7 @@ long CountHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* bu
   if (nu > UINT_E_MAX / nu) return CountHashOverflow(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
 
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(max_wedges,num_wedges), 1, UINT_E_MAX);
-  long next_idx = getWedgesHash2(wedges,nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, true);
+  long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, true);
   
   _seq<T> wedge_freqs = wedges.entries();
 

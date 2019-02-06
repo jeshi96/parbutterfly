@@ -597,9 +597,9 @@ struct TupleCmp {
 
   };
 
-  template <typename s_size_t, typename ct_t, typename E, typename V>
-  tuple<size_t, tuple<s_size_t,sequentialHT<ct_t,uintE>*>* > seq_sparse_histogram_list(sequence<tuple<E,V>> A, size_t m, size_t max) {
-    sequentialHTList<s_size_t, ct_t> tab(nullptr, A.size(), 1.0, make_tuple(numeric_limits<s_size_t>::max(), nullptr), max);
+  template <typename s_size_t, typename ct_t, typename E, typename V, typename Hash>
+  tuple<size_t, tuple<s_size_t,sequentialHT<ct_t,uintE>*>* > seq_sparse_histogram_list(sequence<tuple<E,V>> A, size_t m, Hash max) {
+    sequentialHTList<s_size_t, ct_t, Hash> tab(nullptr, A.size(), 1.0, make_tuple(numeric_limits<s_size_t>::max(), nullptr), max);
     for (size_t i = 0; i < A.size(); i++) {
       tab.insert(A[i]);
     }
@@ -613,8 +613,8 @@ struct TupleCmp {
   // Returns a sequence S of pairs of (elm, count) of size <= n.
   // TODO: maybe not a good idea to have sizes -- just do max size? see which is faster?
   // , tuple<E,uintE>* sizes, size_t total_num
-  template <typename s_size_t, typename ct_t, typename E, typename V>
-  tuple<size_t, tuple<s_size_t,sequentialHT<ct_t,uintE>*>* > sparse_histogram_list(sequence<tuple<E,V>> A, size_t m, size_t max) {
+  template <typename s_size_t, typename ct_t, typename E, typename V, typename Hash>
+  tuple<size_t, tuple<s_size_t,sequentialHT<ct_t,uintE>*>* > sparse_histogram_list(sequence<tuple<E,V>> A, size_t m, Hash max) {
     //using E = typename Seq::T;
     size_t n = A.size();
     size_t bits;
@@ -668,7 +668,7 @@ struct TupleCmp {
       size_t t_size = (size_t)(1 << pbbs::log2_up(end - start + 100));
       outT* tab = tmp + offs[i];
       if (i < num_buckets/2) {
-        auto table = sequentialHTList<s_size_t, ct_t>(tab, t_size, 1, empty, max);
+        auto table = sequentialHTList<s_size_t, ct_t, Hash>(tab, t_size, 1, empty, max);
         // light
         for (size_t j = start; j < end; j++) {
           table.insert(A[j]);
@@ -698,7 +698,7 @@ struct TupleCmp {
       auto tab = tmp + offs[i];
       size_t out_off = c_offs[i];
       if (i < num_buckets/2) {
-        auto table = sequentialHTList<s_size_t, ct_t>(tab, t_size, 1, empty, max);
+        auto table = sequentialHTList<s_size_t, ct_t, Hash>(tab, t_size, 1, empty, max);
         table.compactInto(out + out_off);
       } else {
         out[out_off] = tmp[offs[i]];

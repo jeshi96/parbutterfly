@@ -69,6 +69,8 @@ class sparseAdditiveSet {
     TA(newA(kvPair,m)) 
       { empty=make_pair(UINT_E_MAX,zero); clearA(TA,m,empty); }
 
+  sparseAdditiveSet() {}
+
   // Deletes the allocated arrays
   void del() {
     free(TA); 
@@ -274,6 +276,8 @@ class sparsePointerAdditiveSet {
     TA(newA(kvPair,m)) 
       { empty=pair<T*,E>(NULL,zero); clearA(TA,m,empty); }
 
+  sparsePointerAdditiveSet() {}
+
   // Deletes the allocated arrays
   void del() {
     free(TA); 
@@ -358,11 +362,6 @@ class sparsePointerAdditiveSet {
     return sequence::mapReduce<intT>(TA,m,addF<intT>(),notEmptyF(empty));
   }
 
-  void copy(sparseAdditiveSet<E> &A) {
-    parallel_for(long i=0;i<A.m;i++) {
-      if(A.TA[i].first != NULL) insert(A.TA[i]);
-    }
-  }
 };
 
 //*************************************************************************************************

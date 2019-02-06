@@ -74,6 +74,32 @@ struct WedgeIntCons {
   }
 };
 
+struct UWedgeIntCons {
+  long nu;
+  UWedgeIntCons(long _nu) : nu(_nu) {}
+  tuple<uintE,uintE> operator() (uintE v1, uintE v2, uintE c) {
+    return make_tuple(v1 * nu + v2, c);
+  }
+};
+
+struct UWedge {
+  uintE v1;
+  uintE v2;
+  uintE u;
+  UWedge(uintE _v1, uintE _v2, uintE _u) : v1(_v1), v2(_v2), u(_u) {}
+};
+
+struct UWedgeCons { UWedge operator() (uintE v1, uintE v2, uintE c) { return UWedge(v1, v2, c); }};
+
+struct UWedgeCmp {
+  bool operator() (UWedge vs1, UWedge vs2) {
+  	if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
+  	return vs1.v1 < vs2.v1;
+  }
+};
+
+struct UWedgeEq { bool operator() (UWedge vs1, UWedge vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
+
 struct Wedge {
   uintE v1;
   uintE v2;
@@ -279,6 +305,7 @@ template<class T> struct cmpF{bool operator() (T a, T b) {return a < b;}};
 
 struct nonEmptyUVPF{bool operator() (UVertexPair &a) {return (a.v1 != UINT_E_MAX || a.v2 != UINT_E_MAX);}};
 struct nonEmptyUVPHF{bool operator() (UVertexPairHash &a) {return (a.v1 != UINT_E_MAX || a.v2 != UINT_E_MAX);}};
+struct nonEmptyUWF{bool operator() (UWedge &a) {return (a.v1 != UINT_E_MAX || a.v2 != UINT_E_MAX || a.u != UINT_E_MAX);}};
 
 struct nonMaxTupleF{bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}};
 
@@ -1178,6 +1205,85 @@ pair<tuple<uintE,uintE>*,long> updateBuckets_seq(uintE* update_idxs, long num_up
   }
   return make_pair(update, idx);
 }
+
+template <class vertex>
+struct edgeToIdx { 
+  long nv;
+  long nu;
+  vertex* V;
+  vertex* U;
+  bool overflow;
+  long num_edges;
+  long max_wedges;
+  sparseAdditiveSet<uintE> edges;
+  sparsePointerAdditiveSet<UVertexPairHash, uintE, UVertexPairHashEq> edges_overflow;
+
+  edgeToIdx(bipartiteGraph<vertex> GA, bool use_v, long _max_wedges) : max_wedges(_max_wedges) {
+    nv = use_v ? GA.nv : GA.nu;
+    nu = use_v ? GA.nu : GA.nv;
+    V = use_v ? GA.V : GA.U;
+    U = use_v ? GA.U : GA.V;
+
+    overflow = (nu > UINT_E_MAX / nu);
+  
+    if (nv < nu) num_edges = sequence::reduce<long>((long) 0, (long) nv, addF<long>(), getV<vertex, long>(V));
+    else num_edges = sequence::reduce<long>((long) 0, (long) nu, addF<long>(), getV<vertex, long>(U));
+  
+    if (overflow)
+      edges_overflow = sparsePointerAdditiveSet<UVertexPairHash, uintE, UVertexPairHashEq>(num_edges, 1, UINT_E_MAX, UVertexPairHashEq());
+    else
+      edges = sparseAdditiveSet<uintE>(num_edges, 1, UINT_E_MAX);
+    
+    if (!overflow && nu*nv < max_wedges) {
+// go through edges in an array
+      bool* edges_bool = newA(bool, nu*nv);
+      parallel_for(long i=0; i < nu*nv; ++i) {edges_bool[i] = false;}
+      parallel_for(long i=0; i < nv; ++i) {
+        for (long j = 0; j < V[i].getOutDegree(); ++j) {
+          edges_bool[nu*i + V[i].getOutNeighbor(j)] = true;
+        }
+      }
+      auto f = [&] (size_t i) { return edges_bool[i]; };
+      auto f_in = make_in_imap<bool>(nu*nv, f);
+      auto out = pbbs::pack_index<uintE>(f_in);
+      out.alloc = false;
+      free(edges_bool);
+
+      parallel_for(long i=0; i < out.size(); ++i) {
+        edges.insert(make_pair(out.s[i], i));
+      }
+
+      free(out.s);
+    }
+    else {
+// hash edges sequentially
+// TODO maybe it's faster to hash all w/val 1 or something, then retrieve entries, then rehash w/entry idx??
+      uintE idx = 0;
+      UVertexPairHashCons overflow_cons = UVertexPairHashCons(nu);
+      for (long i=0; i < nv; ++i) {
+        for (long j=0; j < V[i].getOutDegree(); ++j) {
+          if (overflow) edges_overflow.insert(make_pair(overflow_cons(i, V[i].getOutNeighbor(j), 0), idx));
+          else edges.insert(make_pair(nu*i + V[i].getOutNeighbor(j), idx));
+          idx++;
+        }
+      }
+    }
+  }
+
+  void del() {
+    if (overflow) edges_overflow.del();
+    else edges.del();
+  }
+
+  // Note: always in the format (V, U)
+  uintE operator() (const uintE& i, const uintE& j) {
+    if (overflow) {
+      UVertexPairHashConsN overflow_cons = UVertexPairHashConsN(nu);
+      return (edges_overflow.find(overflow_cons(i, j, 0))).second;
+    }
+    return (edges.find((uintE) (nu*i + j))).second;
+  }
+};
 
 
 #endif

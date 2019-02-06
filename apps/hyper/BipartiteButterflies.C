@@ -549,25 +549,28 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   fflush(stdout);
   
 
-  pair<bool,long> use_v_pair = (ty!=8) ? cmpWedgeCounts(G) : cmpWedgeCounts_seq(G);
+  pair<bool,long> use_v_pair = cmpWedgeCounts(G);
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
   //long max_wedges = ; //0LONG_MAX;//num_wedges;
 
 /*timer t3;
 t3.start();
-uintE* ebutterflies = CountE(G, use_v, num_wedges, ty);
+auto eti = edgeToIdx<symmetricVertex>(G, use_v, max_wedges);
+uintE* ebutterflies = CountE(eti, G, use_v, num_wedges, max_wedges, ty);
 t3.stop();
-if(ty==0) t3.reportTotal("E Hash:");
-else if (ty == 1) t3.reportTotal("E HashCE:");
-else if (ty == 2) t3.reportTotal("E Sort:");
-else if (ty==3) t3.reportTotal("E SortCE:");
+if(ty==2) t3.reportTotal("E Hash:");
+else if (ty == 3) t3.reportTotal("E HashCE:");
+else if (ty == 0) t3.reportTotal("E Sort:");
+else if (ty==1) t3.reportTotal("E SortCE:");
 else if (ty==4) t3.reportTotal("E Hist:");
 else t3.reportTotal("E HistCE:");
 
-//for (long i=0; i < nu*(nv-1)+nu-1; ++i) {cout << ebutterflies[i] << ", ";}
-//cout << "\n";
+long b=0;
+for (long i=0; i < eti.num_edges; ++i) {b += ebutterflies[i];}
+cout << "number of edge butterflies: " << b << "\n";*/
 
+/*
 timer t2;
 t2.start();
 auto cores = PeelE(G, use_v, ebutterflies, tp);
@@ -588,6 +591,7 @@ t.stop();
   else if (ty==3) t.reportTotal("HashCE:");
   else if (ty==4) t.reportTotal("Hist:");
   else if (ty==6) t.reportTotal("HistCE:");
+  else if (ty==7) t.reportTotal("Seq:");
 
   long num_idxs = use_v ? G.nu : G.nv;
   long b = 0;
@@ -598,7 +602,7 @@ t.stop();
   //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
 
-  /*timer t2;
+  timer t2;
   t2.start();
   auto cores = Peel(G, use_v, butterflies, max_wedges, tp);
   t2.stop();
@@ -608,10 +612,10 @@ t.stop();
 
   uintE mc = 0;
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;*/
+  cout << "### Max core: " << mc << endl;
 
   free(butterflies);
-
+  //eti.del();
   //free(ebutterflies);
   G.del();
 }

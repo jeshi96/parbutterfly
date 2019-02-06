@@ -283,7 +283,7 @@ class sequentialHTStruct {
 
 };
 
-template <class K, class V>
+template <class K, class V, class Hash>
 class sequentialHTList {
  typedef tuple<K,sequentialHT<V,uintE>*> T;
  typedef tuple<tuple<K,V>,size_t> O;
@@ -296,13 +296,13 @@ class sequentialHTList {
   T* table;
   bool alloc;
   size_t n_elms;
-  size_t max;
+  Hash max;
 
   inline size_t toRange(size_t h) {return h & mask;}
   inline size_t firstIndex(K v) {return toRange(pbbs::hash64(v));}
   inline size_t incrementIndex(size_t h) {return toRange(h+1);}
 
-  sequentialHTList(T* _table, size_t size, float loadFactor, T _empty, size_t _max) ://tuple<K,uintE>* sizes, 
+  sequentialHTList(T* _table, size_t size, float loadFactor, T _empty, Hash _max) ://tuple<K,uintE>* sizes, 
     m((size_t) 1 << pbbs::log2_up((size_t)(loadFactor*size))),
     mask(m-1),
     empty(_empty),
@@ -335,7 +335,7 @@ class sequentialHTList {
     while (1) {
       auto k = get<0>(table[h]);
       if (k == max_key) {
-        sequentialHT<V,uintE>* ht = new sequentialHT<V,uintE>(nullptr, max, 1.0, make_tuple(numeric_limits<V>::max(), 0));
+        sequentialHT<V,uintE>* ht = new sequentialHT<V,uintE>(nullptr, (max.find(vKey)).second, 1.0, make_tuple(numeric_limits<V>::max(), 0));
         table[h] = make_tuple(vKey, ht);
         get<1>(table[h])->insertAdd(get<1>(v));
         n_elms++;
