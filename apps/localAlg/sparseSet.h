@@ -46,6 +46,7 @@ class sparseAdditiveSet {
   kvPair empty;
   kvPair* TA;
   float loadFactor;
+  bool alloc;
 
   // needs to be in separate routine due to Cilk bugs
   static void clearA(kvPair* A, long n, kvPair v) {
@@ -67,13 +68,17 @@ class sparseAdditiveSet {
     m((uintT) 1 << log2RoundUp((uintT)(_loadFactor*size)+100)),
     mask(m-1),
     TA(newA(kvPair,m)) 
-      { empty=make_pair(UINT_E_MAX,zero); clearA(TA,m,empty); }
+      { empty=make_pair(UINT_E_MAX,zero); clearA(TA,m,empty); alloc=true; }
 
   sparseAdditiveSet() {}
 
+  sparseAdditiveSet(kvPair* _TA, long size, float _loadFactor, E zero) : loadFactor(_loadFactor), m(size*_loadFactor), mask(m-1), TA(_TA) {
+    empty=make_pair(UINT_E_MAX,zero); alloc=false;
+  }
+
   // Deletes the allocated arrays
   void del() {
-    free(TA); 
+    if(alloc) free(TA); 
   }
 
   void clear() {
@@ -215,6 +220,7 @@ class sparseSet : public sparseAdditiveSet<E> {
 
   public:
   sparseSet(long size, float _loadFactor, E zero) : sparseAdditiveSet<E>(size, _loadFactor, zero) {}
+  sparseSet(kvPair* _TA, long size, float _loadFactor, E zero) : sparseAdditiveSet<E>(_TA, size, _loadFactor, zero) {}
 
   // nondeterministic insert no add
   bool insert(kvPair v) {
@@ -239,7 +245,6 @@ class sparseSet : public sparseAdditiveSet<E> {
     return 0; // should never get here
   }
 };
-
 
 // This is if your key absolutely can't fit in the ~8 byte space
 // Your struct T must have a hash field that returns an int (and that follows eq)

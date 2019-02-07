@@ -42,6 +42,7 @@ long CountEHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE*
   auto wedges_tuple = pbbsa::sparse_histogram_list<uintE, uintE>(wedges_seq, nu*nu + nu, wedges); //TODO this last one could be better
   tuple<uintE, pbbsa::sequentialHT<uintE,uintE>*>* wedge_freqs = get<1>(wedges_tuple);
   size_t wedge_freqs_n = get<0>(wedges_tuple);
+  wedges.del();
 
   X* b_freqs = newA(X, 2*num_wedges_list);
   long idx = 0;
@@ -103,6 +104,7 @@ long CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* b
   auto wedges_tuple = pbbsa::sparse_histogram_list<uintE, uintE>(wedges_seq, nu*nu + nu, wedges); //TODO this last one could be better
   tuple<uintE, pbbsa::sequentialHT<uintE,uintE>*>* wedge_freqs = get<1>(wedges_tuple);
   size_t wedge_freqs_n = get<0>(wedges_tuple);
+  wedges.del();
 
 
   /*uintE* butterflies = newA(uintE, nu*(nv-1)+nu-1);
@@ -227,36 +229,51 @@ long CountESort(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* b
 //********************************************************************************************
 
 template<class vertex, class wedgeCons>
-sparseSet<sparseSet<uintE>*> allocateWedgesHash(sparseAdditiveSet<uintE>& wedges, const long nv, vertex* V, vertex* U, wedgeCons cons,
+pair<sparseSet<sparseSet<uintE>*>,pair<uintE,uintE>*> allocateWedgesHash(sparseAdditiveSet<uintE>& wedges, const long nv, vertex* V, vertex* U, wedgeCons cons,
   long curr_idx, long next_idx) {
   using T=sparseSet<uintE>*;
+  using X=pair<uintE,uintE>;
   _seq<pair<uintE,uintE>> wedge_freqs = wedges.entries();
   sparseSet<T> cwedges = sparseSet<T>(wedge_freqs.n, 1, NULL);
+
+  uintE* idxs = newA(uintE, wedge_freqs.n+1);
+  idxs[wedge_freqs.n] = 0;
+  // (uintE) 1 << log2RoundUp((uintE)(wedge_freqs.A[i].second)+10)
+  parallel_for(long i=0; i < wedge_freqs.n; ++i) { idxs[i] = (uintE) 1 << log2RoundUp(wedge_freqs.A[i].second+10); }
+  sequence::plusScan(idxs, idxs, wedge_freqs.n+1);
+
+  X* nested_wedges = newA(X, idxs[wedge_freqs.n]);
+  parallel_for(long i=0; i < idxs[wedge_freqs.n]; ++i) {nested_wedges[i] = make_pair(UINT_E_MAX, UINT_E_MAX);}
+
   // Allocate the space for all of our wedge lists
+  // TODO change back this is too slow
   parallel_for (long i=0; i < wedge_freqs.n; ++i) {
-    pair<uintE,uintE> wedge_freq_pair = wedge_freqs.A[i];
-    T cset = new sparseSet<uintE>(wedge_freq_pair.second, 1, UINT_E_MAX);
+    X wedge_freq_pair = wedge_freqs.A[i];
+    T cset = new sparseSet<uintE>(nested_wedges + idxs[i], (uintE) 1 << log2RoundUp(wedge_freq_pair.second+10), 1.0, UINT_E_MAX);
     cwedges.insert(make_pair(wedge_freq_pair.first, cset));
   }
+
+  free(idxs);
 
   // Count number of wedges by their key
   parallel_for (long i = curr_idx; i < next_idx; ++i) {
     const vertex u = U[i];
+    const long u_deg = u.getOutDegree();
+    //granular_for (j, 0, u_deg, (u_deg > 1000), {
     parallel_for (long j = 0; j < u.getOutDegree(); ++j) {
       const uintE v_idx = u.getOutNeighbor(j);
       const vertex v = V[v_idx];
       // Find all seagulls with center v and endpoint u
       for (long k=0; k < v.getOutDegree(); ++k) {
         const uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx < i) {
-          sparseSet<uintE>* wedge_pair = cwedges.find(cons(i, u2_idx, v_idx)).second;
-          wedge_pair->insert(pair<uintE,uintE>(v_idx,1));
-        }
+        if (u2_idx < i) (cwedges.find(cons(i, u2_idx, v_idx)).second)->insert(pair<uintE,uintE>(v_idx,1));
+          //sparseSet<uintE>* wedge_pair = cwedges.find(cons(i, u2_idx, v_idx)).second;
+          //wedge_pair->insert(pair<uintE,uintE>(v_idx,1));
       }
     }
   }
 
-  return cwedges;
+  return make_pair(cwedges, nested_wedges);
 }
 
 template <class writeAddOp, class vertex>
@@ -268,18 +285,18 @@ void countButterfliesEHash(sparseSet<sparseSet<uintE>*>& cwedges, const long nu,
     sparseSet<uintE>* centers = cwedge_freqs.A[i].second;
     _seq<pair<uintE,uintE>> centers_seq = centers->entries();
 
-    uintE u2 = key % nu;
-    uintE u1 = key / nu;
     uintE num_butterflies = centers_seq.n - 1;
     parallel_for(long j=0; j < centers_seq.n; ++j) {
       uintE v = centers_seq.A[j].first;
-      op(eti(v,u2), num_butterflies);
-      op(eti(v,u1), num_butterflies);
+      op(eti(v, key % nu), num_butterflies);
+      op(eti(v, key / nu), num_butterflies);
     }
 
     centers_seq.del();
-    centers->del();
+    //free(centers->TA);
+    //centers->del();
   }
+  //free(cwedge_freqs.A[0].second->TA);
   cwedge_freqs.del();
 }
 
@@ -293,7 +310,9 @@ long CountEHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* b
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges), 1, UINT_E_MAX);
   long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, true);
   // TODO idk if this nested stuff is best -- I needed a linkedlist append kind of thing but parallel
-  sparseSet<sparseSet<uintE>*> cwedges = allocateWedgesHash(wedges,nv,V,U,UVertexPairIntCons(nu), curr_idx, next_idx);
+  auto cwedges_pair = allocateWedgesHash(wedges,nv,V,U,UVertexPairIntCons(nu), curr_idx, next_idx);
+  sparseSet<sparseSet<uintE>*> cwedges = cwedges_pair.first;
+  wedges.del();
   
   //TODO this should be init to # of edges --> need a good way to index edges???? unless we do it on all pairs
   /*uintE* butterflies = newA(uintE, nu*(nv-1)+nu-1);
@@ -301,10 +320,10 @@ long CountEHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* b
     butterflies[i] = 0;
   }*/
 
-  countButterfliesEHash(cwedges,nu,nv, writeAddArr<uintE>(butterflies), eti);
-  
+  countButterfliesEHash(cwedges, nu, nv, writeAddArr<uintE>(butterflies), eti);
+  free(cwedges_pair.second);
   cwedges.del();
-  wedges.del();
+  
   return next_idx;
 }
 
@@ -318,14 +337,15 @@ long CountEHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE*
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges), 1, UINT_E_MAX);
   long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, true);
   // TODO idk if this nested stuff is best -- I needed a linkedlist append kind of thing but parallel
-  sparseSet<sparseSet<uintE>*> cwedges = allocateWedgesHash(wedges,nv,V,U,UVertexPairIntCons(nu), curr_idx, next_idx);
+  auto cwedges_pair = allocateWedgesHash(wedges,nv,V,U,UVertexPairIntCons(nu), curr_idx, next_idx);
+  sparseSet<sparseSet<uintE>*> cwedges = cwedges_pair.first;
   
   //TODO this should be init to # of edges --> need a good way to index edges???? unless we do it on all pairs
   //sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nu*(nv-1)+nu-1,1,UINT_E_MAX);
   sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(eti.num_edges, 1, UINT_E_MAX);
 
   countButterfliesEHash(cwedges,nu,nv, writeAddSet<uintE>(butterflies_set), eti);
-
+  free(cwedges_pair.second);
   cwedges.del();
   wedges.del();
 

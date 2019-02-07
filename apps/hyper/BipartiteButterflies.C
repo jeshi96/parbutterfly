@@ -444,6 +444,7 @@ pair<uintE*, long> PeelButterflies(vertexSubset active, uintE* butterflies, vert
 
     // Obtain butterfly updates based on desired method
     long num_wedges = countSeagulls(V,U,active);
+    
     if (max_wedges >= num_wedges) {
       if (type == 0) { PeelHash(active, butterflies, update_dense, V, U, nu, num_wedges, max_wedges); }
       else if(type == 1){
@@ -552,9 +553,8 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   pair<bool,long> use_v_pair = cmpWedgeCounts(G);
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
-  //long max_wedges = ; //0LONG_MAX;//num_wedges;
 
-/*timer t3;
+timer t3;
 t3.start();
 auto eti = edgeToIdx<symmetricVertex>(G, use_v, max_wedges);
 uintE* ebutterflies = CountE(eti, G, use_v, num_wedges, max_wedges, ty);
@@ -568,7 +568,7 @@ else t3.reportTotal("E HistCE:");
 
 long b=0;
 for (long i=0; i < eti.num_edges; ++i) {b += ebutterflies[i];}
-cout << "number of edge butterflies: " << b << "\n";*/
+cout << "number of edge butterflies: " << b/4 << "\n";
 
 /*
 timer t2;
@@ -580,7 +580,7 @@ else if (tp==1) t2.reportTotal("Sort Peel:");
 else t2.reportTotal("Hist Peel:");
 */
 
-timer t;
+/*timer t;
 t.start();
   uintE* butterflies = Count(G,use_v, num_wedges, max_wedges, ty);
 t.stop();
@@ -614,8 +614,8 @@ t.stop();
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
   cout << "### Max core: " << mc << endl;
 
-  free(butterflies);
-  //eti.del();
-  //free(ebutterflies);
+  free(butterflies);*/
+  eti.del();
+  free(ebutterflies);
   G.del();
 }
