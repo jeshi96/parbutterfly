@@ -564,7 +564,10 @@ else if (ty == 3) t3.reportTotal("E HashCE:");
 else if (ty == 0) t3.reportTotal("E Sort:");
 else if (ty==1) t3.reportTotal("E SortCE:");
 else if (ty==4) t3.reportTotal("E Hist:");
-else t3.reportTotal("E HistCE:");
+else if (ty==6) t3.reportTotal("E HistCE:");
+else if (ty==7) t3.reportTotal("E Hash2:");
+else if (ty==8) t3.reportTotal("E HashCE2:");
+else if (ty==9) t3.reportTotal("E Hist2:");
 
 long b=0;
 for (long i=0; i < eti.num_edges; ++i) {b += ebutterflies[i];}

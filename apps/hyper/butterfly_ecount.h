@@ -132,6 +132,58 @@ long CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* b
   return wedges_pair.second;
 }
 
+template <class vertex>
+long CountEHist2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
+
+  using X = tuple<uintE,uintE>;
+  auto cons = UVertexPairIntCons(nu);
+  pair<pair<uintE*,long>, long> wedges_pair = getWedges2<uintE>(nu, V, U, cons, max_wedges, curr_idx, num_wedges,
+    UINT_E_MAX, nonMaxF(), true);
+  uintE* wedges_list = wedges_pair.first.first;
+  long num_wedges_list = wedges_pair.first.second;
+  long next_idx = wedges_pair.second;
+  pbbsa::sequence<uintE> wedges_seq = pbbsa::sequence<uintE>(wedges_list,num_wedges_list);
+
+  tuple<size_t,X*> wedges_tuple = pbbsa::sparse_histogram<uintE, uintE>(wedges_seq, nu*nu);
+  X* wedge_freqs = get<1>(wedges_tuple);
+  size_t wedge_freqs_n = get<0>(wedges_tuple);
+
+  sparseAdditiveSet<uintE> sizes = sparseAdditiveSet<uintE>(wedge_freqs_n, 1, UINT_E_MAX);
+
+  parallel_for (long i=0; i < wedge_freqs_n; ++i) {
+    sizes.insert(make_pair(get<0>(wedge_freqs[i]), get<1>(wedge_freqs[i])));
+  }
+  free(wedge_freqs);
+  free(wedges_list);
+
+  parallel_for (long i = curr_idx; i < next_idx; ++i) {
+    const vertex u = U[i];
+    const long u_deg = u.getOutDegree();
+    //granular_for (j, 0, u_deg, (u_deg > 1000), {
+    parallel_for (long j = 0; j < u.getOutDegree(); ++j) {
+      const uintE v_idx = u.getOutNeighbor(j);
+      const vertex v = V[v_idx];
+      // Find all seagulls with center v and endpoint u
+      for (long k=0; k < v.getOutDegree(); ++k) {
+        const uintE u2_idx = v.getOutNeighbor(k);
+        if (u2_idx < i) {
+          uintE num_butterflies = sizes.find(cons(i, u2_idx, v_idx)).second - 1;
+          writeAdd(&butterflies[eti(v_idx, i)],num_butterflies); 
+          writeAdd(&butterflies[eti(v_idx, u2_idx)],num_butterflies); 
+        }
+      }
+    }
+  }
+
+  sizes.del();
+
+  return next_idx;
+}
+
 //********************************************************************************************
 //********************************************************************************************
 
@@ -301,6 +353,88 @@ void countButterfliesEHash(sparseSet<sparseSet<uintE>*>& cwedges, const long nu,
 }
 
 template <class vertex>
+long CountEHash2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
+
+  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges), 1, UINT_E_MAX);
+  UVertexPairIntCons cons = UVertexPairIntCons(nu);
+  long next_idx = getWedgesHash2(wedges, nu, V, U, cons, max_wedges, curr_idx, num_wedges, true);
+  
+  // TODO modularize w/hashce
+  parallel_for (long i = curr_idx; i < next_idx; ++i) {
+    const vertex u = U[i];
+    const long u_deg = u.getOutDegree();
+    //granular_for (j, 0, u_deg, (u_deg > 1000), {
+    parallel_for (long j = 0; j < u.getOutDegree(); ++j) {
+      const uintE v_idx = u.getOutNeighbor(j);
+      const vertex v = V[v_idx];
+      // Find all seagulls with center v and endpoint u
+      for (long k=0; k < v.getOutDegree(); ++k) {
+        const uintE u2_idx = v.getOutNeighbor(k);
+        if (u2_idx < i) {
+          uintE num_butterflies = wedges.find(cons(i, u2_idx, v_idx)).second - 1;
+          writeAdd(&butterflies[eti(v_idx, i)],num_butterflies); 
+          writeAdd(&butterflies[eti(v_idx, u2_idx)],num_butterflies); 
+        }
+      }
+    }
+  }
+
+  wedges.del();
+  
+  return next_idx;
+}
+
+template <class vertex>
+long CountEHashCE2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
+
+  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges), 1, UINT_E_MAX);
+  UVertexPairIntCons cons = UVertexPairIntCons(nu);
+  long next_idx = getWedgesHash2(wedges, nu, V, U, cons, max_wedges, curr_idx, num_wedges, true);
+
+  sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(eti.num_edges, 1, UINT_E_MAX);
+  
+  parallel_for (long i = curr_idx; i < next_idx; ++i) {
+    const vertex u = U[i];
+    const long u_deg = u.getOutDegree();
+    parallel_for (long j = 0; j < u.getOutDegree(); ++j) {
+      const uintE v_idx = u.getOutNeighbor(j);
+      const vertex v = V[v_idx];
+      // Find all seagulls with center v and endpoint u
+      for (long k=0; k < v.getOutDegree(); ++k) {
+        const uintE u2_idx = v.getOutNeighbor(k);
+        if (u2_idx < i) {
+          uintE num_butterflies = wedges.find(cons(i, u2_idx, v_idx)).second - 1;
+          butterflies_set.insert(make_pair(eti(v_idx, i), num_butterflies));
+          butterflies_set.insert(make_pair(eti(v_idx, u2_idx), num_butterflies));
+        }
+      }
+    }
+  }
+
+  wedges.del();
+
+  _seq<pair<uintE,uintE>> butterflies_seq = butterflies_set.entries();
+
+  parallel_for(long i=0; i < butterflies_seq.n; ++i) {
+      pair<uintE,uintE> butterflies_pair = butterflies_seq.A[i];
+      butterflies[butterflies_pair.first] += butterflies_pair.second;
+  }
+
+  butterflies_seq.del();
+  butterflies_set.del();
+  
+  return next_idx;
+}
+
+template <class vertex>
 long CountEHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -382,7 +516,10 @@ uintE* CountE(edgeToIdx<vertex> eti, bipartiteGraph<vertex> GA, bool use_v, long
     else if (type == 0) CountESort(GA, use_v, num_wedges, butterflies, max_wedges, eti);
     else if (type==1) CountESortCE(GA, use_v, num_wedges, butterflies, max_wedges, eti);
     else if (type==4) CountEHist(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else CountEHistCE(GA, use_v, num_wedges, butterflies, max_wedges, eti);
+    else if (type==6) CountEHistCE(GA, use_v, num_wedges, butterflies, max_wedges, eti);
+    else if (type == 7) CountEHash2(GA, use_v, num_wedges, butterflies, max_wedges, eti);
+    else if (type == 8) CountEHashCE2(GA, use_v, num_wedges, butterflies, max_wedges, eti);
+    else if (type==9) CountEHist2(GA, use_v, num_wedges, butterflies, max_wedges, eti);
     return butterflies;
   }
   long curr_idx = 0;
@@ -392,7 +529,10 @@ uintE* CountE(edgeToIdx<vertex> eti, bipartiteGraph<vertex> GA, bool use_v, long
     else if (type == 0) curr_idx = CountESort(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
     else if (type==1) curr_idx = CountESortCE(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
     else if (type==4) curr_idx = CountEHist(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else curr_idx = CountEHistCE(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
+    else if (type==6) curr_idx = CountEHistCE(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
+    else if (type == 7) curr_idx = CountEHash2(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
+    else if (type == 8) curr_idx = CountEHashCE2(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
+    else if (type==9) curr_idx = CountEHist2(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
   }
   return butterflies;
 }
