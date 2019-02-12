@@ -15,9 +15,13 @@
 #include "../../lib/histogram.h"
 #include "../../lib/gbbs-histogram.h"
 
+timer nextWedgeTimer, hashInsertTimer, numButterfliesHashInsertTimer, getWedgesFromHashTimer, initHashTimer;
+
 #include "butterfly_utils.h"
 
 using namespace std;
+
+
 
 // Not parallel
 void storeButterfliesSortCE_seq(uintE* butterflies, UVertexPair* wedges, uintE* wedge_freqs_f, 
@@ -254,8 +258,10 @@ long CountHashCEOverflow(bipartiteGraph<vertex> GA, bool use_v, long num_wedges,
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
+  //cout << max_wedges << " " << curr_idx << endl;
   using T = pair<UVertexPairHash*,uintE>;
   using X = pair<uintE, uintE>;
+
 
   sparsePointerAdditiveSet<UVertexPairHash,uintE,UVertexPairHashEq> wedges =
     sparsePointerAdditiveSet<UVertexPairHash,uintE,UVertexPairHashEq>(min(max_wedges,num_wedges), 1, UINT_E_MAX, UVertexPairHashEq());
@@ -302,14 +308,22 @@ long CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
   const vertex* U = use_v ? GA.U : GA.V;
 
   using T = pair<uintE,uintE>;
-
+  //cout << max_wedges << " " << curr_idx << endl;
   if (nu > UINT_E_MAX / nu) return CountHashCEOverflow(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
 
+  initHashTimer.start();
+  //JS: this is taking a good fraction of the time. we should clear and reuse the hash table instead
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges),1,UINT_E_MAX);
+  initHashTimer.stop();
   long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, true);
-  
+  getWedgesFromHashTimer.start();
   _seq<T> wedge_freqs = wedges.entries();
+  getWedgesFromHashTimer.stop();
+  numButterfliesHashInsertTimer.start();
+
+    //JS: clear and reuse the hash table instead
   sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);
+
 
   // Retrieve count on each key; that number choose 2 is the number of butterflies
   parallel_for (long i=0; i < wedge_freqs.n; ++i) {
@@ -331,7 +345,7 @@ long CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
     T butterfly_pair = butterflies_seq.A[i];
     butterflies[butterfly_pair.first] += butterfly_pair.second;
   }
-  
+  numButterfliesHashInsertTimer.stop();  
   butterflies_seq.del();
   butterflies_set.del();
   wedge_freqs.del();
@@ -542,6 +556,8 @@ long CountHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
 //********************************************************************************************
 //********************************************************************************************
 
+
+
 template <class vertex>
 uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_wedges, long type=0) {
   const long nv = use_v ? GA.nv : GA.nu;
@@ -571,6 +587,11 @@ uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_we
     else if (type == 4) curr_idx = CountHist(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
     else if (type == 6) curr_idx = CountHistCE(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
   }
+    nextWedgeTimer.reportTotal("getting next wedge");
+    initHashTimer.reportTotal("init first hash table");
+    hashInsertTimer.reportTotal("inserting into first hash table");
+    getWedgesFromHashTimer.reportTotal("extract from first hash table");
+    numButterfliesHashInsertTimer.reportTotal("init and inserting into second hash table");
   return butterflies;
 
 }

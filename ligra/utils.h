@@ -123,6 +123,18 @@ namespace sequence {
 	}						\
   }
 
+#define granular_for(_i, _st, _ne, _thresh, _body) {	\
+  if ((_ne - _st) > _thresh) { \
+    {parallel_for(intT _i=_st; _i < _ne; _i++) { \
+      _body \
+    }} \
+  } else { \
+    {for (intT _i=_st; _i < _ne; _i++) { \
+      _body \
+    }} \
+  } \
+  }
+
   template <class OT, class intT, class F, class G>
   OT reduceSerial(intT s, intT e, F f, G g) {
     OT r = g(s);

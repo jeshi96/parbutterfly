@@ -863,8 +863,12 @@ long getNextWedgeIdx_seq(long nv, vertex* V, long max_wedges, long curr_idx) {
   return nv;
 }
 
+
+
+//JS: what is the difference between this and getNextWedgeIdx2?
 template<class vertex>
 long getNextWedgeIdx(long nv, vertex* V, long max_wedges, long curr_idx) {
+  
   if (nv - curr_idx < 1000) return getNextWedgeIdx_seq(nv, V, max_wedges, curr_idx);
   uintE* idxs = newA(uintE, nv - curr_idx + 1);
   idxs[nv-curr_idx] = 0;
@@ -879,7 +883,7 @@ long getNextWedgeIdx(long nv, vertex* V, long max_wedges, long curr_idx) {
   size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
   free(idxs);
   if (find_idx == curr_idx) {cout << "Space must accomodate max degree choose 2\n"; exit(0); }
-
+  
   return find_idx;
 }
 
@@ -1057,22 +1061,25 @@ pair<wedge*, long> _getWedges2(Sequence I, const long nu, const vertex* V, const
 template<class vertex, class wedgeCons, class T, class Sequence>
 void _getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeCons cons, bool half, long curr_idx=0, long next_idx=-1) {
   if (next_idx == -1) next_idx = nu;
+  hashInsertTimer.start();
   parallel_for(long i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
-    const uintE u_idx = I[i];
+    const uintE u_idx = I[i]; //JS: should the vertex indexes just be i ?
     const uintE u_deg = U[u_idx].getOutDegree();
 
     parallel_for (long j=0; j < u_deg; ++j ) {
         const vertex v = V[U[u_idx].getOutNeighbor(j)];
         const uintE v_deg = v.getOutDegree();
         // Find all seagulls with center v and endpoint u
-        for (long k=0; k < v_deg; ++k) {
+        for (long k=0; k < v_deg; ++k) { 
           const uintE u2_idx = v.getOutNeighbor(k);
+	  //JS: what is "half"?
           if ((u2_idx != u_idx && !half) || (u2_idx < u_idx && half))
             wedges.insert(make_pair(cons(u_idx,u2_idx,U[u_idx].getOutNeighbor(j)),1)); //(u_idx * nu + u2_idx, 1)
-        }
+	}
     }
   }
+  hashInsertTimer.stop();
 }
 
 template<class vertex, class Sequence>
@@ -1093,8 +1100,10 @@ pair<long,long> getNextWedgeIdx_seq2(Sequence I, long nu, vertex* V, vertex* U, 
 }
 
 // TODO based on half can also optimize this stuff? but will be hard to parallelize later so maybe not
+//JS: there looks to be some inefficiency here. we should have gotten the prefix sum of wedges for all vertices at the beginning, so we don't need to recompute it here. binary search can use a doubling search instead, starting at the last index until getting the right range, then binary search inside.
 template<class vertex, class Sequence>
 pair<long,long> getNextWedgeIdx2(Sequence I, long nu, vertex* V, vertex* U, long max_wedges, long curr_idx) {
+  nextWedgeTimer.start();
   if (nu - curr_idx < 10000) return getNextWedgeIdx_seq2(I, nu, V, U, max_wedges, curr_idx);
   uintE* idxs = newA(uintE, nu - curr_idx + 1);
   idxs[nu-curr_idx] = 0;
@@ -1112,6 +1121,7 @@ pair<long,long> getNextWedgeIdx2(Sequence I, long nu, vertex* V, vertex* U, long
   size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
   free(idxs);
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
+  nextWedgeTimer.stop();
   return make_pair(find_idx, idxs[find_idx - curr_idx]); //TODO make sure right
 }
 
@@ -1159,6 +1169,7 @@ pair<pair<wedge*,long>, long> getWedges2(const long nu, const vertex* V, const v
 template<class vertex, class wedgeCons, class T>
 long getWedgesHash2(T& wedges, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges,
   bool half=false) {
+  //JS: i am confused why we need this map. 
   auto refl_map = make_in_imap<uintT>(nu, [&] (size_t i) { return i; });
   return getWedgesHash2(wedges, refl_map, nu, V, U, cons, max_wedges, curr_idx, num_wedges, half);
 }

@@ -540,8 +540,8 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   timer t_con;
   t_con.start();
 
-  //bipartiteGraph<symmetricVertex> G = (gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
-  bipartiteGraph<symmetricVertex> G = (gen != 0) ? KONECTToBp<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
+  bipartiteGraph<symmetricVertex> G = (gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
+  //bipartiteGraph<symmetricVertex> G = (gen != 0) ? KONECTToBp<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
 
   t_con.stop();
   t_con.reportTotal("Graph construction: ");
@@ -554,36 +554,35 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
 
-timer t3;
-t3.start();
-auto eti = edgeToIdx<symmetricVertex>(G, use_v, max_wedges);
-uintE* ebutterflies = CountE(eti, G, use_v, num_wedges, max_wedges, ty);
-t3.stop();
-if(ty==2) t3.reportTotal("E Hash:");
-else if (ty == 3) t3.reportTotal("E HashCE:");
-else if (ty == 0) t3.reportTotal("E Sort:");
-else if (ty==1) t3.reportTotal("E SortCE:");
-else if (ty==4) t3.reportTotal("E Hist:");
-else if (ty==6) t3.reportTotal("E HistCE:");
-else if (ty==7) t3.reportTotal("E Hash2:");
-else if (ty==8) t3.reportTotal("E HashCE2:");
-else if (ty==9) t3.reportTotal("E Hist2:");
+// timer t3;
+// t3.start();
+// auto eti = edgeToIdx<symmetricVertex>(G, use_v, max_wedges);
+// uintE* ebutterflies = CountE(eti, G, use_v, num_wedges, max_wedges, ty);
+// t3.stop();
+// if(ty==2) t3.reportTotal("E Hash:");
+// else if (ty == 3) t3.reportTotal("E HashCE:");
+// else if (ty == 0) t3.reportTotal("E Sort:");
+// else if (ty==1) t3.reportTotal("E SortCE:");
+// else if (ty==4) t3.reportTotal("E Hist:");
+// else if (ty==6) t3.reportTotal("E HistCE:");
+// else if (ty==7) t3.reportTotal("E Hash2:");
+// else if (ty==8) t3.reportTotal("E HashCE2:");
+// else if (ty==9) t3.reportTotal("E Hist2:");
 
-long b=0;
-for (long i=0; i < eti.num_edges; ++i) {b += ebutterflies[i];}
-cout << "number of edge butterflies: " << b/4 << "\n";
+// long b=0;
+// for (long i=0; i < eti.num_edges; ++i) {b += ebutterflies[i];}
+// cout << "number of edge butterflies: " << b/4 << "\n";
 
-/*
-timer t2;
-t2.start();
-auto cores = PeelE(G, use_v, ebutterflies, tp);
-t2.stop();
-if (tp ==0) t2.reportTotal("Hash Peel:");
-else if (tp==1) t2.reportTotal("Sort Peel:");
-else t2.reportTotal("Hist Peel:");
-*/
 
-/*timer t;
+// timer t2;
+// t2.start();
+// auto cores = PeelE(G, use_v, ebutterflies, tp);
+// t2.stop();
+// if (tp ==0) t2.reportTotal("Hash Peel:");
+// else if (tp==1) t2.reportTotal("Sort Peel:");
+// else t2.reportTotal("Hist Peel:");
+
+timer t;
 t.start();
   uintE* butterflies = Count(G,use_v, num_wedges, max_wedges, ty);
 t.stop();
@@ -605,20 +604,20 @@ t.stop();
   //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
 
-  timer t2;
-  t2.start();
-  auto cores = Peel(G, use_v, butterflies, max_wedges, tp);
-  t2.stop();
-  if (tp ==0) t2.reportTotal("Hash Peel:");
-  else if (tp==1) t2.reportTotal("Sort Peel:");
-  else t2.reportTotal("Hist Peel:");
+  // timer t2;
+  // t2.start();
+  // auto cores = Peel(G, use_v, butterflies, max_wedges, tp);
+  // t2.stop();
+  // if (tp ==0) t2.reportTotal("Hash Peel:");
+  // else if (tp==1) t2.reportTotal("Sort Peel:");
+  // else t2.reportTotal("Hist Peel:");
 
-  uintE mc = 0;
-  for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;
+  // uintE mc = 0;
+  // for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
+  // cout << "### Max core: " << mc << endl;
 
-  free(butterflies);*/
-  eti.del();
-  free(ebutterflies);
+  free(butterflies);
+  //eti.del();
+  //free(ebutterflies);
   G.del();
 }
