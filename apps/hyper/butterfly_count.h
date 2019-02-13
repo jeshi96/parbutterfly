@@ -302,20 +302,15 @@ long CountHashCEOverflow(bipartiteGraph<vertex> GA, bool use_v, long num_wedges,
 }
 
 template <class vertex>
-long CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, long curr_idx=0) {
+long CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteGraph<vertex>& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
   using T = pair<uintE,uintE>;
-  //cout << max_wedges << " " << curr_idx << endl;
-  if (nu > UINT_E_MAX / nu) return CountHashCEOverflow(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
+  //if (nu > UINT_E_MAX / nu) return CountHashCEOverflow(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
 
-  initHashTimer.start();
-  //JS: this is taking a good fraction of the time. we should clear and reuse the hash table instead
-  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges),1,UINT_E_MAX);
-  initHashTimer.stop();
   long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, true);
   getWedgesFromHashTimer.start();
   _seq<T> wedge_freqs = wedges.entries();
@@ -323,7 +318,8 @@ long CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
   numButterfliesHashInsertTimer.start();
 
     //JS: clear and reuse the hash table instead
-  sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);
+  //sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);
+  wedges.clear();
 
 
   // Retrieve count on each key; that number choose 2 is the number of butterflies
@@ -335,12 +331,12 @@ long CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
 
     num_butterflies = num_butterflies * (num_butterflies - 1)/2;
     if (num_butterflies > 0) {
-      butterflies_set.insert(T(v1, num_butterflies));
-      butterflies_set.insert(T(v2, num_butterflies));
+      wedges.insert(T(v1, num_butterflies));
+      wedges.insert(T(v2, num_butterflies));
     }
   }
 
-  _seq<T> butterflies_seq = butterflies_set.entries();
+  _seq<T> butterflies_seq = wedges.entries();
 
   parallel_for(long i=0; i < butterflies_seq.n; ++i) {
     T butterfly_pair = butterflies_seq.A[i];
@@ -348,9 +344,9 @@ long CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
   }
   numButterfliesHashInsertTimer.stop();  
   butterflies_seq.del();
-  butterflies_set.del();
+  //butterflies_set.del();
   wedge_freqs.del();
-  wedges.del();
+  
   return next_idx;
 }
 
@@ -573,14 +569,16 @@ void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  uintE* totals = newA(uintE, nu);
+  //uintE* totals = newA(uintE, nu);
 
   parallel_for_1(long i=0; i < nu; ++i){
+    seqLoopTimer.start();
     uintE* wedges = newA(uintE, nu);
-    //uintE* used = newA(uintE, nu);
-    //long used_idx=0;
-    totals[i] = 0;
+    uintE* used = newA(uintE, nu);
+    long used_idx=0;
+    //totals[i] = 0;
     parallel_for(long i=0; i < nu; ++i) { wedges[i] = 0; }
+    seqLoopTimer.stop();
     vertex u = U[i];
     for (long j=0; j < u.getOutDegree(); ++j ) {
       vertex v = V[u.getOutNeighbor(j)];
@@ -590,29 +588,28 @@ void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
         if (u2_idx < i) {
           //writeAdd(&butterflies[i], wedges[u2_idx]);
           //writeAdd(&butterflies[u2_idx], wedges[u2_idx]);
-          //butterflies[i] += wedges[u2_idx];
-          //butterflies[u2_idx] += wedges[u2_idx];
-          totals[i] += wedges[u2_idx];
+          //totals[i] += wedges[u2_idx];
           wedges[u2_idx]++;
-          //if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
         }
         else break;
       }
-      /*seqWriteTimer.start();
-      uintE total = used_idx == 0 ? 0 : sequence::reduce<long>((long) 0, (long) used_idx, addF<uintE>(), nestA<uintE, long>(wedges, used));;
-      writeAdd(&butterflies[i], total);
-      parallel_for(long j=0; j < used_idx; ++j) {
-        uintE num_butterflies = wedges[used[j]] * (wedges[used[j]] - 1) / 2;
-        writeAdd(&butterflies[used[j]], num_butterflies);
-      }
-      seqWriteTimer.stop();*/
     }
+    seqWriteTimer.start();
+    uintE total = used_idx == 0 ? 0 : sequence::reduce<long>((long) 0, (long) used_idx, addF<uintE>(), nestA<uintE, long>(wedges, used));
+    writeAdd(&butterflies[i], total);
+    parallel_for(long j=0; j < used_idx; ++j) {
+      uintE num_butterflies = wedges[used[j]] * (wedges[used[j]] - 1) / 2;
+      writeAdd(&butterflies[used[j]], num_butterflies);
+    }
+    seqWriteTimer.stop();
     free(wedges);
-    //free(used);
+    free(used);
   }
 
-  uintE total = sequence::plusReduce(totals, nu);
-  cout << "num: " << total << "\n";
+  //uintE total = sequence::plusReduce(totals, nu);
+  //cout << "num: " << total << "\n";
+  //free(totals);
 }
 
 template <class vertex>
@@ -627,13 +624,13 @@ void CountOrig(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
   uintE* wedges = newA(uintE, nu);
   uintE* used = newA(uintE, nu);
   for(long i=0; i < nu; ++i) { wedges[i] = 0; }
-  seqLoopTimer.start();
+
+  
   for(long i=0; i < nu; ++i){
     long used_idx = 0;
     vertex u = U[i];
     for (long j=0; j < U[i].getOutDegree(); ++j ) {
       vertex v = V[U[i].getOutNeighbor(j)];
-      // Find all seagulls with center v and endpoint u
       for (long k=0; k < v.getOutDegree(); ++k) { 
         uintE u2_idx = v.getOutNeighbor(k);
         if (u2_idx < i) {
@@ -647,8 +644,9 @@ void CountOrig(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
       }
     }
     for(long j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
+    //parallel_for(long i=0; i < nu; ++i) { wedges[i] = 0; }
   }
-  seqLoopTimer.stop();
+  
   free(wedges);
   free(used);
   cout << "num: " << results << "\n";
@@ -657,7 +655,34 @@ void CountOrig(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
 //********************************************************************************************
 //********************************************************************************************
 
+template <class vertex>
+void CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
 
+  initHashTimer.start();
+  //JS: this is taking a good fraction of the time. we should clear and reuse the hash table instead
+  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(max(min(num_wedges,max_wedges),nu),1,UINT_E_MAX);
+  initHashTimer.stop();
+
+  if (max_wedges >= num_wedges) {
+    CountHashCE(wedges, GA, use_v, num_wedges, butterflies, max_wedges);
+    wedges.del();
+    return;
+  }
+  long curr_idx = 0;
+  while(curr_idx < nu) {
+    curr_idx = CountHashCE(wedges, GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
+    wedges.clear();
+  }
+  wedges.del();
+
+  nextWedgeTimer.reportTotal("getting next wedge");
+  initHashTimer.reportTotal("init first hash table");
+  hashInsertTimer.reportTotal("inserting into first hash table");
+  getWedgesFromHashTimer.reportTotal("extract from first hash table");
+  numButterfliesHashInsertTimer.reportTotal("init and inserting into second hash table");
+}
 
 template <class vertex>
 uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_wedges, long type=0) {
@@ -669,15 +694,18 @@ uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_we
     butterflies[i] = 0;
   }
   if (type > 8 || type == 5) return butterflies;
-
-  if (type == 7) {
+  if (type == 3) {
+    CountHashCE(GA, use_v, num_wedges, butterflies, max_wedges);
+    return butterflies;
+  }
+  else if (type == 7) {
     CountSeq(GA, use_v, butterflies);
     seqWriteTimer.reportTotal("seq write time");
+    seqLoopTimer.reportTotal("seq allocate space time");
     return butterflies;
   }
   else if (type ==8) {
     CountOrig(GA, use_v, butterflies);
-    seqLoopTimer.reportTotal("seq loop time");
     return butterflies;
   }
 
@@ -685,7 +713,7 @@ uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_we
     if (type == 0) CountSort(GA, use_v, num_wedges, butterflies, max_wedges);
     else if (type == 1) CountSortCE(GA, use_v, num_wedges, butterflies, max_wedges);
     else if (type == 2) CountHash(GA, use_v, num_wedges, butterflies, max_wedges);
-    else if (type == 3) CountHashCE(GA, use_v, num_wedges, butterflies, max_wedges);
+    //else if (type == 3) CountHashCE(GA, use_v, num_wedges, butterflies, max_wedges);
     else if(type == 4) CountHist(GA, use_v, num_wedges, butterflies, max_wedges);
     else if(type == 6) CountHistCE(GA, use_v, num_wedges, butterflies, max_wedges);
 
@@ -696,7 +724,7 @@ uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_we
     if (type == 0) curr_idx = CountSort(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
     else if (type == 1) curr_idx = CountSortCE(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
     else if (type == 2) curr_idx = CountHash(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
-    else if (type == 3) curr_idx = CountHashCE(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
+    //else if (type == 3) curr_idx = CountHashCE(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
     else if (type == 4) curr_idx = CountHist(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
     else if (type == 6) curr_idx = CountHistCE(GA, use_v, num_wedges, butterflies, max_wedges, curr_idx);
   }
