@@ -863,9 +863,8 @@ long getNextWedgeIdx_seq(long nv, vertex* V, long max_wedges, long curr_idx) {
   return nv;
 }
 
-
-
 //JS: what is the difference between this and getNextWedgeIdx2?
+//JS2: This counts wedges in a different way -- by iterating through vertices in V, and taking every pair of its neighbors. In order to split up wedges b/c of mem issues, we actually can't use this, b/c otherwise it doesn't give us the right counts if we stop midway; so we have to iterate through U, and find the two-hop neighbors. I'll delete this code, but right now I think it's still being used for edge peeling that I haven't gotten to fixing yet.
 template<class vertex>
 long getNextWedgeIdx(long nv, vertex* V, long max_wedges, long curr_idx) {
   
@@ -1064,7 +1063,7 @@ void _getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedge
   hashInsertTimer.start();
   parallel_for(long i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
-    const uintE u_idx = I[i]; //JS: should the vertex indexes just be i ?
+    const uintE u_idx = I[i]; //JS: should the vertex indexes just be i ? //JS2: We reuse this for peeling, where the active subset gives our vertex indices
     const uintE u_deg = U[u_idx].getOutDegree();
 
     parallel_for (long j=0; j < u_deg; ++j ) {
@@ -1074,6 +1073,7 @@ void _getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedge
         for (long k=0; k < v_deg; ++k) { 
           const uintE u2_idx = v.getOutNeighbor(k);
 	  //JS: what is "half"?
+    //JS2: One of the things that makes the original seq code faster is that they really only process half of the wedges -- for u2 < u; then, we can just store the butterflies on both u and u2; however, we do need to retain the ability to count all wedges, for peeling
           if ((u2_idx != u_idx && !half) || (u2_idx < u_idx && half))
             wedges.insert(make_pair(cons(u_idx,u2_idx,U[u_idx].getOutNeighbor(j)),1)); //(u_idx * nu + u2_idx, 1)
 	}
@@ -1169,7 +1169,7 @@ pair<pair<wedge*,long>, long> getWedges2(const long nu, const vertex* V, const v
 template<class vertex, class wedgeCons, class T>
 long getWedgesHash2(T& wedges, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges,
   bool half=false) {
-  //JS: i am confused why we need this map. 
+  //JS: i am confused why we need this map. //JS2: see above note about indexing -- it's to reuse code for peeling
   auto refl_map = make_in_imap<uintT>(nu, [&] (size_t i) { return i; });
   return getWedgesHash2(wedges, refl_map, nu, V, U, cons, max_wedges, curr_idx, num_wedges, half);
 }

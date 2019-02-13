@@ -16,6 +16,7 @@
 #include "../../lib/gbbs-histogram.h"
 
 timer nextWedgeTimer, hashInsertTimer, numButterfliesHashInsertTimer, getWedgesFromHashTimer, initHashTimer;
+timer seqLoopTimer, seqWriteTimer;
 
 #include "butterfly_utils.h"
 
@@ -552,6 +553,106 @@ long CountHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
   return wedges_list_pair.second;
 }
 
+//********************************************************************************************
+//********************************************************************************************
+
+template <class E, class I>
+struct nestA { 
+  E* arr1;
+  E* arr2;
+  nestA(E* _arr1, E* _arr2) : arr1(_arr1), arr2(_arr2) {}
+  E operator() (const I& i) const {
+    return arr1[arr2[i]] * (arr1[arr2[i]]-1) / 2;
+  }
+};
+
+template <class vertex>
+void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
+
+  uintE* totals = newA(uintE, nu);
+
+  parallel_for_1(long i=0; i < nu; ++i){
+    uintE* wedges = newA(uintE, nu);
+    //uintE* used = newA(uintE, nu);
+    //long used_idx=0;
+    totals[i] = 0;
+    parallel_for(long i=0; i < nu; ++i) { wedges[i] = 0; }
+    vertex u = U[i];
+    for (long j=0; j < u.getOutDegree(); ++j ) {
+      vertex v = V[u.getOutNeighbor(j)];
+      // Find all seagulls with center v and endpoint u
+      for (long k=0; k < v.getOutDegree(); ++k) { 
+        uintE u2_idx = v.getOutNeighbor(k);
+        if (u2_idx < i) {
+          //writeAdd(&butterflies[i], wedges[u2_idx]);
+          //writeAdd(&butterflies[u2_idx], wedges[u2_idx]);
+          //butterflies[i] += wedges[u2_idx];
+          //butterflies[u2_idx] += wedges[u2_idx];
+          totals[i] += wedges[u2_idx];
+          wedges[u2_idx]++;
+          //if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+        }
+        else break;
+      }
+      /*seqWriteTimer.start();
+      uintE total = used_idx == 0 ? 0 : sequence::reduce<long>((long) 0, (long) used_idx, addF<uintE>(), nestA<uintE, long>(wedges, used));;
+      writeAdd(&butterflies[i], total);
+      parallel_for(long j=0; j < used_idx; ++j) {
+        uintE num_butterflies = wedges[used[j]] * (wedges[used[j]] - 1) / 2;
+        writeAdd(&butterflies[used[j]], num_butterflies);
+      }
+      seqWriteTimer.stop();*/
+    }
+    free(wedges);
+    //free(used);
+  }
+
+  uintE total = sequence::plusReduce(totals, nu);
+  cout << "num: " << total << "\n";
+}
+
+template <class vertex>
+void CountOrig(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
+
+  long results = 0;
+
+  uintE* wedges = newA(uintE, nu);
+  uintE* used = newA(uintE, nu);
+  for(long i=0; i < nu; ++i) { wedges[i] = 0; }
+  seqLoopTimer.start();
+  for(long i=0; i < nu; ++i){
+    long used_idx = 0;
+    vertex u = U[i];
+    for (long j=0; j < U[i].getOutDegree(); ++j ) {
+      vertex v = V[U[i].getOutNeighbor(j)];
+      // Find all seagulls with center v and endpoint u
+      for (long k=0; k < v.getOutDegree(); ++k) { 
+        uintE u2_idx = v.getOutNeighbor(k);
+        if (u2_idx < i) {
+          //butterflies[i] += wedges[u2_idx];
+          //butterflies[u2_idx] += wedges[u2_idx];
+          results += wedges[u2_idx];
+          wedges[u2_idx]++;
+          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+        }
+        else break;
+      }
+    }
+    for(long j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
+  }
+  seqLoopTimer.stop();
+  free(wedges);
+  free(used);
+  cout << "num: " << results << "\n";
+}
 
 //********************************************************************************************
 //********************************************************************************************
@@ -566,6 +667,18 @@ uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_we
   uintE* butterflies = newA(uintE, nu);
   parallel_for(long i=0;i<nu;++i){
     butterflies[i] = 0;
+  }
+  if (type > 8 || type == 5) return butterflies;
+
+  if (type == 7) {
+    CountSeq(GA, use_v, butterflies);
+    seqWriteTimer.reportTotal("seq write time");
+    return butterflies;
+  }
+  else if (type ==8) {
+    CountOrig(GA, use_v, butterflies);
+    seqLoopTimer.reportTotal("seq loop time");
+    return butterflies;
   }
 
   if (max_wedges >= num_wedges) {

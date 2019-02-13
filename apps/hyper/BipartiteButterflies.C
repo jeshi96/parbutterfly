@@ -594,6 +594,7 @@ t.stop();
   else if (ty==4) t.reportTotal("Hist:");
   else if (ty==6) t.reportTotal("HistCE:");
   else if (ty==7) t.reportTotal("Seq:");
+  else if (ty==8) t.reportTotal("Orig:");
 
   long num_idxs = use_v ? G.nu : G.nv;
   long b = 0;
