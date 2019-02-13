@@ -569,14 +569,14 @@ void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  //uintE* totals = newA(uintE, nu);
+  uintE* totals = newA(uintE, nu);
 
   parallel_for_1(long i=0; i < nu; ++i){
     seqLoopTimer.start();
     uintE* wedges = newA(uintE, nu);
-    uintE* used = newA(uintE, nu);
-    long used_idx=0;
-    //totals[i] = 0;
+    //uintE* used = newA(uintE, nu);
+    //long used_idx=0;
+    totals[i] = 0;
     parallel_for(long i=0; i < nu; ++i) { wedges[i] = 0; }
     seqLoopTimer.stop();
     vertex u = U[i];
@@ -588,28 +588,28 @@ void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
         if (u2_idx < i) {
           //writeAdd(&butterflies[i], wedges[u2_idx]);
           //writeAdd(&butterflies[u2_idx], wedges[u2_idx]);
-          //totals[i] += wedges[u2_idx];
+          totals[i] += wedges[u2_idx];
           wedges[u2_idx]++;
-          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+          //if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
         }
         else break;
       }
     }
-    seqWriteTimer.start();
+    /*seqWriteTimer.start();
     uintE total = used_idx == 0 ? 0 : sequence::reduce<long>((long) 0, (long) used_idx, addF<uintE>(), nestA<uintE, long>(wedges, used));
     writeAdd(&butterflies[i], total);
     parallel_for(long j=0; j < used_idx; ++j) {
       uintE num_butterflies = wedges[used[j]] * (wedges[used[j]] - 1) / 2;
       writeAdd(&butterflies[used[j]], num_butterflies);
     }
-    seqWriteTimer.stop();
+    seqWriteTimer.stop();*/
     free(wedges);
-    free(used);
+    //free(used);
   }
 
-  //uintE total = sequence::plusReduce(totals, nu);
-  //cout << "num: " << total << "\n";
-  //free(totals);
+  uintE total = sequence::plusReduce(totals, nu);
+  cout << "num: " << total << "\n";
+  free(totals);
 }
 
 template <class vertex>
@@ -625,7 +625,6 @@ void CountOrig(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
   uintE* used = newA(uintE, nu);
   for(long i=0; i < nu; ++i) { wedges[i] = 0; }
 
-  
   for(long i=0; i < nu; ++i){
     long used_idx = 0;
     vertex u = U[i];
