@@ -241,6 +241,12 @@ struct edgeCmpWgh {
   }
 };
 
+struct lessThan {
+  bool operator() (uintT a, uintT b) {
+    return a < b;
+  }
+};
+
 template <class intT>
 edgeArray<intT> remDuplicates(edgeArray<intT> A) {
   intT m = A.nonZeros;
@@ -377,13 +383,23 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
   intSort::iSort(E,offsetsV,mv,nv,getuF<intT>());
   intT *edgesV = newA(intT,mv);
   vertex<intT> *v = newA(vertex<intT>,nv);
+  
   parallel_for (intT i=0; i < nv; i++) {
     intT o = offsetsV[i];
     intT l = ((i == nv-1) ? mv : offsetsV[i+1])-offsetsV[i];
-    v[i].degree = l;
+    //v[i].degree = l;
     v[i].Neighbors = edgesV+o;
     for (intT j=0; j < l; j++) {
       v[i].Neighbors[j] = E[o+j].v;
+    }
+    quickSort(v[i].Neighbors,l,lessThan());
+    if(l > 0) {
+      intT k = 1;
+      intT lastRead = v[i].Neighbors[0];
+      for(intT j=1; j<l; j++) {
+	if(v[i].Neighbors[j] != lastRead) { v[i].Neighbors[k++] = v[i].Neighbors[j]; lastRead = v[i].Neighbors[j]; }
+      }
+      v[i].degree = k;
     }
   }
   free(offsetsV);
@@ -395,11 +411,20 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
   vertex<intT> *h = newA(vertex<intT>,nh);
   parallel_for (intT i=0; i<nh;i++) {
     intT o = offsetsH[i];
-    intT l = ((i == nh-1) ? mh : offsetsH[i+1])-offsetsH[i];
-    h[i].degree = l;
+    intT l = ((i == nh-1) ? mh : offsetsH[i+1])-offsetsH[i];    
+    //h[i].degree = l;
     h[i].Neighbors = edgesH+o;
     for (intT j=0; j < l; j++) {
       h[i].Neighbors[j] = E[o+j].v;
+    }
+    quickSort(h[i].Neighbors,l,lessThan());
+    if(l > 0) {
+      intT k = 1;
+      intT lastRead = h[i].Neighbors[0];
+      for(intT j=1; j<l; j++) {
+	if(h[i].Neighbors[j] != lastRead) { h[i].Neighbors[k++] = h[i].Neighbors[j]; lastRead = h[i].Neighbors[j]; }
+      }
+      h[i].degree = k;
     }
   }
   free(offsetsH);
