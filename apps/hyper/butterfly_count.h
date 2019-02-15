@@ -556,7 +556,7 @@ struct nestA {
   E* arr1;
   E* arr2;
   nestA(E* _arr1, E* _arr2) : arr1(_arr1), arr2(_arr2) {}
-  E operator() (const I& i) const {
+  inline E operator() (const I& i) const {
     return arr1[arr2[i]] * (arr1[arr2[i]]-1) / 2;
   }
 };
