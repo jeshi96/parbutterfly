@@ -732,6 +732,43 @@ tuple<long, uintE*> intersect_hash(uintE* a, uintE* b, size_t num_a, size_t num_
 //********************************************************************************************
 //********************************************************************************************
 
+template<class vertex>
+pair<uintE*, uintE*> countWedgesScan(long nu, vertex* V, vertex* U, bool half=false, bool save_nbhrs=false) {
+  uintE* idxs = newA(uintE, nu + 1);
+  idxs[nu] = 0;
+
+  using T = uintE*;
+  T* nbhd_idxs = newA(T, nu); 
+
+  parallel_for(long i=0; i < nu; ++i) {
+    idxs[i] = 0;
+    uintE u_deg = U[i].getOutDegree();
+
+    nbhd_idxs[i] = newA(uintE, u_deg + 1);
+    (nbhd_idxs[i])[u_deg] = 0;
+
+    parallel_for(long j=0; j < u_deg; ++j) { //TODO can parallelize this too technically
+      if (!half) (nbhd_idxs[i])[j] = V[U[i].getOutNeighbor(j)].getOutDegree() - 1; //idxs[i] +=
+      else {
+        (nbhd_idxs[i])[j] = 0;
+        vertex v = V[U[i].getOutNeighbor(j)];
+        for (long k = 0; k < v.getOutDegree(); ++k) { //TODO can parallelize this too technically
+          if (v.getOutNeighbor(k) < i) (nbhd_idxs[i])[j] ++;
+        }
+        (nbhd_idxs[i])[j]--; //idxs[i] += deg - 1;
+      }
+    }
+
+    sequence::plusScan(nbhd_idxs[i], nbhd_idxs[i], u_deg + 1);
+    // Set up indices associated with u
+    idxs[i] = (nbhd_idxs[i])[u_deg];
+    if (!save_nbhrs) free(nbhd_idxs[i]);
+  }
+  if (!save_nbhrs) free(nbhd_idxs);
+  sequence::plusScan(idxs, idxs, nu + 1);
+  return save_nbhrs ? make_pair(idxs, nbhd_idxs) : make_pair(idxs, nullptr);
+}
+
 /*
  *  Computes the total number of wedges on all vertices on one bipartition of our graph, as 
  *  specified by V (note that the vertices of V are considered the centers of the wedges).
@@ -743,7 +780,7 @@ tuple<long, uintE*> intersect_hash(uintE* a, uintE* b, size_t num_a, size_t num_
  */
 template<class vertex>
 long countWedges(long nv, vertex* V) {
-  return 2*sequence::reduce<long>((long) 0, nv, addF<long>(), chooseV<vertex, long>(V)); //TODO CHECK
+  return sequence::reduce<long>((long) 0, nv, addF<long>(), chooseV<vertex, long>(V)); //TODO CHECK make sure 2* not needed
 }
 
 template<class vertex>
@@ -753,7 +790,7 @@ long countWedges_seq(long nv, vertex* V) {
     uintE deg_v = V[i].getOutDegree();
     num_wedges += deg_v * (deg_v - 1) / 2;
   }
-  return 2 * num_wedges; //TODO CHECK
+  return num_wedges; //TODO CHECK
 }
 
 template <class vertex>

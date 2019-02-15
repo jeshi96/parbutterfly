@@ -317,7 +317,6 @@ long CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteGraph<vertex>& GA, b
   getWedgesFromHashTimer.stop();
   numButterfliesHashInsertTimer.start();
 
-    //JS: clear and reuse the hash table instead
   //sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);
   wedges.clear();
 
@@ -570,7 +569,8 @@ void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
   const vertex* U = use_v ? GA.U : GA.V;
 
   uintE* totals = newA(uintE, nu);
-
+//TODO set a constant # of parallelizations to make + repeat, then clear + repeat
+//TODO to clear, don't clear whole thing, just the ones that you reset
   parallel_for_1(long i=0; i < nu; ++i){
     seqLoopTimer.start();
     uintE* wedges = newA(uintE, nu);
@@ -591,6 +591,7 @@ void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
           totals[i] += wedges[u2_idx];
           wedges[u2_idx]++;
           //if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+          //TODO fetch + add
         }
         else break;
       }
@@ -660,8 +661,11 @@ void CountHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
   const long nu = use_v ? GA.nu : GA.nv;
 
   initHashTimer.start();
-  //JS: this is taking a good fraction of the time. we should clear and reuse the hash table instead
+
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(max(min(num_wedges,max_wedges),nu),1,UINT_E_MAX);
+  // TODO resize dynamically; if we need small #, start with that, resize when # gets bigger
+  // TODO fix hist so that it saves storage
+  // TODO also can config float factor for hash table
   initHashTimer.stop();
 
   if (max_wedges >= num_wedges) {
