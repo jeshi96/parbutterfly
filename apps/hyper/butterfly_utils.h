@@ -71,14 +71,6 @@ struct seagullSum {
   }
 };
 
-struct WedgeIntCons {
-  long nu;
-  WedgeIntCons(long _nu) : nu(_nu) {}
-  inline tuple<uintE,uintE> operator() (uintE v1, uintE v2, uintE c) {
-    return make_tuple(v1 <= v2 ? v1 * nu + v2 : v2 * nu + v1, c);
-  }
-};
-
 struct UWedgeIntCons {
   long nu;
   UWedgeIntCons(long _nu) : nu(_nu) {}
@@ -105,41 +97,7 @@ struct UWedgeCmp {
 
 struct UWedgeEq { inline bool operator() (UWedge vs1, UWedge vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 
-struct Wedge {
-  uintE v1;
-  uintE v2;
-  uintE u;
-  Wedge(uintE _v1, uintE _v2, uintE _u) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1), u(_u) {}
-};
-
-struct WedgeCons { inline Wedge operator() (uintE v1, uintE v2, uintE c) { return Wedge(v1, v2, c); }};
-
-struct WedgeCmp {
-  long nv;
-  WedgeCmp(long _nv) : nv(_nv) {}
-  inline bool operator() (Wedge vs1, Wedge vs2) {
-    return vs1.v1 * nv + vs1.v2 < vs2.v1 * nv + vs2.v2;
-  }
-};
-
-struct WedgeEq { inline bool operator() (Wedge vs1, Wedge vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
-
 // Represents a pair of vertices on one side of a bipartite graph (ordered, with least vertex first)
-struct VertexPair {
-  uintE v1;
-  uintE v2;
-  VertexPair(uintE _v1, uintE _v2) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1) {}
-};
-
-struct VertexPairHash {
-  uintE v1;
-  uintE v2;
-  uintE hash;
-  VertexPairHash(uintE _v1, uintE _v2, uintE nu) : v1(_v1<=_v2 ? _v1 : _v2), v2(_v1<=_v2 ? _v2 : _v1) {
-    hash = v1 * nu + v2;
-  }
-  VertexPairHash() : v1(0), v2(0), hash(0) {};
-};
 
 // Represents a pair of vertices on one side of a bipartite graph (unordered, stored based on constructor order)
 struct UVertexPair {
@@ -148,48 +106,10 @@ struct UVertexPair {
   UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
 };
 
-struct UVertexPairHash {
-  uintE v1;
-  uintE v2;
-  uintE hash;
-  UVertexPairHash(uintE _v1, uintE _v2, uintE nu) : v1(_v1), v2(_v2) { hash = v1 * nu + v2; }
-  UVertexPairHash() : v1(0), v2(0), hash(0) {};
-};
-
 //TODO get rid of legacy _nv
 // Comparer for VertexPair based on least vertex in pair and then greatest vertex in pair
-struct VertexPairCmp {
-  long nv;
-  VertexPairCmp(long _nv) : nv(_nv) {}
-  inline bool operator() (VertexPair vs1, VertexPair vs2) {
-    if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
-    return vs1.v1 < vs2.v1;
-  }
-};
-
-struct VertexPairHashCmp {
-  inline bool operator() (VertexPairHash vs1, VertexPairHash vs2) {
-    if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
-    return vs1.v1 < vs2.v1;
-  }
-};
-
-struct UVertexPairHashCmp {
-  inline bool operator() (UVertexPairHash vs1, UVertexPairHash vs2) {
-    if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
-    return vs1.v1 < vs2.v1;
-  }
-};
 
 // Comparer for VertexPair based on greatest vertex in pair and then least vertex in pair
-struct VertexPairCmp2 {
-  long nv;
-  VertexPairCmp2(long _nv) : nv(_nv) {}
-  inline bool operator() (VertexPair vs1, VertexPair vs2) {
-    if (vs1.v2 == vs2.v2) return vs1.v1 < vs2.v1;
-    return vs1.v2 < vs2.v2;
-  }
-};
 
 // Comparer for UVertexPair
 struct UVertexPairCmp2{
@@ -211,51 +131,12 @@ struct UVertexPairCmp {
 };
 
 // Equality for VertexPair and UVertexPair
-struct VertexPairEq { inline bool operator() (VertexPair vs1, VertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 struct UVertexPairEq { inline bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
-struct VertexPairHashEq { inline bool operator() (VertexPairHash vs1, VertexPairHash vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
-struct UVertexPairHashEq { inline bool operator() (UVertexPairHash vs1, UVertexPairHash vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 
 // Constructs a VertexPair and UVertexPair
-struct VertexPairCons { inline VertexPair operator() (uintE v1, uintE v2, uintE c) { return VertexPair(v1, v2); }};
 struct UVertexPairCons { inline UVertexPair operator() (uintE v1, uintE v2, uintE c) { return UVertexPair(v1, v2); }};
-struct VertexPairHashCons {
-  long nu;
-  VertexPairHashCons(long _nu) : nu(_nu) {}
-  inline VertexPairHash* operator() (uintE v1, uintE v2, uintE c) {
-    return new VertexPairHash(v1, v2, nu);
-  }
-};
-struct VertexPairHashConsN {
-  long nu;
-  VertexPairHashConsN(long _nu) : nu(_nu) {}
-  inline VertexPairHash operator() (uintE v1, uintE v2, uintE c) {
-    return VertexPairHash(v1, v2, nu);
-  }
-};
-struct UVertexPairHashCons {
-  long nu;
-  UVertexPairHashCons(long _nu) : nu(_nu) {}
-  inline UVertexPairHash* operator() (uintE v1, uintE v2, uintE c) {
-    return new UVertexPairHash(v1, v2, nu);
-  }
-};
-struct UVertexPairHashConsN {
-  long nu;
-  UVertexPairHashConsN(long _nu) : nu(_nu) {}
-  inline UVertexPairHash operator() (uintE v1, uintE v2, uintE c) {
-    return UVertexPairHash(v1, v2, nu);
-  }
-};
 
 // Constructs a uintE form of a VertexPair and UVertexPair
-struct VertexPairIntCons {
-  long nu;
-  VertexPairIntCons(long _nu) : nu(_nu) {}
-  inline uintE operator() (uintE v1, uintE v2, uintE c) {
-    return v1 <= v2 ? v1 * nu + v2 : v2 * nu + v1;
-  }
-};
 struct UVertexPairIntCons {
   long nu;
   UVertexPairIntCons(long _nu) : nu(_nu) {}
@@ -265,25 +146,6 @@ struct UVertexPairIntCons {
 };
 
 // Comparer for indices for VertexPairs in nest, by v1 or v2 (based on use_v1)
-struct NestedVPCmp {
-  VertexPair* nest;
-  bool use_v1;
-  NestedVPCmp(VertexPair* _nest, bool _use_v1) : nest(_nest), use_v1(_use_v1) {}
-  inline bool operator() (uintE idx1, uintE idx2) {
-    if (use_v1) return nest[idx1].v1 < nest[idx2].v1;
-    return nest[idx1].v2 < nest[idx2].v2;
-  }
-};
-struct NestedVPEq {
-  VertexPair* nest;
-  bool use_v1;
-  NestedVPEq(VertexPair* _nest, bool _use_v1) : nest(_nest), use_v1(_use_v1) {}
-  inline bool operator() (uintE idx1, uintE idx2) {
-    if (use_v1) return nest[idx1].v1 == nest[idx2].v1;
-    return nest[idx1].v2 == nest[idx2].v2;
-  }
-};
-
 struct NestedUVPCmp {
   UVertexPair* nest;
   bool use_v1;
@@ -309,7 +171,6 @@ struct greaterOneF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1
 template<class T> struct cmpF{inline bool operator() (T a, T b) {return a < b;}};
 
 struct nonEmptyUVPF{inline bool operator() (UVertexPair &a) {return (a.v1 != UINT_E_MAX || a.v2 != UINT_E_MAX);}};
-struct nonEmptyUVPHF{inline bool operator() (UVertexPairHash &a) {return (a.v1 != UINT_E_MAX || a.v2 != UINT_E_MAX);}};
 struct nonEmptyUWF{inline bool operator() (UWedge &a) {return (a.v1 != UINT_E_MAX || a.v2 != UINT_E_MAX || a.u != UINT_E_MAX);}};
 
 struct nonMaxTupleF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}};
@@ -1202,29 +1063,22 @@ struct edgeToIdx {
   long nu;
   vertex* V;
   vertex* U;
-  bool overflow;
   long num_edges;
   long max_wedges;
   sparseAdditiveSet<uintE> edges;
-  sparsePointerAdditiveSet<UVertexPairHash, uintE, UVertexPairHashEq> edges_overflow;
 
   edgeToIdx(bipartiteGraph<vertex> GA, bool use_v, long _max_wedges) : max_wedges(_max_wedges) {
     nv = use_v ? GA.nv : GA.nu;
     nu = use_v ? GA.nu : GA.nv;
     V = use_v ? GA.V : GA.U;
     U = use_v ? GA.U : GA.V;
-
-    overflow = (nu > UINT_E_MAX / nu);
   
     if (nv < nu) num_edges = sequence::reduce<long>((long) 0, (long) nv, addF<long>(), getV<vertex, long>(V));
     else num_edges = sequence::reduce<long>((long) 0, (long) nu, addF<long>(), getV<vertex, long>(U));
-  
-    if (overflow)
-      edges_overflow = sparsePointerAdditiveSet<UVertexPairHash, uintE, UVertexPairHashEq>(num_edges, 1, UINT_E_MAX, UVertexPairHashEq());
-    else
-      edges = sparseAdditiveSet<uintE>(num_edges, 1, UINT_E_MAX);
+
+    edges = sparseAdditiveSet<uintE>(num_edges, 1, UINT_E_MAX);
     
-    if (!overflow && nu*nv < max_wedges) {
+    if (nu*nv < max_wedges) {
 // go through edges in an array
       bool* edges_bool = newA(bool, nu*nv);
       parallel_for(long i=0; i < nu*nv; ++i) {edges_bool[i] = false;}
@@ -1249,11 +1103,9 @@ struct edgeToIdx {
 // hash edges sequentially
 // TODO maybe it's faster to hash all w/val 1 or something, then retrieve entries, then rehash w/entry idx??
       uintE idx = 0;
-      UVertexPairHashCons overflow_cons = UVertexPairHashCons(nu);
       for (long i=0; i < nv; ++i) {
         for (long j=0; j < V[i].getOutDegree(); ++j) {
-          if (overflow) edges_overflow.insert(make_pair(overflow_cons(i, V[i].getOutNeighbor(j), 0), idx));
-          else edges.insert(make_pair(nu*i + V[i].getOutNeighbor(j), idx));
+          edges.insert(make_pair(nu*i + V[i].getOutNeighbor(j), idx));
           idx++;
         }
       }
@@ -1261,16 +1113,11 @@ struct edgeToIdx {
   }
 
   void del() {
-    if (overflow) edges_overflow.del();
-    else edges.del();
+    edges.del();
   }
 
   // Note: always in the format (V, U)
   inline uintE operator() (const uintE& i, const uintE& j) {
-    if (overflow) {
-      UVertexPairHashConsN overflow_cons = UVertexPairHashConsN(nu);
-      return (edges_overflow.find(overflow_cons(i, j, 0))).second;
-    }
     return (edges.find((uintE) (nu*i + j))).second;
   }
 };
