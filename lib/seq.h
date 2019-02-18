@@ -6,7 +6,7 @@ struct sequence {
 public:
   using T = E;
 
-  sequence() {}
+  sequence() { s = NULL; e = NULL; allocated = false; }
 
   sequence(sequence&& b) 
     : s(b.s), e(b.e), allocated(b.allocated) {
@@ -42,6 +42,15 @@ public:
   sequence(E* s, E* e) : s(s), e(e) {};
 
   ~sequence() { clear();}
+
+  void resize(const size_t n) {
+    if (!allocated || n > e-s) {
+      clear();
+      s = new_array_no_init<E>(n);
+      allocated = true;
+      e = s + n;
+    }
+  }
 
   template <typename X, typename F>
   static sequence<X> tabulate(const size_t n, F f) {
@@ -92,6 +101,7 @@ private:
       delete_array<E>(s,e-s);
     }
     s = e = NULL;
+    allocated = false;
   }
   E *s; // = NULL;
   E *e; // = NULL;

@@ -226,21 +226,30 @@ namespace pbbsa {
   }
 
   template <typename s_size_t, typename ct_t, typename Seq>
-  tuple<size_t, tuple<s_size_t, ct_t>* > seq_sparse_histogram(Seq A, size_t m) {
+  tuple<size_t, tuple<s_size_t, ct_t>* > seq_sparse_histogram(Seq A, size_t m, sequence<tuple<s_size_t, ct_t>>& out_seq) {
     sequentialHT<s_size_t, ct_t> tab(nullptr, A.size(), 1.0, make_tuple(numeric_limits<s_size_t>::max(), 0));
     for (size_t i = 0; i < A.size(); i++) {
       tab.insertAdd(A[i]);
     }
-    auto out = tab.compact();
+    out_seq.resize(tab.m);
+    size_t out_size = tab.compactInto(out_seq.as_array());
     tab.del();
-    return out;
+    return make_tuple(out_size, out_seq.as_array());
   }
 
   // n = A.size(): number of elements to histogram
   // m: elements are in the range [0, m)
   // Returns a sequence S of pairs of (elm, count) of size <= n.
-  template <typename s_size_t, typename ct_t, typename Seq>
+    template <typename s_size_t, typename ct_t, typename Seq>
   tuple<size_t, tuple<s_size_t, ct_t>* > sparse_histogram(Seq A, size_t m) {
+    sequence<tuple<s_size_t, ct_t>> tmp_seq = sequence<tuple<s_size_t, ct_t>>();
+    sequence<tuple<s_size_t, ct_t>> out_seq = sequence<tuple<s_size_t, ct_t>>();
+    return sparse_histogram<s_size_t, ct_t>(A, m, tmp_seq, out_seq);
+  }
+
+  template <typename s_size_t, typename ct_t, typename Seq>
+  tuple<size_t, tuple<s_size_t, ct_t>* > sparse_histogram(Seq A, size_t m, 
+    sequence<tuple<s_size_t, ct_t>>& tmp_seq, sequence<tuple<s_size_t, ct_t>>& out_seq) {
     using E = typename Seq::T;
     size_t n = A.size();
     size_t bits;
@@ -250,7 +259,7 @@ namespace pbbsa {
     else bits = (log2_up(n) - 17);
     size_t num_buckets = (1<<bits);
     if (n < (1 << 13)) {
-      return seq_sparse_histogram<s_size_t, ct_t>(A , m);
+      return seq_sparse_histogram<s_size_t, ct_t>(A , m, out_seq);
     }
 
     // generate sample
@@ -278,7 +287,9 @@ namespace pbbsa {
     scan_add(offs, offs);
 
     using outT = tuple<s_size_t, ct_t>;
-    outT* tmp = new_array_no_init<outT>(offs[num_buckets]);
+
+    tmp_seq.resize(offs[num_buckets]);
+    outT* tmp = tmp_seq.as_array();
     outT empty = make_tuple(numeric_limits<s_size_t>::max(), 0);
 
     sequence<size_t> c_offs(num_buckets+1);
@@ -310,7 +321,8 @@ namespace pbbsa {
     c_offs[num_buckets] = 0;
     scan_add(c_offs, c_offs);
 
-    outT* out = new_array_no_init<outT>(c_offs[num_buckets]);
+    out_seq.resize(c_offs[num_buckets]);
+    outT* out = out_seq.as_array();
     parallel_for_1(size_t i=0; i<num_buckets; i++) {
       size_t start = bucket_offsets[i];
       size_t end = bucket_offsets[i+1];
@@ -324,7 +336,6 @@ namespace pbbsa {
         out[out_off] = tmp[offs[i]];
       }
     }
-    free(tmp);
     return make_tuple(c_offs[num_buckets], out);
   }
 
@@ -712,18 +723,27 @@ struct TupleCmp {
 // A should be a sequence of key value tuples
 
   template <typename s_size_t, typename ct_t, typename E, typename V, typename F>
-  tuple<size_t, tuple<s_size_t, ct_t>* > seq_sparse_histogram_f(sequence<tuple<E,V>> A, size_t m, F& f) {
+  tuple<size_t, tuple<s_size_t, ct_t>* > seq_sparse_histogram_f(sequence<tuple<E,V>> A, size_t m, F& f, sequence<tuple<s_size_t, ct_t>>& out_seq) {
     sequentialHT<s_size_t, ct_t> tab(nullptr, A.size(), 1.0, make_tuple(numeric_limits<s_size_t>::max(), 0));
     for (size_t i = 0; i < A.size(); i++) {
       tab.insertF(A[i], f);
     }
-    auto out = tab.compact();
+    out_seq.resize(tab.m);
+    size_t out_size = tab.compactInto(out_seq.as_array());
     tab.del();
-    return out;
+    return make_tuple(out_size, out_seq.as_array());
+  }
+
+template <typename s_size_t, typename ct_t, typename E, typename V, typename F, typename G>
+  tuple<size_t, tuple<s_size_t, ct_t>* > sparse_histogram_f(sequence<tuple<E,V>> A, size_t m, F& f, G& f_reduce) {
+    sequence<tuple<s_size_t, ct_t>> tmp_seq = sequence<tuple<s_size_t, ct_t>>();
+    sequence<tuple<s_size_t, ct_t>> out_seq = sequence<tuple<s_size_t, ct_t>>();
+    return sparse_histogram_f<s_size_t, ct_t>(A, m, f, f_reduce, tmp_seq, out_seq);
   }
 
   template <typename s_size_t, typename ct_t, typename E, typename V, typename F, typename G>
-  tuple<size_t, tuple<s_size_t, ct_t>* > sparse_histogram_f(sequence<tuple<E,V>> A, size_t m, F& f, G& f_reduce) {
+  tuple<size_t, tuple<s_size_t, ct_t>* > sparse_histogram_f(sequence<tuple<E,V>> A, size_t m, F& f, G& f_reduce, 
+    sequence<tuple<s_size_t, ct_t>>& tmp_seq, sequence<tuple<s_size_t, ct_t>>& out_seq) {
     //using E = typename Seq::T;
     size_t n = A.size();
     size_t bits;
@@ -733,7 +753,7 @@ struct TupleCmp {
     else bits = (log2_up(n) - 17);
     size_t num_buckets = (1<<bits);
     if (n < (1 << 13)) {
-      return seq_sparse_histogram_f<s_size_t, ct_t>(A , m, f);
+      return seq_sparse_histogram_f<s_size_t, ct_t>(A , m, f, out_seq);
     }
 
     // generate sample
@@ -761,7 +781,8 @@ struct TupleCmp {
     scan_add(offs, offs);
 
     using outT = tuple<s_size_t, ct_t>;
-    outT* tmp = new_array_no_init<outT>(offs[num_buckets]);
+    tmp_seq.resize(offs[num_buckets]);
+    outT* tmp = tmp_seq.as_array();
     outT empty = make_tuple(numeric_limits<s_size_t>::max(), 0);
 
     sequence<size_t> c_offs(num_buckets+1);
@@ -795,7 +816,9 @@ struct TupleCmp {
     c_offs[num_buckets] = 0;
     scan_add(c_offs, c_offs);
 
-    outT* out = new_array_no_init<outT>(c_offs[num_buckets]);
+
+    out_seq.resize(c_offs[num_buckets]);
+    outT* out = out_seq.as_array();
     parallel_for_1(size_t i=0; i<num_buckets; i++) {
       size_t start = bucket_offsets[i];
       size_t end = bucket_offsets[i+1];
@@ -809,7 +832,6 @@ struct TupleCmp {
         out[out_off] = tmp[offs[i]];
       }
     }
-    free(tmp);
     return make_tuple(c_offs[num_buckets], out);
   }
 
