@@ -1027,7 +1027,7 @@ long getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeC
 //***************************************************************************************************
 
 template<class wedge, class vertex, class wedgeCons>
-wedge* _getWedges_seq2(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long num_wedges,
+wedge* _getWedges_seq(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long num_wedges,
   long curr_idx, long next_idx) {
   wedge* seagulls = newA(wedge, num_wedges);
   long idx = 0;
@@ -1049,10 +1049,10 @@ wedge* _getWedges_seq2(const long nu, const vertex* V, const vertex* U, wedgeCon
 }
 
 template<class wedge, class vertex, class wedgeCons>
-wedge* _getWedges2(const long nu, const vertex* V, const vertex* U, wedgeCons cons,
+wedge* _getWedges(const long nu, const vertex* V, const vertex* U, wedgeCons cons,
   long num_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, long curr_idx=0, long next_idx=-1) {
   if (next_idx == -1) next_idx = nu;
-  if (num_wedges < 10000) return _getWedges_seq2<wedge>(nu, V, U, cons, num_wedges, curr_idx, next_idx);
+  if (num_wedges < 10000) return _getWedges_seq<wedge>(nu, V, U, cons, num_wedges, curr_idx, next_idx);
  
   // Allocate space for seagull storage
   long num_sg = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
@@ -1086,7 +1086,7 @@ wedge* _getWedges2(const long nu, const vertex* V, const vertex* U, wedgeCons co
 }
 
 template<class vertex, class wedgeCons, class T>
-void _getWedgesHash2(T& wedges,long nu, vertex* V, vertex* U, wedgeCons cons, long num_wedges, long curr_idx=0, long next_idx=-1) {
+void _getWedgesHash(T& wedges,long nu, vertex* V, vertex* U, wedgeCons cons, long num_wedges, long curr_idx=0, long next_idx=-1) {
   if (next_idx == -1) next_idx = nu;
   wedges.resize(num_wedges);
   hashInsertTimer.start();
@@ -1106,7 +1106,7 @@ void _getWedgesHash2(T& wedges,long nu, vertex* V, vertex* U, wedgeCons cons, lo
 }
 
 template<class vertex>
-long getNextWedgeIdx_seq2(long nu, vertex* V, vertex* U, long max_wedges, long curr_idx) {
+long getNextWedgeIdx_seq(long nu, vertex* V, vertex* U, long max_wedges, long curr_idx) {
   long orig = max_wedges;
   for(long i=curr_idx; i < nu; ++i) {
     for(long j=0; j < U[i].getOutDegree(); ++j) {
@@ -1128,9 +1128,9 @@ long getNextWedgeIdx_seq2(long nu, vertex* V, vertex* U, long max_wedges, long c
 
 // TODO doubling search
 template<class vertex>
-long getNextWedgeIdx2(long nu, vertex* V, vertex* U, long max_wedges, long curr_idx, uintE* wedge_idxs) {
+long getNextWedgeIdx(long nu, vertex* V, vertex* U, long max_wedges, long curr_idx, uintE* wedge_idxs) {
   nextWedgeTimer.start();
-  if (nu - curr_idx < 10000) return getNextWedgeIdx_seq2(nu, V, U, max_wedges, curr_idx);
+  if (nu - curr_idx < 2000) return getNextWedgeIdx_seq(nu, V, U, max_wedges, curr_idx);
 
   auto idx_map = make_in_imap<uintT>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
   auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
@@ -1141,23 +1141,23 @@ long getNextWedgeIdx2(long nu, vertex* V, vertex* U, long max_wedges, long curr_
 }
 
 template<class wedge, class vertex, class wedgeCons>
-pair<pair<wedge*,long>, long> getWedges2(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges, uintE* wedge_idxs, uintE** nbhd_idxs) {
-  if (max_wedges >= num_wedges) return make_pair(make_pair(_getWedges2<wedge>(nu, V, U, cons, num_wedges, wedge_idxs, nbhd_idxs), num_wedges), nu);
-  long next_idx = getNextWedgeIdx2(nu, V, U, max_wedges, curr_idx, wedge_idxs);
+pair<pair<wedge*,long>, long> getWedges(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges, uintE* wedge_idxs, uintE** nbhd_idxs) {
+  if (max_wedges >= num_wedges) return make_pair(make_pair(_getWedges<wedge>(nu, V, U, cons, num_wedges, wedge_idxs, nbhd_idxs), num_wedges), nu);
+  long next_idx = getNextWedgeIdx(nu, V, U, max_wedges, curr_idx, wedge_idxs);
   num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
-  wedge* wedges = _getWedges2<wedge>(nu, V, U, cons, num_wedges, wedge_idxs, nbhd_idxs, curr_idx, next_idx);
+  wedge* wedges = _getWedges<wedge>(nu, V, U, cons, num_wedges, wedge_idxs, nbhd_idxs, curr_idx, next_idx);
   return make_pair(make_pair(wedges, num_wedges), next_idx);
 }
 
 template<class vertex, class wedgeCons, class T>
-long getWedgesHash2(T& wedges, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges, uintE* wedge_idxs) {
+long getWedgesHash(T& wedges, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges, uintE* wedge_idxs) {
 if (max_wedges >= num_wedges) {
-    _getWedgesHash2(wedges, nu, V, U, cons, num_wedges);
+    _getWedgesHash(wedges, nu, V, U, cons, num_wedges);
     return nu;
   }
-  long next_idx = getNextWedgeIdx2(nu, V, U, max_wedges, curr_idx, wedge_idxs);
+  long next_idx = getNextWedgeIdx(nu, V, U, max_wedges, curr_idx, wedge_idxs);
   num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
-  _getWedgesHash2(wedges, nu, V, U, cons, num_wedges, curr_idx, next_idx);
+  _getWedgesHash(wedges, nu, V, U, cons, num_wedges, curr_idx, next_idx);
   return next_idx;
 }
 
