@@ -732,20 +732,21 @@ tuple<long, uintE*> intersect_hash(uintE* a, uintE* b, size_t num_a, size_t num_
 //********************************************************************************************
 //********************************************************************************************
 
+//TODO we don't use nbhrs or save nbhrs -- delete from everything
 template<class vertex>
-pair<uintE*, uintE*> countWedgesScan(long nu, vertex* V, vertex* U, bool half=false, bool save_nbhrs=false) {
+pair<uintE*, uintE**> countWedgesScan(long nu, vertex* V, vertex* U, bool half=false, bool save_nbhrs=false) {
   uintE* idxs = newA(uintE, nu + 1);
   idxs[nu] = 0;
 
   using T = uintE*;
-  T* nbhd_idxs = newA(T, nu); 
+  T* nbhd_idxs = newA(T, nu);
 
   parallel_for(long i=0; i < nu; ++i) {
     idxs[i] = 0;
     uintE u_deg = U[i].getOutDegree();
 
     nbhd_idxs[i] = newA(uintE, u_deg + 1);
-    (nbhd_idxs[i])[u_deg] = 0;
+    parallel_for(long j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;}
 
     parallel_for(long j=0; j < u_deg; ++j) { //TODO can parallelize this too technically
       if (!half) (nbhd_idxs[i])[j] = V[U[i].getOutNeighbor(j)].getOutDegree() - 1; //idxs[i] +=
@@ -753,20 +754,24 @@ pair<uintE*, uintE*> countWedgesScan(long nu, vertex* V, vertex* U, bool half=fa
         (nbhd_idxs[i])[j] = 0;
         vertex v = V[U[i].getOutNeighbor(j)];
         for (long k = 0; k < v.getOutDegree(); ++k) { //TODO can parallelize this too technically
-          if (v.getOutNeighbor(k) < i) (nbhd_idxs[i])[j] ++;
+          if (v.getOutNeighbor(k) < i) nbhd_idxs[i][j] ++;
+          else break;
         }
-        (nbhd_idxs[i])[j]--; //idxs[i] += deg - 1;
       }
     }
 
     sequence::plusScan(nbhd_idxs[i], nbhd_idxs[i], u_deg + 1);
     // Set up indices associated with u
     idxs[i] = (nbhd_idxs[i])[u_deg];
-    if (!save_nbhrs) free(nbhd_idxs[i]);
+    //if (!save_nbhrs)
+    free(nbhd_idxs[i]);
   }
-  if (!save_nbhrs) free(nbhd_idxs);
+  //if (!save_nbhrs)
+  free(nbhd_idxs);
   sequence::plusScan(idxs, idxs, nu + 1);
-  return save_nbhrs ? make_pair(idxs, nbhd_idxs) : make_pair(idxs, nullptr);
+
+  //return save_nbhrs ? make_pair(idxs, nbhd_idxs) : make_pair(idxs, nullptr);
+  return make_pair(idxs, nullptr);
 }
 
 /*
@@ -820,182 +825,11 @@ pair<bool,long> cmpWedgeCounts(bipartiteGraph<vertex> GA) {
   return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
 }
 
-/*
- *  Retrieves all wedges on the bipartition V of our graph, where the vertices V are 
- *  taken to be the center of the wedges. Stores these wedges using the constructor 
- *  cons on the two endpoints that make up the wedge.
- * 
- *  nv  : Number of vertices in our bipartition V
- *  V   : Bipartition of vertices that forms the center of our wedges
- *  cons: Constructor to create wedge objects, given two endpoints of a wedge + center
- * 
- *  Returns: Array of wedges on bipartition V
- */
-template<class wedge, class vertex, class wedgeCons>
-wedge* getWedges(const long nv, const vertex* V, wedgeCons cons) {
-  // Retrieve the indices of each wedge associated with each vertex in V
-  long* wedge_idxs = newA(long,nv+1);
-  parallel_for(long i=0;i<nv+1;++i){
-    wedge_idxs[i] = 0;
-  }
-  parallel_for (long i = 0; i < nv; ++i) {
-    uintE v_deg = V[i].getOutDegree();
-    if (v_deg >= 2)
-      wedge_idxs[i] = v_deg * (v_deg - 1)/2;
-  }
-  sequence::plusScan(wedge_idxs, wedge_idxs, nv+1);
-  long num_wedges = wedge_idxs[nv];
-
-  // Retrieve each wedge associated with each vertex in V
-  wedge* wedges = newA(wedge,num_wedges);
-  parallel_for (long i = 0; i < nv; ++i) {
-    const vertex v = V[i];
-    const uintE v_deg = v.getOutDegree();
-    long wedge_idx = wedge_idxs[i];
-    long idx = 0;
-    for (long j = 0; j < v_deg; ++j) {
-      for (long k = j+1; k < v_deg; ++k) {
-        wedges[wedge_idx + idx] = cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i);
-        ++idx;
-      }
-    }
-  }
-  free(wedge_idxs);
-
-  return wedges;
-}
-
-template<class vertex, class wedgeCons, class T>
-void getWedgesHash(T& wedges, long nv, vertex* V, wedgeCons cons) {
-//timer t;
-//t.start();
-// Count number of wedges by their key
-  parallel_for (long i = 0; i < nv; ++i) {
-    const vertex v = V[i];
-    const uintE v_deg = v.getOutDegree();
-    for (long j = 0; j < v_deg; ++j) {
-      for (long k = j+1; k < v_deg; ++k) {
-        wedges.insert(make_pair(cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i), 1));
-      }
-    }
-  }
-//t.stop();
-//t.reportTotal("\tgetWedgesHash:");
-}
-
-// TODO when to use seq?
-template<class vertex>
-long getNextWedgeIdx_seq(long nv, vertex* V, long max_wedges, long curr_idx) {
-  for (long i=curr_idx; i < nv; ++i) {
-    uintE v_deg = V[i].getOutDegree();
-    uintE num = v_deg * (v_deg - 1) / 2;
-    if (num > max_wedges) {
-      if (i == curr_idx) {cout << "Space must accomodate max degree choose 2\n"; exit(0); }
-      return i;
-    }
-    else {
-      max_wedges -= num;
-    }
-  }
-  return nv;
-}
-
-//JS: what is the difference between this and getNextWedgeIdx2?
-//JS2: This counts wedges in a different way -- by iterating through vertices in V, and taking every pair of its neighbors. In order to split up wedges b/c of mem issues, we actually can't use this, b/c otherwise it doesn't give us the right counts if we stop midway; so we have to iterate through U, and find the two-hop neighbors. I'll delete this code, but right now I think it's still being used for edge peeling that I haven't gotten to fixing yet.
-template<class vertex>
-long getNextWedgeIdx(long nv, vertex* V, long max_wedges, long curr_idx) {
-  
-  if (nv - curr_idx < 1000) return getNextWedgeIdx_seq(nv, V, max_wedges, curr_idx);
-  uintE* idxs = newA(uintE, nv - curr_idx + 1);
-  idxs[nv-curr_idx] = 0;
-  parallel_for(long i=curr_idx; i < nv; ++i) {
-    uintE v_deg = V[i].getOutDegree();
-    idxs[i-curr_idx] = v_deg * (v_deg - 1) / 2;
-  }
-  sequence::plusScan(idxs, idxs, nv - curr_idx + 1);
-
-  auto idx_map = make_in_imap<uintT>(nv - curr_idx, [&] (size_t i) { return idxs[i+1]; });
-  auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
-  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
-  free(idxs);
-  if (find_idx == curr_idx) {cout << "Space must accomodate max degree choose 2\n"; exit(0); }
-  
-  return find_idx;
-}
-
-// TODO this is messy af -- combine w/getWedges
-template<class wedge, class vertex, class wedgeCons>
-pair<pair<wedge*, long>, long> getWedgesLimit(const long nv, const vertex* V, wedgeCons cons, long max_wedges, long curr_idx) {
-  long next_idx = getNextWedgeIdx(nv, V, max_wedges, curr_idx);
-
-  // Retrieve the indices of each wedge associated with each vertex in V
-  long* wedge_idxs = newA(long,next_idx-curr_idx+1);
-  parallel_for(long i=curr_idx;i<next_idx+1;++i){
-    wedge_idxs[i-curr_idx] = 0;
-  }
-  parallel_for (long i = curr_idx; i < next_idx; ++i) {
-    uintE v_deg = V[i].getOutDegree();
-    if (v_deg >= 2)
-      wedge_idxs[i-curr_idx] = v_deg * (v_deg - 1)/2;
-  }
-  sequence::plusScan(wedge_idxs, wedge_idxs, next_idx-curr_idx+1);
-  long num_wedges = wedge_idxs[next_idx-curr_idx];
-
-  // Retrieve each wedge associated with each vertex in V
-  wedge* wedges = newA(wedge, num_wedges);
-  parallel_for (long i = curr_idx; i < next_idx; ++i) {
-    const vertex v = V[i];
-    const uintE v_deg = v.getOutDegree();
-    long wedge_idx = wedge_idxs[i-curr_idx];
-    long idx = 0;
-    for (long j = 0; j < v_deg; ++j) {
-      for (long k = j+1; k < v_deg; ++k) {
-        wedges[wedge_idx + idx] = cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i);
-        ++idx;
-      }
-    }
-  }
-  free(wedge_idxs);
-
-  return make_pair(make_pair(wedges, num_wedges), next_idx);
-}
-
-template<class vertex, class wedgeCons, class T>
-long getWedgesHashLimit(T& wedges, long nv, vertex* V, wedgeCons cons, long max_wedges, long curr_idx) {
-  long next_idx = getNextWedgeIdx(nv, V, max_wedges, curr_idx);
-  // Count number of wedges by their key
-  parallel_for (long i = curr_idx; i < next_idx; ++i) {
-    const vertex v = V[i];
-    const uintE v_deg = v.getOutDegree();
-    for (long j = 0; j < v_deg; ++j) {
-      for (long k = j+1; k < v_deg; ++k) {
-        wedges.insert(make_pair(cons(v.getOutNeighbor(j), v.getOutNeighbor(k), i), 1));
-      }
-    }
-  }
-  return next_idx;
-}
-
-template<class wedge, class vertex, class wedgeCons>
-pair<pair<wedge*,long>, long> getWedges(const long nv, const vertex* V, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges) {
-  if (max_wedges >= num_wedges) return make_pair(make_pair(getWedges<wedge>(nv, V, cons),num_wedges), nv);
-  else return getWedgesLimit<wedge>(nv, V, cons, max_wedges, curr_idx);
-}
-
-template<class vertex, class wedgeCons, class T>
-long getWedgesHash(T& wedges, long nv, vertex* V, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges) {
-  if (max_wedges >= num_wedges) {
-    getWedgesHash(wedges, nv, V, cons);
-    return nv;
-  }
-  else { return getWedgesHashLimit(wedges, nv, V, cons, max_wedges, curr_idx); }
-}
-
 //***************************************************************************************************
 //***************************************************************************************************
 
 template<class wedge, class vertex, class wedgeCons, class Sequence>
-pair<wedge*, long> _getWedges_seq2(Sequence I, const long nu, const vertex* V, const vertex* U, wedgeCons cons, long num_wedges,
+wedge* _getWedges_seq2(Sequence I, const long nu, const vertex* V, const vertex* U, wedgeCons cons, long num_wedges,
   long curr_idx, long next_idx, bool half) {
   wedge* seagulls = newA(wedge, num_wedges);
   long idx = 0;
@@ -1007,7 +841,6 @@ pair<wedge*, long> _getWedges_seq2(Sequence I, const long nu, const vertex* V, c
       // Find neighbors (not equal to u) of v
       for (long k = 0; k < v.getOutDegree(); ++k) {
         uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx > u_idx && half) break;
         if (u2_idx != u_idx) {
           seagulls[idx] = cons(u_idx, u2_idx, u.getOutNeighbor(j));
           ++idx;
@@ -1015,11 +848,11 @@ pair<wedge*, long> _getWedges_seq2(Sequence I, const long nu, const vertex* V, c
       }
     }
   }
-  return make_pair(seagulls, idx);
+  return seagulls;
 }
 
 template<class wedge, class vertex, class wedgeCons, class Sequence, class F>
-pair<wedge*, long> _getWedges2(Sequence I, const long nu, const vertex* V, const vertex* U, wedgeCons cons,
+wedge* _getWedges2(Sequence I, const long nu, const vertex* V, const vertex* U, wedgeCons cons,
   long num_wedges, wedge empty, F nonEmpty, bool half, long curr_idx=0, long next_idx=-1) {
   if (next_idx == -1) next_idx = nu;
   if (num_wedges < 10000) return _getWedges_seq2<wedge>(I, nu, V, U, cons, num_wedges, curr_idx, next_idx, half);
@@ -1067,36 +900,28 @@ pair<wedge*, long> _getWedges2(Sequence I, const long nu, const vertex* V, const
       // Find neighbors (not equal to u) of v
       for (long k = 0; k < v_deg; ++k) {
         uintE u2_idx = v.getOutNeighbor(k);
-        if ((u2_idx != u_idx && !half) || (u2_idx < u_idx && half)) {
+        if (u2_idx != u_idx) {
           seagulls[sg_idx+nbhd_idx+idx] = cons(u_idx, u2_idx, U[u_idx].getOutNeighbor(j));
-          ++idx;
-        }
-        else if (u2_idx > u_idx) {
-          seagulls[sg_idx+nbhd_idx+idx] = empty;
           ++idx;
         }
       }
     }
   }
 
-  wedge* seagulls_filter = newA(wedge, num_sg);
-
-  num_wedges = sequence::filter(seagulls, seagulls_filter, num_wedges, nonEmpty);
-
   // Cleanup
-  free(seagulls);
-  parallel_for(long i=0; i<next_idx-curr_idx;++i) { 
+  parallel_for(long i=curr_idx; i<next_idx;++i) { 
     free(nbhd_idxs[i]); 
   }
   free(nbhd_idxs);
   free(sg_idxs);
 
-  return make_pair(seagulls_filter, num_wedges);
+  return seagulls;
 }
 
 template<class vertex, class wedgeCons, class T, class Sequence>
-void _getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeCons cons, bool half, long curr_idx=0, long next_idx=-1) {
+void _getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeCons cons, long num_wedges, bool half, long curr_idx=0, long next_idx=-1) {
   if (next_idx == -1) next_idx = nu;
+  wedges.resize(num_wedges);
   hashInsertTimer.start();
   parallel_for(long i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
@@ -1109,15 +934,8 @@ void _getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedge
         // Find all seagulls with center v and endpoint u
         for (long k=0; k < v_deg; ++k) { 
           const uintE u2_idx = v.getOutNeighbor(k);
-	  //JS: what is "half"?
-    //JS2: One of the things that makes the original seq code faster is that they really only process half of the wedges -- for u2 < u; then, we can just store the butterflies on both u and u2; however, we do need to retain the ability to count all wedges, for peeling
 
-	  //faster code
-	  /*if(u2_idx < u_idx)
-	                wedges.insert(make_pair(cons(u_idx,u2_idx,U[u_idx].getOutNeighbor(j)),1)); 
-			else break;*/
-
-          if ((u2_idx != u_idx && !half) || (u2_idx < u_idx && half))
+          if (u2_idx != u_idx)
 	  wedges.insert(make_pair(cons(u_idx,u2_idx,U[u_idx].getOutNeighbor(j)),1)); //(u_idx * nu + u2_idx, 1)
 	}
     }
@@ -1162,10 +980,11 @@ pair<long,long> getNextWedgeIdx2(Sequence I, long nu, vertex* V, vertex* U, long
   auto idx_map = make_in_imap<uintT>(nu - curr_idx, [&] (size_t i) { return idxs[i+1]; });
   auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
   size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
+  long num = idxs[find_idx - curr_idx];
   free(idxs);
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
   nextWedgeTimer.stop();
-  return make_pair(find_idx, idxs[find_idx - curr_idx]); //TODO make sure right
+  return make_pair(find_idx, num); //TODO make sure right
 }
 
 // TODO this is messy af -- combine w/getWedges
@@ -1175,20 +994,22 @@ pair<pair<wedge*, long>, long> _getWedgesLimit2(Sequence I, const long nu, const
   pair<long, long> p = getNextWedgeIdx2(I, nu, V, U, max_wedges, curr_idx);
   long next_idx = p.first;
   long num_wedges = p.second;
-  return make_pair(_getWedges2<wedge>(I, nu, V, U, cons, num_wedges, empty, nonEmpty, half, curr_idx, next_idx), next_idx);
+  return make_pair(make_pair(_getWedges2<wedge>(I, nu, V, U, cons, num_wedges, empty, nonEmpty, half, curr_idx, next_idx), num_wedges), next_idx);
 }
 
 template<class vertex, class wedgeCons, class T, class Sequence>
 long _getWedgesHashLimit2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, bool half) {
-  long next_idx = getNextWedgeIdx2(I, nu, V, U, max_wedges, curr_idx).first;
-  _getWedgesHash2(wedges, I, nu, V, U, cons, half, curr_idx, next_idx);
+  pair<long, long> p = getNextWedgeIdx2(I, nu, V, U, max_wedges, curr_idx);
+  long next_idx = p.first;
+  long num_wedges = p.second;
+  _getWedgesHash2(wedges, I, nu, V, U, cons, num_wedges, half, curr_idx, next_idx);
   return next_idx;
 }
 
 template<class wedge, class vertex, class wedgeCons, class Sequence, class F>
 pair<pair<wedge*,long>, long> getWedges2(Sequence I, const long nu, const vertex* V, const vertex* U, wedgeCons cons,
   long max_wedges, long curr_idx, long num_wedges, wedge empty, F nonEmpty, bool half=false) {
-  if (max_wedges >= num_wedges) return make_pair(_getWedges2<wedge>(I, nu, V, U, cons, num_wedges, empty, nonEmpty, half), nu);
+  if (max_wedges >= num_wedges) return make_pair(make_pair(_getWedges2<wedge>(I, nu, V, U, cons, num_wedges, empty, nonEmpty, half), num_wedges), nu);
   else return _getWedgesLimit2<wedge>(I, nu, V, U, cons, max_wedges, curr_idx, empty, nonEmpty, half);
 }
 
@@ -1196,25 +1017,148 @@ template<class vertex, class wedgeCons, class T, class Sequence>
 long getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges,
   bool half=false) {
   if (max_wedges >= num_wedges) {
-    _getWedgesHash2(wedges, I, nu, V, U, cons, half);
+    _getWedgesHash2(wedges, I, nu, V, U, cons, num_wedges, half);
     return nu;
   }
   else { return _getWedgesHashLimit2(wedges, I, nu, V, U, cons, max_wedges, curr_idx, half); }
 }
 
-template<class wedge, class vertex, class wedgeCons, class F>
-pair<pair<wedge*,long>, long> getWedges2(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges,
-  wedge empty, F nonEmpty, bool half=false) {
-  auto refl_map = make_in_imap<uintT>(nu, [&] (size_t i) { return i; });
-  return getWedges2<wedge>(refl_map, nu, V, U, cons, max_wedges, curr_idx, num_wedges, empty, nonEmpty, half);
+//***************************************************************************************************
+//***************************************************************************************************
+
+template<class wedge, class vertex, class wedgeCons>
+wedge* _getWedges_seq2(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long num_wedges,
+  long curr_idx, long next_idx) {
+  wedge* seagulls = newA(wedge, num_wedges);
+  long idx = 0;
+  for(long i=curr_idx; i < next_idx; ++i) {
+    for(long j=0; j < U[i].getOutDegree(); ++j) {
+      vertex v = V[U[i].getOutNeighbor(j)];
+      // Find neighbors (not equal to u) of v
+      for (long k = 0; k < v.getOutDegree(); ++k) {
+        uintE u2_idx = v.getOutNeighbor(k);
+        if (u2_idx < i) {
+          seagulls[idx] = cons(i, u2_idx, U[i].getOutNeighbor(j));
+          ++idx;
+        }
+        else break; 
+      }
+    }
+  }
+  return seagulls;
+}
+
+template<class wedge, class vertex, class wedgeCons>
+wedge* _getWedges2(const long nu, const vertex* V, const vertex* U, wedgeCons cons,
+  long num_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, long curr_idx=0, long next_idx=-1) {
+  if (next_idx == -1) next_idx = nu;
+  if (num_wedges < 10000) return _getWedges_seq2<wedge>(nu, V, U, cons, num_wedges, curr_idx, next_idx);
+ 
+  // Allocate space for seagull storage
+  long num_sg = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
+  wedge* seagulls = newA(wedge, num_sg);
+  // Store seagulls in parallel
+  parallel_for(long i=curr_idx; i < next_idx; ++i) {
+    long sg_idx = wedge_idxs[i] - wedge_idxs[curr_idx];
+    // Consider each neighbor v of active vertex u
+    //parallel_for(long j=0; j < U[i].getOutDegree(); ++j) {
+    long idx = 0;
+    for(long j=0; j < U[i].getOutDegree(); ++j) {
+      const vertex v = V[U[i].getOutNeighbor(j)];
+      //long nbhd_idx = (nbhd_idxs[i])[j];
+      //long idx = 0;
+      // Find neighbors (not equal to u) of v
+      for (long k = 0; k < v.getOutDegree(); ++k) {
+        uintE u2_idx = v.getOutNeighbor(k);
+        if (u2_idx < i) {
+          seagulls[sg_idx+idx] = cons(i, u2_idx, U[i].getOutNeighbor(j));
+          ++idx;
+        }
+        else break;
+      }
+    }
+  }
+  /*parallel_for(long i=curr_idx; i<next_idx;++i) { 
+    free(nbhd_idxs[i]); 
+  }*/
+
+  return seagulls;
 }
 
 template<class vertex, class wedgeCons, class T>
-long getWedgesHash2(T& wedges, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges,
-  bool half=false) {
-  //JS: i am confused why we need this map. //JS2: see above note about indexing -- it's to reuse code for peeling
-  auto refl_map = make_in_imap<uintT>(nu, [&] (size_t i) { return i; });
-  return getWedgesHash2(wedges, refl_map, nu, V, U, cons, max_wedges, curr_idx, num_wedges, half);
+void _getWedgesHash2(T& wedges,long nu, vertex* V, vertex* U, wedgeCons cons, long num_wedges, long curr_idx=0, long next_idx=-1) {
+  if (next_idx == -1) next_idx = nu;
+  wedges.resize(num_wedges);
+  hashInsertTimer.start();
+  parallel_for(long i=curr_idx; i < next_idx; ++i){
+    // Set up for each active vertex
+    parallel_for (long j=0; j < U[i].getOutDegree(); ++j ) {
+        const vertex v = V[U[i].getOutNeighbor(j)];
+        // Find all seagulls with center v and endpoint u
+        for (long k=0; k < v.getOutDegree(); ++k) { 
+          const uintE u2_idx = v.getOutNeighbor(k);
+          if (u2_idx < i) wedges.insert(make_pair(cons(i,u2_idx,U[i].getOutNeighbor(j)),1)); //(u_idx * nu + u2_idx, 1)
+          else break;
+        }
+    }
+  }
+  hashInsertTimer.stop();
+}
+
+template<class vertex>
+long getNextWedgeIdx_seq2(long nu, vertex* V, vertex* U, long max_wedges, long curr_idx) {
+  long orig = max_wedges;
+  for(long i=curr_idx; i < nu; ++i) {
+    for(long j=0; j < U[i].getOutDegree(); ++j) {
+      vertex v = V[U[i].getOutNeighbor(j)];
+      uintE num = 0;
+      for (long k=0; k < v.getOutDegree(); ++k) {
+        if (v.getOutNeighbor(k) < i) num ++;
+        else break;
+      }
+      if (num > max_wedges) {
+        if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
+        return i;
+      }
+      else { max_wedges -= num; }
+    }
+  }
+  return nu;
+}
+
+// TODO doubling search
+template<class vertex>
+long getNextWedgeIdx2(long nu, vertex* V, vertex* U, long max_wedges, long curr_idx, uintE* wedge_idxs) {
+  nextWedgeTimer.start();
+  if (nu - curr_idx < 10000) return getNextWedgeIdx_seq2(nu, V, U, max_wedges, curr_idx);
+
+  auto idx_map = make_in_imap<uintT>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
+  auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
+  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
+  if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
+  nextWedgeTimer.stop();
+  return find_idx; //TODO make sure right
+}
+
+template<class wedge, class vertex, class wedgeCons>
+pair<pair<wedge*,long>, long> getWedges2(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges, uintE* wedge_idxs, uintE** nbhd_idxs) {
+  if (max_wedges >= num_wedges) return make_pair(make_pair(_getWedges2<wedge>(nu, V, U, cons, num_wedges, wedge_idxs, nbhd_idxs), num_wedges), nu);
+  long next_idx = getNextWedgeIdx2(nu, V, U, max_wedges, curr_idx, wedge_idxs);
+  num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
+  wedge* wedges = _getWedges2<wedge>(nu, V, U, cons, num_wedges, wedge_idxs, nbhd_idxs, curr_idx, next_idx);
+  return make_pair(make_pair(wedges, num_wedges), next_idx);
+}
+
+template<class vertex, class wedgeCons, class T>
+long getWedgesHash2(T& wedges, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges, uintE* wedge_idxs) {
+if (max_wedges >= num_wedges) {
+    _getWedgesHash2(wedges, nu, V, U, cons, num_wedges);
+    return nu;
+  }
+  long next_idx = getNextWedgeIdx2(nu, V, U, max_wedges, curr_idx, wedge_idxs);
+  num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
+  _getWedgesHash2(wedges, nu, V, U, cons, num_wedges, curr_idx, next_idx);
+  return next_idx;
 }
 
 //***************************************************************************************************

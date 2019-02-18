@@ -81,6 +81,18 @@ class sparseAdditiveSet {
     if(alloc) free(TA); 
   }
 
+  void resize(long size, float lf=1.0) {
+    if (size * lf > m) {
+      if(alloc) free(TA);
+      loadFactor = lf;
+      m = (uintT) 1 << log2RoundUp((uintT)(lf * size)+100);
+      mask = m-1;
+      TA = newA(kvPair, m);
+      clearA(TA, m, empty);
+      alloc = true;
+    }
+  }
+
   void clear() {
     clearA(TA, m, empty);
   }
