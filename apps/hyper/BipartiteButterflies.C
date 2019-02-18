@@ -347,7 +347,7 @@ template<class vertex>
 long PeelSort(vertexSubset active, uintE* butterflies, bool* update_dense, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  pair<pair<UVertexPair*, long>,long> sg_pair = getWedges2<UVertexPair>(active_map, active.size(), V, U, UVertexPairCons(), max_wedges, curr_idx, num_wedges, UVertexPair(UINT_E_MAX, UINT_E_MAX), nonEmptyUVPF(), false);
+  pair<pair<UVertexPair*, long>,long> sg_pair = getWedges2<UVertexPair>(active_map, active.size(), V, U, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
   long next_idx = sg_pair.second;
 
   pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqs(nu, sg_pair.first.first, sg_pair.first.second);
@@ -364,7 +364,7 @@ template<class vertex>
 long PeelSort_seq(vertexSubset active, uintE* butterflies, bool* update_dense, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  pair<pair<UVertexPair*, long>,long> sg_pair = getWedges2<UVertexPair>(active_map, active.size(), V, U, UVertexPairCons(), max_wedges, curr_idx, num_wedges, UVertexPair(UINT_E_MAX, UINT_E_MAX), nonEmptyUVPF(), false);
+  pair<pair<UVertexPair*, long>,long> sg_pair = getWedges2<UVertexPair>(active_map, active.size(), V, U, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
   long next_idx = sg_pair.second;
 
   pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqs_seq(nu, sg_pair.first.first, sg_pair.first.second);
@@ -384,7 +384,7 @@ template<class vertex>
 long PeelHist(vertexSubset active, uintE* butterflies, bool* update_dense, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  pair<pair<uintE*, long>, long> sg_pair = getWedges2<uintE>(active_map, active.size(), V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, UINT_E_MAX, nonMaxF(), false);
+  pair<pair<uintE*, long>, long> sg_pair = getWedges2<uintE>(active_map, active.size(), V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
   long next_idx = sg_pair.second;
 
   pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist(nu, sg_pair.first.first, sg_pair.first.second);
@@ -400,7 +400,7 @@ template<class vertex>
 long PeelHist_seq(vertexSubset active, uintE* butterflies, bool* update_dense, vertex* V, vertex* U,const long nu, long num_wedges, long max_wedges, long curr_idx=0) {
   // Retrieve all seagulls
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  pair<pair<uintE*, long>, long> sg_pair = getWedges2<uintE>(active_map, active.size(), V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, UINT_E_MAX, nonMaxF(), false);
+  pair<pair<uintE*, long>, long> sg_pair = getWedges2<uintE>(active_map, active.size(), V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
   long next_idx = sg_pair.second;
 
   pair<tuple<uintE,uintE>*, long> sg_freqs_pair = getSeagullFreqsHist_seq(nu, sg_pair.first.first, sg_pair.first.second);

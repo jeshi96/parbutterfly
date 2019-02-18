@@ -21,15 +21,14 @@
 using namespace std;
 
 template <class vertex>
-long CountEHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountEHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
   using X = tuple<uintE,uintE>;
-  pair<pair<X*,long>, long> wedges_pair = getWedges2<X>(nu, V, U, UWedgeIntCons(nu), max_wedges, curr_idx, num_wedges,
-    make_tuple(UINT_E_MAX, UINT_E_MAX), nonMaxTupleF(), true);
+  pair<pair<X*,long>, long> wedges_pair = getWedges<X>(nu, V, U, UWedgeIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs, nbhd_idxs);
   X* wedges_list = wedges_pair.first.first;
   long num_wedges_list = wedges_pair.first.second;
   pbbsa::sequence<X> wedges_seq = pbbsa::sequence<X>(wedges_list, num_wedges_list);
@@ -83,15 +82,14 @@ long CountEHistCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE*
 }
 
 template <class vertex>
-long CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
   using X = tuple<uintE,uintE>;
-  pair<pair<X*,long>, long> wedges_pair = getWedges2<X>(nu, V, U, UWedgeIntCons(nu), max_wedges, curr_idx, num_wedges,
-    make_tuple(UINT_E_MAX, UINT_E_MAX), nonMaxTupleF(), true);
+  pair<pair<X*,long>, long> wedges_pair = getWedges<X>(nu, V, U, UWedgeIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs, nbhd_idxs);
   X* wedges_list = wedges_pair.first.first;
   long num_wedges_list = wedges_pair.first.second;
   pbbsa::sequence<X> wedges_seq = pbbsa::sequence<X>(wedges_list,num_wedges_list);
@@ -133,7 +131,7 @@ long CountEHist(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* b
 }
 
 template <class vertex>
-long CountEHist2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountEHist2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
@@ -141,8 +139,7 @@ long CountEHist2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
 
   using X = tuple<uintE,uintE>;
   auto cons = UVertexPairIntCons(nu);
-  pair<pair<uintE*,long>, long> wedges_pair = getWedges2<uintE>(nu, V, U, cons, max_wedges, curr_idx, num_wedges,
-    UINT_E_MAX, nonMaxF(), true);
+  pair<pair<uintE*,long>, long> wedges_pair = getWedges<uintE>(nu, V, U, cons, max_wedges, curr_idx, num_wedges, wedge_idxs, nbhd_idxs);
   uintE* wedges_list = wedges_pair.first.first;
   long num_wedges_list = wedges_pair.first.second;
   long next_idx = wedges_pair.second;
@@ -188,14 +185,13 @@ long CountEHist2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
 //********************************************************************************************
 
 template <class vertex>
-long CountESortCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountESortCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  pair<pair<UWedge*,long>, long> wedges_pair = getWedges2<UWedge>(nu, V, U, UWedgeCons(), max_wedges, curr_idx, num_wedges,
-    UWedge(UINT_E_MAX, UINT_E_MAX, UINT_E_MAX), nonEmptyUWF(), true);
+  pair<pair<UWedge*,long>, long> wedges_pair = getWedges<UWedge>(nu, V, U, UWedgeCons(), max_wedges, curr_idx, num_wedges, wedge_idxs, nbhd_idxs);
   UWedge* wedges = wedges_pair.first.first;
   long num_wedges_f = wedges_pair.first.second;
   using X = tuple<uintE,uintE>;
@@ -242,14 +238,13 @@ long CountESortCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE*
 }
 
 template <class vertex>
-long CountESort(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountESort(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  pair<pair<UWedge*,long>, long> wedges_pair = getWedges2<UWedge>(nu, V, U, UWedgeCons(), max_wedges, curr_idx, num_wedges,
-    UWedge(UINT_E_MAX, UINT_E_MAX, UINT_E_MAX), nonEmptyUWF(), true);
+  pair<pair<UWedge*,long>, long> wedges_pair = getWedges<UWedge>(nu, V, U, UWedgeCons(), max_wedges, curr_idx, num_wedges, wedge_idxs, nbhd_idxs);
   UWedge* wedges = wedges_pair.first.first;
   long num_wedges_f = wedges_pair.first.second;
 
@@ -353,7 +348,7 @@ void countButterfliesEHash(sparseSet<sparseSet<uintE>*>& cwedges, const long nu,
 }
 
 template <class vertex>
-long CountEHash2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountEHash2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
@@ -361,7 +356,7 @@ long CountEHash2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
 
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges), 1, UINT_E_MAX);
   UVertexPairIntCons cons = UVertexPairIntCons(nu);
-  long next_idx = getWedgesHash2(wedges, nu, V, U, cons, max_wedges, curr_idx, num_wedges, true);
+  long next_idx = getWedgesHash(wedges, nu, V, U, cons, max_wedges, curr_idx, num_wedges, wedge_idxs);
   
   // TODO modularize w/hashce
   parallel_for (long i = curr_idx; i < next_idx; ++i) {
@@ -389,7 +384,7 @@ long CountEHash2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
 }
 
 template <class vertex>
-long CountEHashCE2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountEHashCE2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
@@ -397,7 +392,7 @@ long CountEHashCE2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE
 
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges), 1, UINT_E_MAX);
   UVertexPairIntCons cons = UVertexPairIntCons(nu);
-  long next_idx = getWedgesHash2(wedges, nu, V, U, cons, max_wedges, curr_idx, num_wedges, true);
+  long next_idx = getWedgesHash(wedges, nu, V, U, cons, max_wedges, curr_idx, num_wedges, wedge_idxs);
 
   sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(eti.num_edges, 1, UINT_E_MAX);
   
@@ -435,14 +430,14 @@ long CountEHashCE2(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE
 }
 
 template <class vertex>
-long CountEHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountEHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges), 1, UINT_E_MAX);
-  long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, true);
+  long next_idx = getWedgesHash(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   // TODO idk if this nested stuff is best -- I needed a linkedlist append kind of thing but parallel
   auto cwedges_pair = allocateWedgesHash(wedges,nv,V,U,UVertexPairIntCons(nu), curr_idx, next_idx);
   sparseSet<sparseSet<uintE>*> cwedges = cwedges_pair.first;
@@ -462,14 +457,14 @@ long CountEHash(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* b
 }
 
 template <class vertex>
-long CountEHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, edgeToIdx<vertex> eti, long curr_idx=0) {
+long CountEHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, edgeToIdx<vertex> eti, long curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(min(num_wedges,max_wedges), 1, UINT_E_MAX);
-  long next_idx = getWedgesHash2(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, true);
+  long next_idx = getWedgesHash(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   // TODO idk if this nested stuff is best -- I needed a linkedlist append kind of thing but parallel
   auto cwedges_pair = allocateWedgesHash(wedges,nv,V,U,UVertexPairIntCons(nu), curr_idx, next_idx);
   sparseSet<sparseSet<uintE>*> cwedges = cwedges_pair.first;
@@ -501,38 +496,49 @@ long CountEHashCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE*
 template <class vertex>
 uintE* CountE(edgeToIdx<vertex> eti, bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_wedges, long type=0) {
   const long nu = use_v ? GA.nu : GA.nv;
+  const vertex* V = use_v ? GA.V : GA.U;
+  const vertex* U = use_v ? GA.U : GA.V;
   //auto eti = edgeToIdx<vertex>(GA, use_v, max_wedges);
 
   uintE* butterflies = newA(uintE, eti.num_edges);
   parallel_for(long i=0; i < eti.num_edges; ++i){
     butterflies[i] = 0;
   }
+
+  uintE* wedge_idxs = nullptr;
+  uintE** nbhd_idxs = nullptr;
+
+  //TODO properly free this stuff
+  pair<uintE*, uintE**> idxs_pair = countWedgesScan(nu, V, U, true, type != 2 && type != 3);
+  wedge_idxs = idxs_pair.first;
+  nbhd_idxs = idxs_pair.second;
+
   // TODO clean up utils, do overflow stuff (double check youtube needs it)
   // TODO check correctness against each other
   // TODO why is hash so slow
   if (max_wedges >= num_wedges) {
-    if (type == 2) CountEHash(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else if (type == 3) CountEHashCE(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else if (type == 0) CountESort(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else if (type==1) CountESortCE(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else if (type==4) CountEHist(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else if (type==6) CountEHistCE(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else if (type == 7) CountEHash2(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else if (type == 8) CountEHashCE2(GA, use_v, num_wedges, butterflies, max_wedges, eti);
-    else if (type==9) CountEHist2(GA, use_v, num_wedges, butterflies, max_wedges, eti);
+    if (type == 2) CountEHash(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+    else if (type == 3) CountEHashCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+    else if (type == 0) CountESort(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti);
+    else if (type==1) CountESortCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti);
+    else if (type==4) CountEHist(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti);
+    else if (type==6) CountEHistCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti);
+    else if (type == 7) CountEHash2(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+    else if (type == 8) CountEHashCE2(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+    else if (type==9) CountEHist2(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti);
     return butterflies;
   }
   long curr_idx = 0;
   while(curr_idx < nu) {
-    if (type == 2) curr_idx = CountEHash(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else if (type == 3) curr_idx = CountEHashCE(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else if (type == 0) curr_idx = CountESort(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else if (type==1) curr_idx = CountESortCE(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else if (type==4) curr_idx = CountEHist(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else if (type==6) curr_idx = CountEHistCE(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else if (type == 7) curr_idx = CountEHash2(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else if (type == 8) curr_idx = CountEHashCE2(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
-    else if (type==9) curr_idx = CountEHist2(GA, use_v, num_wedges, butterflies, max_wedges, eti, curr_idx);
+    if (type == 2) curr_idx = CountEHash(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+    else if (type == 3) curr_idx = CountEHashCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+    else if (type == 0) curr_idx = CountESort(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti, curr_idx);
+    else if (type==1) curr_idx = CountESortCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti, curr_idx);
+    else if (type==4) curr_idx = CountEHist(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti, curr_idx);
+    else if (type==6) curr_idx = CountEHistCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti, curr_idx);
+    else if (type == 7) curr_idx = CountEHash2(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+    else if (type == 8) curr_idx = CountEHashCE2(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+    else if (type==9) curr_idx = CountEHist2(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, eti, curr_idx);
   }
   return butterflies;
 }

@@ -389,10 +389,8 @@ void CountSeq_helper(long curr_idx, long next_idx, uintE* wedges, uintE* used, u
         if (u2_idx < i) {
           //writeAdd(&butterflies[i], wedges[u2_idx]);
           //writeAdd(&butterflies[u2_idx], wedges[u2_idx]);
-          //totals[i] += wedges[u2_idx];
           wedges[shift + u2_idx]++;
           if (wedges[shift + u2_idx] == 1) {used[shift + used_idx] = shift + u2_idx; used_idx++;}
-          //TODO fetch + add
         }
         else break;
       }
@@ -406,8 +404,6 @@ void CountSeq_helper(long curr_idx, long next_idx, uintE* wedges, uintE* used, u
     }
     seqWriteTimer.stop();
     for(long j=shift; j < shift + used_idx; ++j) { wedges[used[j]] = 0; }
-    //free(wedges);
-    //free(used);
   }
 }
 
@@ -418,22 +414,16 @@ void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies, long ma
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  //uintE* totals = newA(uintE, nu);
   long step = max_wedges / nu;
   uintE* wedges = newA(uintE, step * nu);
   uintE* used = newA(uintE, step * nu);
   parallel_for(long i=0; i < step * nu; ++i) { wedges[i] = 0; }
-//TODO set a constant # of parallelizations to make + repeat, then clear + repeat
-//TODO to clear, don't clear whole thing, just the ones that you reset
   for(long i=0; i < nu; i += step) {
     CountSeq_helper(i, i+step < nu ? i+step : nu, wedges, used, butterflies, nv, nu, V, U);
   }
 
   free(wedges);
   free(used);
-  //uintE total = sequence::plusReduce(totals, nu);
-  //cout << "num: " << total << "\n";
-  //free(totals);
 }
 
 template <class vertex>
@@ -467,7 +457,6 @@ void CountOrig(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
       }
     }
     for(long j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
-    //parallel_for(long i=0; i < nu; ++i) { wedges[i] = 0; }
   }
   
   free(wedges);
