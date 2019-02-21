@@ -540,8 +540,8 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   timer t_con;
   t_con.start();
 
-  //bipartiteGraph<symmetricVertex> G = (gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
-  bipartiteGraph<symmetricVertex> G = (gen != 0) ? KONECTToBp<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
+  bipartiteGraph<symmetricVertex> G = (gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
+  //bipartiteGraph<symmetricVertex> G = (gen != 0) ? KONECTToBp<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
 
   t_con.stop();
   t_con.reportTotal("Graph construction: ");

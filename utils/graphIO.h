@@ -387,7 +387,6 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
   parallel_for (intT i=0; i < nv; i++) {
     intT o = offsetsV[i];
     intT l = ((i == nv-1) ? mv : offsetsV[i+1])-offsetsV[i];
-    v[i].degree = l;
     v[i].Neighbors = edgesV+o;
     for (intT j=0; j < l; j++) {
       v[i].Neighbors[j] = E[o+j].v;
@@ -400,7 +399,7 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
 	if(v[i].Neighbors[j] != lastRead) { v[i].Neighbors[k++] = v[i].Neighbors[j]; lastRead = v[i].Neighbors[j]; }
       }
       v[i].degree = k;
-    }
+    } else v[i].degree = 0;
   }
   free(offsetsV);
 
@@ -412,7 +411,6 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
   parallel_for (intT i=0; i<nh;i++) {
     intT o = offsetsH[i];
     intT l = ((i == nh-1) ? mh : offsetsH[i+1])-offsetsH[i];    
-    h[i].degree = l;
     h[i].Neighbors = edgesH+o;
     for (intT j=0; j < l; j++) {
       h[i].Neighbors[j] = E[o+j].v;
@@ -425,7 +423,7 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
 	if(h[i].Neighbors[j] != lastRead) { h[i].Neighbors[k++] = h[i].Neighbors[j]; lastRead = h[i].Neighbors[j]; }
       }
       h[i].degree = k;
-    }
+    } else h[i].degree = 0;
   }
   free(offsetsH);
   free(E);

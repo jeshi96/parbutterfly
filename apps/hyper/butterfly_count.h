@@ -383,23 +383,25 @@ void CountSeq_helper(long curr_idx, long next_idx, uintE* wedges, uintE* used, u
       for (long k=0; k < v.getOutDegree(); ++k) { 
         uintE u2_idx = v.getOutNeighbor(k);
         if (u2_idx < i) {
+	  
           //writeAdd(&butterflies[i], wedges[u2_idx]);
           //writeAdd(&butterflies[u2_idx], wedges[u2_idx]);
-          wedges[shift + u2_idx]++;
+          writeAdd(&butterflies[8*(i-curr_idx)],wedges[shift + u2_idx]);
+	  wedges[shift+u2_idx]++;
           if (wedges[shift + u2_idx] == 1) {used[shift + used_idx] = shift + u2_idx; used_idx++;}
         }
         else break;
       }
     }
-    seqWriteTimer.start();
-    uintE total = used_idx == 0 ? 0 : sequence::reduce<long>((long) shift, (long) shift + used_idx, addF<uintE>(), nestA<uintE, long>(wedges, used));
-    writeAdd(&butterflies[i], total);
-    parallel_for(long j=shift; j < shift + used_idx; ++j) {
-      uintE num_butterflies = wedges[used[j]] * (wedges[used[j]] - 1) / 2;
-      writeAdd(&butterflies[used[j] - shift], num_butterflies);
-    }
-    seqWriteTimer.stop();
-    for(long j=shift; j < shift + used_idx; ++j) { wedges[used[j]] = 0; }
+    //seqWriteTimer.start();
+    //uintE total = used_idx == 0 ? 0 : sequence::reduce<long>((long) shift, (long) shift + used_idx, addF<uintE>(), nestA<uintE, long>(wedges, used));
+    //writeAdd(&butterflies[0], 2*total);
+    /* parallel_for(long j=shift; j < shift + used_idx; ++j) { */
+    /*   uintE num_butterflies = wedges[used[j]] * (wedges[used[j]] - 1) / 2; */
+    /*   writeAdd(&butterflies[used[j] - shift], num_butterflies); */
+    /* } */
+    //seqWriteTimer.stop();
+    parallel_for(long j=shift; j < shift + used_idx; ++j) { wedges[used[j]] = 0; }
   }
 }
 
@@ -410,7 +412,7 @@ void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies, long ma
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  long step = max_wedges / nu;
+  long step = 1000;//max_wedges / nu;
   uintE* wedges = newA(uintE, step * nu);
   uintE* used = newA(uintE, step * nu);
   parallel_for(long i=0; i < step * nu; ++i) { wedges[i] = 0; }
