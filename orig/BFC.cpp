@@ -31,16 +31,18 @@
 #include <map>
 #include <sstream>
 #include <stdint.h>
-#include <boost/random/mersenne_twister.hpp>
+//#include <boost/random/mersenne_twister.hpp>
 //#include <boost/random/uniform_int_distribution.hpp>
 //#include <boost/random/uniform_real_distribution.hpp>
-#include <boost/random/random_device.hpp>
+//#include <boost/random/random_device.hpp>
 #include <stdlib.h>
 #include <sys/time.h>
 #include <iomanip>
 #include <iostream>
+#include <vector>
+#include "limits.h"
 using namespace std;
-using namespace boost::random;
+//using namespace boost::random;
 
 #define newA(__E,__n) (__E*) malloc((__n)*sizeof(__E))
 #define SZ(x) ((int)x.size())
