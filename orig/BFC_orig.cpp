@@ -7,7 +7,7 @@
 
 	Abstract:
 		We consider the problem of counting motifs in bipartite affiliation networks, such as author-paper, user-product, and actor-movie relations. 
-		We focus on counting the number of occurrences of a "butterfly", a complete 2×2 biclique, the simplest cohesive higher-order structure in a bipartite graph. 
+		We focus on counting the number of occurrences of a "butterfly", a complete 2Ã—2 biclique, the simplest cohesive higher-order structure in a bipartite graph. 
 		Our main contribution is a suite of randomized algorithms that can quickly approximate the number of butterflies in a graph with a provable guarantee on accuracy. 
 		An experimental evaluation on large real-world networks shows that our algorithms return accurate estimates within a few seconds, even for networks with trillions of 
 		butterflies and hundreds of millions of edges.
@@ -382,7 +382,7 @@ double fast_neighbor_intersections(int a, int b) {
 }*/
 
 ll exact_butterfly_counting(vector < vector <int> > &graph) {
-	int side = n_wedge_in_partition[0] > n_wedge_in_partition[1];
+	int side = n_wedge_in_partition[0] < n_wedge_in_partition[1];
 	ld res = 0;
 	for (int vertex = side == 0 ? 0 : SZ(vertices_in_left) ; vertex < largest_index_in_partition[side]; vertex++) {
 		int idx = 0;
