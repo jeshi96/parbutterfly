@@ -517,6 +517,82 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
   return D;
 }
 
+//JS: trying a faster representation
+template <class vertex>
+void CountOrigFaster(bipartiteGraph<vertex> GA, bool use_v) {
+  timer t1,t2;
+  t1.start();
+  cout << GA.nv << " " << GA.nu << " " << GA.mv << " " << GA.mu << endl;
+  intT* offsetsV = newA(intT,GA.nv+1);
+  intT* offsetsU = newA(intT,GA.nu+1);
+  intT* edgesV = newA(intT,GA.mv);
+  intT* edgesU = newA(intT,GA.mu);
+  intT sum = 0;
+  for(long i=0;i<GA.nv;i++) {
+    offsetsV[i] = sum;
+    for(long j=0;j<GA.V[i].getOutDegree();j++) {
+      edgesV[sum+j] = GA.V[i].getOutNeighbor(j);
+    }
+    sum += GA.V[i].getOutDegree();
+  }
+  offsetsV[GA.nv] = GA.mv;
+
+  sum = 0;
+  for(long i=0;i<GA.nu;i++) {
+    offsetsU[i] = sum;
+    for(long j=0;j<GA.U[i].getOutDegree();j++) {
+      edgesU[sum+j] = GA.U[i].getOutNeighbor(j);
+    }
+    sum += GA.U[i].getOutDegree();
+  }
+  offsetsU[GA.nu] = GA.mu;
+  
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  if(!use_v) { swap(offsetsV,offsetsU); swap(edgesV,edgesU); }
+  //const vertex* V = use_v ? GA.V : GA.U;
+  //const vertex* U = use_v ? GA.U : GA.V;
+  long results = 0;
+  uintE* wedges = newA(uintE, nu);
+  uintE* used = newA(uintE, nu);
+
+  for(intT i=0; i < nu; ++i) { wedges[i] = 0; }
+
+  t1.reportTotal("preprocess");
+  t2.start();
+
+  for(intT i=0; i < nu; ++i){
+    intT used_idx = 0;
+    //vertex u = U[i];
+    intT u_offset  = offsetsU[i];
+    intT u_deg = offsetsU[i+1]-u_offset;
+    for (intT j=0; j < u_deg; ++j ) {
+      intT v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1]-offsetsV[v];
+      //vertex v = V[U[i].getOutNeighbor(j)];
+      for (intT k=0; k < v_deg; ++k) { 
+        uintE u2_idx = edgesV[v_offset+k];
+        if (u2_idx < i) {
+          //butterflies[i] += wedges[u2_idx];
+          //butterflies[u2_idx] += wedges[u2_idx];
+          results += wedges[u2_idx];
+          wedges[u2_idx]++;
+          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+        }
+        else break;
+      }
+    }
+    for(intT j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
+  }
+  t2.reportTotal("main loop");
+  
+  free(wedges);
+  free(used);
+  cout << "num: " << results << "\n";
+}
+
+
 // Note: must be invoked with symmetricVertex
 template <class vertex>
 void Compute(hypergraph<vertex>& GA, commandLine P) {
@@ -554,6 +630,11 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
 
+  //JS: start debugging section
+  CountOrigFaster(G,use_v);
+  return;
+  //JS: end debugging
+  
 // timer t3;
 // t3.start();
 // auto eti = edgeToIdx<symmetricVertex>(G, use_v, max_wedges);

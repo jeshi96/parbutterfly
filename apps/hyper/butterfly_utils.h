@@ -264,7 +264,7 @@ bipartiteGraph<vertex> bpGraphComplete(long nv, long nu){
 
   Uncompressed_Membipartitegraph<vertex>* mem = 
     new Uncompressed_Membipartitegraph<vertex>(v,u,nv,nu);
-  return bipartiteGraph<vertex>(v,u,nv,nu,mem);
+  return bipartiteGraph<vertex>(v,u,nv,nu,nv*nu,nv*nu,mem);
 }
 
 template<class vertex>
@@ -392,6 +392,9 @@ template<class vertex>
 bipartiteGraph<symmetricVertex> bpGraphFromHypergraph(hypergraph<vertex> G){
   long nv = G.nv;
   long nu = G.nh;
+  long mv = G.mv;
+  long mu = G.mh;
+
   symmetricVertex* v = newA(symmetricVertex,nv);
   symmetricVertex* u = newA(symmetricVertex,nu);
 
@@ -414,7 +417,7 @@ bipartiteGraph<symmetricVertex> bpGraphFromHypergraph(hypergraph<vertex> G){
 
   Uncompressed_Membipartitegraph<symmetricVertex>* mem = 
     new Uncompressed_Membipartitegraph<symmetricVertex>(v,u,nv,nu);
-  return bipartiteGraph<symmetricVertex>(v,u,nv,nu,mem);
+  return bipartiteGraph<symmetricVertex>(v,u,nv,nu,mv,mu,mem);
 
 }
 

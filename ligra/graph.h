@@ -205,9 +205,11 @@ struct bipartiteGraph {
   vertex *U;
   long nv;
   long nu;
+  long mv;
+  long mu;
   Deletable *D;
 
-bipartiteGraph(vertex* _V, vertex* _U, long _nv, long _nu, Deletable* _D) : V(_V), U(_U), nv(_nv), nu(_nu), D(_D) {}
+bipartiteGraph(vertex* _V, vertex* _U, long _nv, long _nu, long _mv, long _mu, Deletable* _D) : V(_V), U(_U), nv(_nv), nu(_nu), mv(_mv), mu(_mu), D(_D) {}
   void del() {
     D->del();
     free(D);
