@@ -35,6 +35,8 @@
 #define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
 #define assertf(A, M, ...) if(!(A)) {log_error(M, ##__VA_ARGS__); assert(A); }
 
+#include <vector>
+
 using namespace std;
 
 /*
@@ -519,14 +521,14 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
 
 //JS: trying a faster representation
 template <class vertex>
-void CountOrigFaster(bipartiteGraph<vertex> GA, bool use_v) {
+void CountOrigCompact(hypergraph<vertex>& GA, bool use_v) {
   timer t1,t2;
   t1.start();
-  cout << GA.nv << " " << GA.nu << " " << GA.mv << " " << GA.mu << endl;
+  cout << GA.nv << " " << GA.nh << " " << GA.mv << " " << GA.mh << endl;
   intT* offsetsV = newA(intT,GA.nv+1);
-  intT* offsetsU = newA(intT,GA.nu+1);
+  intT* offsetsU = newA(intT,GA.nh+1);
   intT* edgesV = newA(intT,GA.mv);
-  intT* edgesU = newA(intT,GA.mu);
+  intT* edgesU = newA(intT,GA.mh);
   intT sum = 0;
   for(long i=0;i<GA.nv;i++) {
     offsetsV[i] = sum;
@@ -538,17 +540,17 @@ void CountOrigFaster(bipartiteGraph<vertex> GA, bool use_v) {
   offsetsV[GA.nv] = GA.mv;
 
   sum = 0;
-  for(long i=0;i<GA.nu;i++) {
+  for(long i=0;i<GA.nh;i++) {
     offsetsU[i] = sum;
-    for(long j=0;j<GA.U[i].getOutDegree();j++) {
-      edgesU[sum+j] = GA.U[i].getOutNeighbor(j);
+    for(long j=0;j<GA.H[i].getOutDegree();j++) {
+      edgesU[sum+j] = GA.H[i].getOutNeighbor(j);
     }
-    sum += GA.U[i].getOutDegree();
+    sum += GA.H[i].getOutDegree();
   }
-  offsetsU[GA.nu] = GA.mu;
+  offsetsU[GA.nh] = GA.mh;
   
-  const long nv = use_v ? GA.nv : GA.nu;
-  const long nu = use_v ? GA.nu : GA.nv;
+  const long nv = use_v ? GA.nv : GA.nh;
+  const long nu = use_v ? GA.nh : GA.nv;
   if(!use_v) { swap(offsetsV,offsetsU); swap(edgesV,edgesU); }
   //const vertex* V = use_v ? GA.V : GA.U;
   //const vertex* U = use_v ? GA.U : GA.V;
@@ -573,6 +575,71 @@ void CountOrigFaster(bipartiteGraph<vertex> GA, bool use_v) {
       //vertex v = V[U[i].getOutNeighbor(j)];
       for (intT k=0; k < v_deg; ++k) { 
         uintE u2_idx = edgesV[v_offset+k];
+        if (u2_idx < i) {
+          //butterflies[i] += wedges[u2_idx];
+          //butterflies[u2_idx] += wedges[u2_idx];
+          results += wedges[u2_idx];
+          wedges[u2_idx]++;
+          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+        }
+        else break;
+      }
+    }
+    for(intT j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
+  }
+  t2.reportTotal("main loop");
+  
+  free(wedges);
+  free(used);
+  free(offsetsV); free(offsetsU); free(edgesV); free(edgesU);
+  cout << "num: " << results << "\n";
+}
+
+//JS: trying a faster representation
+template <class vertex>
+void CountOrigVector(hypergraph<vertex>& GA, bool use_v) {
+  timer t1,t2;
+  t1.start();
+  cout << GA.nv << " " << GA.nh << " " << GA.mv << " " << GA.mh << endl;
+  vector <vector <intT> > V;
+  vector <vector <intT> > U;
+  V.resize(GA.nv, vector <intT> ());
+  U.resize(GA.nh, vector <intT> ());
+  for(long i=0;i<GA.nv;i++) {
+    V[i].resize(GA.V[i].getOutDegree());
+    for(long j=0;j<GA.V[i].getOutDegree();j++) {
+      V[i][j] = GA.V[i].getOutNeighbor(j);
+    }
+  }
+
+  for(long i=0;i<GA.nh;i++) {
+    U[i].resize(GA.H[i].getOutDegree());
+    for(long j=0;j<GA.H[i].getOutDegree();j++) {
+      U[i][j] = GA.H[i].getOutNeighbor(j);
+    }
+  }
+
+  const long nv = use_v ? GA.nv : GA.nh;
+  const long nu = use_v ? GA.nh : GA.nv;
+  if(!use_v) { swap(V,U); }
+  //const vertex* V = use_v ? GA.V : GA.U;
+  //const vertex* U = use_v ? GA.U : GA.V;
+  long results = 0;
+  uintE* wedges = newA(uintE, nu);
+  uintE* used = newA(uintE, nu);
+
+  for(intT i=0; i < nu; ++i) { wedges[i] = 0; }
+
+  t1.reportTotal("preprocess");
+  t2.start();
+
+  for(intT i=0; i < nu; ++i){
+    intT used_idx = 0;
+    //vertex u = U[i];
+    for (intT j=0; j < U[i].size(); ++j ) {
+      intT v = U[i][j];      
+      for (intT k=0; k < V[v].size(); ++k) { 
+        uintE u2_idx = V[v][k];
         if (u2_idx < i) {
           //butterflies[i] += wedges[u2_idx];
           //butterflies[u2_idx] += wedges[u2_idx];
@@ -616,7 +683,7 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   timer t_con;
   t_con.start();
 
-  bipartiteGraph<symmetricVertex> G = (gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
+  bipartiteGraph<symmetricVertex> G = bpGraphComplete<symmetricVertex>(1,1);//(gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
   //bipartiteGraph<symmetricVertex> G = (gen != 0) ? KONECTToBp<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
 
   t_con.stop();
@@ -631,9 +698,10 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
   long num_wedges = use_v_pair.second;
 
   //JS: start debugging section
-  CountOrigFaster(G,use_v);
+  CountOrigCompact(GA,use_v);
+  //CountOrigVector(GA,use_v);
   return;
-  //JS: end debugging
+  //JS: end debugging section
   
 // timer t3;
 // t3.start();
