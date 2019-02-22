@@ -384,9 +384,9 @@ void CountSeq_helper(long curr_idx, long next_idx, uintE* wedges, uintE* used, u
         uintE u2_idx = v.getOutNeighbor(k);
         if (u2_idx < i) {
 	  
-          //writeAdd(&butterflies[i], wedges[u2_idx]);
-          //writeAdd(&butterflies[u2_idx], wedges[u2_idx]);
-          writeAdd(&butterflies[8*(i-curr_idx)],wedges[shift + u2_idx]);
+          writeAdd(&butterflies[i*16], wedges[shift+u2_idx]);
+          writeAdd(&butterflies[u2_idx*16], wedges[shift+u2_idx]);
+          //writeAdd(&butterflies[8*(i-curr_idx)],wedges[shift + u2_idx]);
 	  wedges[shift+u2_idx]++;
           if (wedges[shift + u2_idx] == 1) {used[shift + used_idx] = shift + u2_idx; used_idx++;}
         }
@@ -395,6 +395,7 @@ void CountSeq_helper(long curr_idx, long next_idx, uintE* wedges, uintE* used, u
     }
     //seqWriteTimer.start();
     //uintE total = used_idx == 0 ? 0 : sequence::reduce<long>((long) shift, (long) shift + used_idx, addF<uintE>(), nestA<uintE, long>(wedges, used));
+    //cout << (double)used_idx/nu << endl;
     //writeAdd(&butterflies[0], 2*total);
     /* parallel_for(long j=shift; j < shift + used_idx; ++j) { */
     /*   uintE num_butterflies = wedges[used[j]] * (wedges[used[j]] - 1) / 2; */
@@ -525,8 +526,8 @@ uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_we
   const vertex* V = use_v ? GA.V : GA.U;
   const vertex* U = use_v ? GA.U : GA.V;
 
-  uintE* butterflies = newA(uintE, nu);
-  parallel_for(long i=0;i<nu;++i){
+  uintE* butterflies = newA(uintE, 16*nu);
+  parallel_for(long i=0;i<nu*16;++i){
     butterflies[i] = 0;
   }
 

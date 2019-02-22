@@ -382,7 +382,7 @@ double fast_neighbor_intersections(int a, int b) {
 }*/
 
 ll exact_butterfly_counting(vector < vector <int> > &graph) {
-	int side = n_wedge_in_partition[0] < n_wedge_in_partition[1];
+	int side = n_wedge_in_partition[0] > n_wedge_in_partition[1];
 	ld res = 0;
 	for (int vertex = side == 0 ? 0 : SZ(vertices_in_left) ; vertex < largest_index_in_partition[side]; vertex++) {
 		int idx = 0;
