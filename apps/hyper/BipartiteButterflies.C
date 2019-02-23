@@ -600,36 +600,11 @@ pair<bool,long> cmpWedgeCounts(bipartiteCSR & GA) {
 }
 
 
-//JS: trying a faster representation
-
 void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
   timer t1,t2;
   t1.start();
-  cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
-  // intT* offsetsV = newA(intT,GA.nv+1);
-  // intT* offsetsU = newA(intT,GA.nh+1);
-  // intT* edgesV = newA(intT,GA.mv);
-  // intT* edgesU = newA(intT,GA.mh);
-  // intT sum = 0;
-  // for(long i=0;i<GA.nv;i++) {
-  //   offsetsV[i] = sum;
-  //   for(long j=0;j<GA.V[i].getOutDegree();j++) {
-  //     edgesV[sum+j] = GA.V[i].getOutNeighbor(j);
-  //   }
-  //   sum += GA.V[i].getOutDegree();
-  // }
-  // offsetsV[GA.nv] = GA.mv;
-
-  // sum = 0;
-  // for(long i=0;i<GA.nh;i++) {
-  //   offsetsU[i] = sum;
-  //   for(long j=0;j<GA.H[i].getOutDegree();j++) {
-  //     edgesU[sum+j] = GA.H[i].getOutNeighbor(j);
-  //   }
-  //   sum += GA.H[i].getOutDegree();
-  // }
-  // offsetsU[GA.nh] = GA.mh;
-  
+  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
+  cout << "Original Serial (make sure running with CILK_NWORKERS=1)" << endl;  
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -637,8 +612,6 @@ void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  //const vertex* V = use_v ? GA.V : GA.U;
-  //const vertex* U = use_v ? GA.U : GA.V;
   long results = 0;
   uintE* wedges = newA(uintE, nu);
   uintE* used = newA(uintE, nu);
@@ -653,20 +626,18 @@ void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
 
   for(intT i=0; i < nu; ++i){
     intT used_idx = 0;
-    //vertex u = U[i];
     intT u_offset  = offsetsU[i];
     intT u_deg = offsetsU[i+1]-u_offset;
     for (intT j=0; j < u_deg; ++j ) {
       intT v = edgesU[u_offset+j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1]-offsetsV[v];
-      //vertex v = V[U[i].getOutNeighbor(j)];
       for (intT k=0; k < v_deg; ++k) { 
         uintE u2_idx = edgesV[v_offset+k];
         if (u2_idx < i) {
-          butterflies[i] += wedges[u2_idx];
-          butterflies[u2_idx] += wedges[u2_idx];
-          //results += wedges[u2_idx];
+          //butterflies[i] += wedges[u2_idx];
+          //butterflies[u2_idx] += wedges[u2_idx];
+          results += wedges[u2_idx];
           wedges[u2_idx]++;
           if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
         }
@@ -683,6 +654,74 @@ void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
   for(long i=0;i<nu;i++) results += butterflies[i];
   free(butterflies);
   cout << "num: " << results << "\n";
+}
+
+void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v) {
+  timer t1,t2;
+  t1.start();
+  cout << "Original Parallel" << endl;
+  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
+  
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  long stepSize = 1000; //tunable parameter
+
+  uintE* wedges = newA(uintE, nu*stepSize);
+  uintE* used = newA(uintE, nu*stepSize);
+
+  granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  
+  long* results = newA(long,eltsPerCacheLine*stepSize); //one entry per cache line
+  granular_for(i,0,stepSize,stepSize > 10000, {results[eltsPerCacheLine*i] = 0;});
+  
+  uintE* butterflies = newA(uintE,nu);
+  granular_for(i,0,nu,nu > 10000, { butterflies[i] = 0; });
+  t1.reportTotal("preprocess");
+
+  t2.start();
+  //JS: try wedge-aware parallelism using wedge counts per vertex
+  for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
+    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,nu); ++i){
+      intT used_idx = 0;
+      intT shift = nu*(i-step*stepSize);
+      intT u_offset  = offsetsU[i];
+      intT u_deg = offsetsU[i+1]-u_offset;
+      for (intT j=0; j < u_deg; ++j ) {
+	intT v = edgesU[u_offset+j];
+	intT v_offset = offsetsV[v];
+	intT v_deg = offsetsV[v+1]-offsetsV[v];
+	for (intT k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = edgesV[v_offset+k];
+	  if (u2_idx < i) {
+	    //butterflies[i] += wedges[u2_idx];
+	    //butterflies[u2_idx] += wedges[u2_idx];
+	    results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
+	    wedges[shift+u2_idx]++;
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
+	  }
+	  else break;
+	}
+      }
+      for(intT j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
+    }
+  }
+  t2.reportTotal("main loop");
+  
+  free(wedges);
+  free(used);
+  long total = 0;
+  
+  for(long i=0;i<nu;i++) total += butterflies[i];
+  for(long i=0;i<stepSize;i++) total += results[i*eltsPerCacheLine];
+  free(butterflies);
+  free(results);
+  cout << "num: " << total << "\n";
 }
 
 // Note: must be invoked with symmetricVertex
@@ -717,12 +756,13 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   //fflush(stdout);
   
 
-  pair<bool,long> use_v_pair = cmpWedgeCounts(GA);
+  pair<bool,long> use_v_pair = cmpWedgeCounts(GA); //need to make parallel
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
 
   //JS: start debugging section
-  CountOrigCompact(GA,use_v);
+  CountOrigCompactParallel(GA,use_v);
+  //CountOrigCompact(GA,use_v);
   return;
   //JS: end debugging section
   
@@ -798,16 +838,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 int parallel_main(int argc, char* argv[]) {
   commandLine P(argc,argv," <inFile>");
   char* iFile = P.getArgument(0);
-  long rounds = P.getOptionLongValue("-rounds",3);
+  //long rounds = P.getOptionLongValue("-rounds",3);
 
   bipartiteCSR G = readBipartite(iFile);
 
   Compute(G,P);
-  for(int r=0;r<rounds;r++) {
-    startTime();
-    Compute(G,P);
-    nextTime("Running time");
-  }
+  // for(int r=0;r<rounds;r++) {
+  //   startTime();
+  //   Compute(G,P);
+  //   nextTime("Running time");
+  // }
   G.del();
 }
 
