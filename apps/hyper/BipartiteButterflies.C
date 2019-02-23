@@ -9,7 +9,7 @@
 #define EDGELONG 1
 #define MCX16 1
 
-#include "hygra.h"
+#include "hypergraphIO.h"
 #include "index_map.h"
 #include "bucket.h"
 #include "edgeMapReduce.h"
@@ -518,40 +518,125 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
   }
   return D;
 }
+ 
+//symmetric compact bipartite
+struct bipartiteCSR {
+  uintT *offsetsV, *offsetsU;
+  uintE *edgesV, *edgesU;
+  long nv, nu, numEdges;
+
+  bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
+    offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
+  {}
+
+  void del() {
+    free(offsetsV); free(offsetsU); free(edgesV); free(edgesU);
+  }
+};
+
+bipartiteCSR readBipartite(char* fname) {
+  words W;
+  _seq<char> S = readStringFromFile(fname);
+  W = stringToWords(S.A, S.n);
+
+  if (W.Strings[0] != (string) "AdjacencyHypergraph") {
+    cout << "Bad input file" << endl;
+    abort();
+  }
+
+  long len = W.m -1;
+  long nv = atol(W.Strings[1]);
+  long mv = atol(W.Strings[2]);
+  long nu = atol(W.Strings[3]);
+  long mu = atol(W.Strings[4]);
+
+  if ((len != nv + mv + nu + mu + 4) | (mv != mu)) {
+    cout << "Bad input file" << endl;
+    abort();
+  }
+
+  uintT* offsetsV = newA(uintT,nv+1);
+  uintT* offsetsU = newA(uintT,nu+1);
+  uintE* edgesV = newA(uintE,mv);
+  uintE* edgesU = newA(uintE,mu);
+
+  {parallel_for(long i=0; i < nv; i++) offsetsV[i] = atol(W.Strings[i + 5]);}
+  offsetsV[nv] = mv;
+  
+  {parallel_for(long i=0; i<mv; i++) {
+      edgesV[i] = atol(W.Strings[i+nv+5]);
+      if(edgesV[i] < 0 || edgesV[i] >= nu) { cout << "edgesV out of range: nu = " << nu << " edge = " << edgesV[i] << endl; exit(0); }
+    }}
+
+  {parallel_for(long i=0; i < nu; i++) offsetsU[i] = atol(W.Strings[i + nv + mv + 5]);}
+  offsetsU[nu] = mu;
+  
+  {parallel_for(long i=0; i<mu; i++) {
+      edgesU[i] = atol(W.Strings[i+nv+mv+nu+5]);
+      if(edgesU[i] < 0 || edgesU[i] >= nv) { cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0); }
+    }}
+
+  //W.del(); // to deal with performance bug in malloc
+
+  return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
+}
+
+
+pair<bool,long> cmpWedgeCounts(bipartiteCSR & GA) {
+  const long nv = GA.nv, nu = GA.nu;
+
+  long num_wedges_v = 0;
+  for(long i=0; i < nv; ++i) {
+    uintE deg_v = GA.offsetsV[i+1]-GA.offsetsV[i];
+    num_wedges_v += deg_v * (deg_v - 1) / 2;
+  }
+
+  long num_wedges_u = 0;
+  for(long i=0; i < nu; ++i) {
+    uintE deg_u = GA.offsetsU[i+1]-GA.offsetsU[i];
+    num_wedges_u += deg_u * (deg_u - 1) / 2;
+  }
+  return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
+}
+
 
 //JS: trying a faster representation
-template <class vertex>
-void CountOrigCompact(hypergraph<vertex>& GA, bool use_v) {
+
+void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
   timer t1,t2;
   t1.start();
-  cout << GA.nv << " " << GA.nh << " " << GA.mv << " " << GA.mh << endl;
-  intT* offsetsV = newA(intT,GA.nv+1);
-  intT* offsetsU = newA(intT,GA.nh+1);
-  intT* edgesV = newA(intT,GA.mv);
-  intT* edgesU = newA(intT,GA.mh);
-  intT sum = 0;
-  for(long i=0;i<GA.nv;i++) {
-    offsetsV[i] = sum;
-    for(long j=0;j<GA.V[i].getOutDegree();j++) {
-      edgesV[sum+j] = GA.V[i].getOutNeighbor(j);
-    }
-    sum += GA.V[i].getOutDegree();
-  }
-  offsetsV[GA.nv] = GA.mv;
+  cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
+  // intT* offsetsV = newA(intT,GA.nv+1);
+  // intT* offsetsU = newA(intT,GA.nh+1);
+  // intT* edgesV = newA(intT,GA.mv);
+  // intT* edgesU = newA(intT,GA.mh);
+  // intT sum = 0;
+  // for(long i=0;i<GA.nv;i++) {
+  //   offsetsV[i] = sum;
+  //   for(long j=0;j<GA.V[i].getOutDegree();j++) {
+  //     edgesV[sum+j] = GA.V[i].getOutNeighbor(j);
+  //   }
+  //   sum += GA.V[i].getOutDegree();
+  // }
+  // offsetsV[GA.nv] = GA.mv;
 
-  sum = 0;
-  for(long i=0;i<GA.nh;i++) {
-    offsetsU[i] = sum;
-    for(long j=0;j<GA.H[i].getOutDegree();j++) {
-      edgesU[sum+j] = GA.H[i].getOutNeighbor(j);
-    }
-    sum += GA.H[i].getOutDegree();
-  }
-  offsetsU[GA.nh] = GA.mh;
+  // sum = 0;
+  // for(long i=0;i<GA.nh;i++) {
+  //   offsetsU[i] = sum;
+  //   for(long j=0;j<GA.H[i].getOutDegree();j++) {
+  //     edgesU[sum+j] = GA.H[i].getOutNeighbor(j);
+  //   }
+  //   sum += GA.H[i].getOutDegree();
+  // }
+  // offsetsU[GA.nh] = GA.mh;
   
-  const long nv = use_v ? GA.nv : GA.nh;
-  const long nu = use_v ? GA.nh : GA.nv;
-  if(!use_v) { swap(offsetsV,offsetsU); swap(edgesV,edgesU); }
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
   //const vertex* V = use_v ? GA.V : GA.U;
   //const vertex* U = use_v ? GA.U : GA.V;
   long results = 0;
@@ -559,6 +644,9 @@ void CountOrigCompact(hypergraph<vertex>& GA, bool use_v) {
   uintE* used = newA(uintE, nu);
 
   for(intT i=0; i < nu; ++i) { wedges[i] = 0; }
+
+  uintE* butterflies = newA(uintE,nu);
+  for(intT i=0; i < nu; ++i) { butterflies[i] = 0; }
 
   t1.reportTotal("preprocess");
   t2.start();
@@ -576,9 +664,9 @@ void CountOrigCompact(hypergraph<vertex>& GA, bool use_v) {
       for (intT k=0; k < v_deg; ++k) { 
         uintE u2_idx = edgesV[v_offset+k];
         if (u2_idx < i) {
-          //butterflies[i] += wedges[u2_idx];
-          //butterflies[u2_idx] += wedges[u2_idx];
-          results += wedges[u2_idx];
+          butterflies[i] += wedges[u2_idx];
+          butterflies[u2_idx] += wedges[u2_idx];
+          //results += wedges[u2_idx];
           wedges[u2_idx]++;
           if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
         }
@@ -591,115 +679,50 @@ void CountOrigCompact(hypergraph<vertex>& GA, bool use_v) {
   
   free(wedges);
   free(used);
-  free(offsetsV); free(offsetsU); free(edgesV); free(edgesU);
+
+  for(long i=0;i<nu;i++) results += butterflies[i];
+  free(butterflies);
   cout << "num: " << results << "\n";
 }
-
-//JS: trying a faster representation
-template <class vertex>
-void CountOrigVector(hypergraph<vertex>& GA, bool use_v) {
-  timer t1,t2;
-  t1.start();
-  cout << GA.nv << " " << GA.nh << " " << GA.mv << " " << GA.mh << endl;
-  vector <vector <intT> > V;
-  vector <vector <intT> > U;
-  V.resize(GA.nv, vector <intT> ());
-  U.resize(GA.nh, vector <intT> ());
-  for(long i=0;i<GA.nv;i++) {
-    V[i].resize(GA.V[i].getOutDegree());
-    for(long j=0;j<GA.V[i].getOutDegree();j++) {
-      V[i][j] = GA.V[i].getOutNeighbor(j);
-    }
-  }
-
-  for(long i=0;i<GA.nh;i++) {
-    U[i].resize(GA.H[i].getOutDegree());
-    for(long j=0;j<GA.H[i].getOutDegree();j++) {
-      U[i][j] = GA.H[i].getOutNeighbor(j);
-    }
-  }
-
-  const long nv = use_v ? GA.nv : GA.nh;
-  const long nu = use_v ? GA.nh : GA.nv;
-  if(!use_v) { swap(V,U); }
-  //const vertex* V = use_v ? GA.V : GA.U;
-  //const vertex* U = use_v ? GA.U : GA.V;
-  long results = 0;
-  uintE* wedges = newA(uintE, nu);
-  uintE* used = newA(uintE, nu);
-
-  for(intT i=0; i < nu; ++i) { wedges[i] = 0; }
-
-  t1.reportTotal("preprocess");
-  t2.start();
-
-  for(intT i=0; i < nu; ++i){
-    intT used_idx = 0;
-    //vertex u = U[i];
-    for (intT j=0; j < U[i].size(); ++j ) {
-      intT v = U[i][j];      
-      for (intT k=0; k < V[v].size(); ++k) { 
-        uintE u2_idx = V[v][k];
-        if (u2_idx < i) {
-          //butterflies[i] += wedges[u2_idx];
-          //butterflies[u2_idx] += wedges[u2_idx];
-          results += wedges[u2_idx];
-          wedges[u2_idx]++;
-          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
-        }
-        else break;
-      }
-    }
-    for(intT j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
-  }
-  t2.reportTotal("main loop");
-  
-  free(wedges);
-  free(used);
-  cout << "num: " << results << "\n";
-}
-
 
 // Note: must be invoked with symmetricVertex
-template <class vertex>
-void Compute(hypergraph<vertex>& GA, commandLine P) {
+void Compute(bipartiteCSR& GA, commandLine P) {
   // Method type for counting + peeling
   long ty = P.getOptionLongValue("-t",0);
   long tp = P.getOptionLongValue("-tp",0);
 
   // Number of vertices if generating complete graph
-  long nv = P.getOptionLongValue("-nv", 10);
-  long nu = P.getOptionLongValue("-nu", 10);
+  // long nv = P.getOptionLongValue("-nv", 10);
+  // long nu = P.getOptionLongValue("-nu", 10);
 
   // 1 if using input file, 0 if using generated graph
-  long gen = P.getOptionLongValue("-i",0);
+  // long gen = P.getOptionLongValue("-i",0);
 
-  std::string iFileConst = P.getOptionValue("-f", "");
-  char* iFile = new char[iFileConst.length()+1];
-  strcpy(iFile, iFileConst.c_str());
+  // std::string iFileConst = P.getOptionValue("-f", "");
+  // char* iFile = new char[iFileConst.length()+1];
+  // strcpy(iFile, iFileConst.c_str());
 
   // # of max wedges
   long max_wedges = P.getOptionLongValue("-m",2577500000);
-  timer t_con;
-  t_con.start();
+  // timer t_con;
+  // t_con.start();
 
-  bipartiteGraph<symmetricVertex> G = bpGraphComplete<symmetricVertex>(1,1);//(gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
+  //bipartiteGraph<symmetricVertex> G = bpGraphComplete<symmetricVertex>(1,1);//(gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
   //bipartiteGraph<symmetricVertex> G = (gen != 0) ? KONECTToBp<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
 
-  t_con.stop();
-  t_con.reportTotal("Graph construction: ");
-  cout << "Done processing graph\n";
-  cout << G.nv << ", " << G.nu << "\n";
-  fflush(stdout);
+  // t_con.stop();
+  // t_con.reportTotal("Graph construction: ");
+  // cout << "Done processing graph\n";
+  //cout << G.nv << ", " << G.nu << "\n";
+  //fflush(stdout);
   
 
-  pair<bool,long> use_v_pair = cmpWedgeCounts(G);
+  pair<bool,long> use_v_pair = cmpWedgeCounts(GA);
   bool use_v = use_v_pair.first;
   long num_wedges = use_v_pair.second;
 
   //JS: start debugging section
   CountOrigCompact(GA,use_v);
-  //CountOrigVector(GA,use_v);
   return;
   //JS: end debugging section
   
@@ -731,25 +754,25 @@ void Compute(hypergraph<vertex>& GA, commandLine P) {
 // else if (tp==1) t2.reportTotal("Sort Peel:");
 // else t2.reportTotal("Hist Peel:");
 
-timer t;
-t.start();
-  uintE* butterflies = Count(G,use_v, num_wedges, max_wedges, ty);
-t.stop();
+// timer t;
+// t.start();
+//   uintE* butterflies = Count(G,use_v, num_wedges, max_wedges, ty);
+// t.stop();
 
-  if (ty==0) t.reportTotal("Sort:");
-  else if (ty==1) t.reportTotal("SortCE:");
-  else if (ty==2) t.reportTotal("Hash:");
-  else if (ty==3) t.reportTotal("HashCE:");
-  else if (ty==4) t.reportTotal("Hist:");
-  else if (ty==6) t.reportTotal("HistCE:");
-  else if (ty==7) t.reportTotal("Seq:");
-  else if (ty==8) t.reportTotal("Orig:");
+//   if (ty==0) t.reportTotal("Sort:");
+//   else if (ty==1) t.reportTotal("SortCE:");
+//   else if (ty==2) t.reportTotal("Hash:");
+//   else if (ty==3) t.reportTotal("HashCE:");
+//   else if (ty==4) t.reportTotal("Hist:");
+//   else if (ty==6) t.reportTotal("HistCE:");
+//   else if (ty==7) t.reportTotal("Seq:");
+//   else if (ty==8) t.reportTotal("Orig:");
 
-  long num_idxs = use_v ? G.nu : G.nv;
-  long b = 0;
-  for (long i=0; i < num_idxs; ++i) {b += butterflies[i];}
-  b = b / 2;
-  cout << "number of butterflies: " << b << "\n";
+//   long num_idxs = use_v ? G.nu : G.nv;
+//   long b = 0;
+//   for (long i=0; i < num_idxs; ++i) {b += butterflies[i];}
+//   b = b / 2;
+//   cout << "number of butterflies: " << b << "\n";
   
   //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
@@ -766,8 +789,25 @@ t.stop();
   // for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
   // cout << "### Max core: " << mc << endl;
 
-  free(butterflies);
+  //free(butterflies);
   //eti.del();
   //free(ebutterflies);
+  //GA.del();
+}
+
+int parallel_main(int argc, char* argv[]) {
+  commandLine P(argc,argv," <inFile>");
+  char* iFile = P.getArgument(0);
+  long rounds = P.getOptionLongValue("-rounds",3);
+
+  bipartiteCSR G = readBipartite(iFile);
+
+  Compute(G,P);
+  for(int r=0;r<rounds;r++) {
+    startTime();
+    Compute(G,P);
+    nextTime("Running time");
+  }
   G.del();
 }
+
