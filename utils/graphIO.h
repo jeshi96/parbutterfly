@@ -383,7 +383,7 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
   intSort::iSort(E,offsetsV,mv,nv,getuF<intT>());
   intT *edgesV = newA(intT,mv);
   vertex<intT> *v = newA(vertex<intT>,nv);
-  
+  intT *newDegreesV = newA(intT,nv);
   parallel_for (intT i=0; i < nv; i++) {
     intT o = offsetsV[i];
     intT l = ((i == nv-1) ? mv : offsetsV[i+1])-offsetsV[i];
@@ -397,10 +397,15 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
       intT lastRead = v[i].Neighbors[0];
       for(intT j=1; j<l; j++) {
 	if(v[i].Neighbors[j] != lastRead) { v[i].Neighbors[k++] = v[i].Neighbors[j]; lastRead = v[i].Neighbors[j]; }
+      if(v[i].Neighbors[j] >= nh) cout << v[i].Neighbors[j] << " " << nh << endl;
       }
+
       v[i].degree = k;
     } else v[i].degree = 0;
+    newDegreesV[i] = v[i].degree;
   }
+  mv = sequence::plusReduce(newDegreesV,nv);
+  free(newDegreesV);
   free(offsetsV);
 
   intT* offsetsH = newA(intT,nh);
@@ -408,6 +413,7 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
   intSort::iSort(E,offsetsH,mh,nh,getuF<intT>()); //don't need?
   intT *edgesH = newA(intT,mh);
   vertex<intT> *h = newA(vertex<intT>,nh);
+  intT *newDegreesH = newA(intT,nh);
   parallel_for (intT i=0; i<nh;i++) {
     intT o = offsetsH[i];
     intT l = ((i == nh-1) ? mh : offsetsH[i+1])-offsetsH[i];    
@@ -421,10 +427,14 @@ hypergraph<intT> hypergraphFromHyperedges(hyperedgeArray<intT> EA) {
       intT lastRead = h[i].Neighbors[0];
       for(intT j=1; j<l; j++) {
 	if(h[i].Neighbors[j] != lastRead) { h[i].Neighbors[k++] = h[i].Neighbors[j]; lastRead = h[i].Neighbors[j]; }
+	if(h[i].Neighbors[j] >= nv) cout << h[i].Neighbors[j] << " " << nv << endl;
       }
       h[i].degree = k;
     } else h[i].degree = 0;
+    newDegreesH[i] = h[i].degree;
   }
+  mh = sequence::plusReduce(newDegreesH,nh);
+  free(newDegreesH);
   free(offsetsH);
   free(E);
   return hypergraph<intT>(v,h,nv,mv,nh,mh,edgesV,edgesH);
@@ -785,6 +795,7 @@ namespace benchIO {
       vertex<intT> h = G.H[i];
       for(long j=0;j < h.degree; j++) O[j] = h.Neighbors[j];
     }
+
     int r = writeArrayToFile(AdjHypergraphHeader,Out,totalLen,fname);
     free(Out);
     return r;
