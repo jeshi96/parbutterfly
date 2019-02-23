@@ -581,8 +581,33 @@ bipartiteCSR readBipartite(char* fname) {
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
 }
 
+// Takes the elements of a vertex array, and returns the out degree choose 2
+template <class E>
+struct wedgeF { 
+  uintT* offsets;
+  wedgeF(uintT* _offsets) : offsets(_offsets) {}
+  inline E operator() (const uintT& i) const {
+    uintE v_deg = offsets[i+1]-offsets[i];
+    return (E) ((v_deg * (v_deg-1)) / 2); 
+  }
+};
 
-pair<bool,long> cmpWedgeCounts(bipartiteCSR & GA) {
+tuple<bool,long,long*> cmpWedgeCounts(bipartiteCSR & GA) {
+  const long nv = GA.nv, nu = GA.nu;
+  long num_wedges_v = sequence::reduce<long>((long) 0, nv, addF<long>(), wedgeF<long>(GA.offsetsV));
+  long num_wedges_u = sequence::reduce<long>((long) 0, nu, addF<long>(), wedgeF<long>(GA.offsetsU));
+  long* tuplePrefixSum;
+  if(num_wedges_v <= num_wedges_u) {
+    tuplePrefixSum = newA(long,nv);
+    sequence::scan<long>(tuplePrefixSum,(long) 0, nv, addF<long>(),wedgeF<long>(GA.offsetsV), 0, false, false);
+  } else {
+    tuplePrefixSum = newA(long,nu);
+    sequence::scan<long>(tuplePrefixSum,(long) 0, nu, addF<long>(),wedgeF<long>(GA.offsetsU), 0, false, false);
+  }
+  return make_tuple((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u, tuplePrefixSum);
+}
+
+pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
   const long nv = GA.nv, nu = GA.nu;
 
   long num_wedges_v = 0;
@@ -755,16 +780,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   //cout << G.nv << ", " << G.nu << "\n";
   //fflush(stdout);
   
-
-  pair<bool,long> use_v_pair = cmpWedgeCounts(GA); //need to make parallel
-  bool use_v = use_v_pair.first;
-  long num_wedges = use_v_pair.second;
-
-  //JS: start debugging section
+  tuple<bool,long,long*> use_v_tuple = cmpWedgeCounts(GA);
+  bool use_v = get<0>(use_v_tuple);
+  long num_wedges = get<1>(use_v_tuple);
+  long* tuplesPrefixSum = get<2>(use_v_tuple);
+  
   CountOrigCompactParallel(GA,use_v);
+  free(tuplesPrefixSum);
   //CountOrigCompact(GA,use_v);
   return;
-  //JS: end debugging section
+  
   
 // timer t3;
 // t3.start();
