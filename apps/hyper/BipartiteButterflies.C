@@ -519,110 +519,6 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
   return D;
 }
  
-//symmetric compact bipartite
-struct bipartiteCSR {
-  uintT *offsetsV, *offsetsU;
-  uintE *edgesV, *edgesU;
-  long nv, nu, numEdges;
-
-  bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
-    offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
-  {}
-
-  void del() {
-    free(offsetsV); free(offsetsU); free(edgesV); free(edgesU);
-  }
-};
-
-bipartiteCSR readBipartite(char* fname) {
-  words W;
-  _seq<char> S = readStringFromFile(fname);
-  W = stringToWords(S.A, S.n);
-
-  if (W.Strings[0] != (string) "AdjacencyHypergraph") {
-    cout << "Bad input file" << endl;
-    abort();
-  }
-
-  long len = W.m -1;
-  long nv = atol(W.Strings[1]);
-  long mv = atol(W.Strings[2]);
-  long nu = atol(W.Strings[3]);
-  long mu = atol(W.Strings[4]);
-
-  if ((len != nv + mv + nu + mu + 4) | (mv != mu)) {
-    cout << "Bad input file" << endl;
-    abort();
-  }
-
-  uintT* offsetsV = newA(uintT,nv+1);
-  uintT* offsetsU = newA(uintT,nu+1);
-  uintE* edgesV = newA(uintE,mv);
-  uintE* edgesU = newA(uintE,mu);
-
-  {parallel_for(long i=0; i < nv; i++) offsetsV[i] = atol(W.Strings[i + 5]);}
-  offsetsV[nv] = mv;
-  
-  {parallel_for(long i=0; i<mv; i++) {
-      edgesV[i] = atol(W.Strings[i+nv+5]);
-      if(edgesV[i] < 0 || edgesV[i] >= nu) { cout << "edgesV out of range: nu = " << nu << " edge = " << edgesV[i] << endl; exit(0); }
-    }}
-
-  {parallel_for(long i=0; i < nu; i++) offsetsU[i] = atol(W.Strings[i + nv + mv + 5]);}
-  offsetsU[nu] = mu;
-  
-  {parallel_for(long i=0; i<mu; i++) {
-      edgesU[i] = atol(W.Strings[i+nv+mv+nu+5]);
-      if(edgesU[i] < 0 || edgesU[i] >= nv) { cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0); }
-    }}
-
-  //W.del(); // to deal with performance bug in malloc
-
-  return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
-}
-
-// Takes the elements of a vertex array, and returns the out degree choose 2
-template <class E>
-struct wedgeF { 
-  uintT* offsets;
-  wedgeF(uintT* _offsets) : offsets(_offsets) {}
-  inline E operator() (const uintT& i) const {
-    uintE v_deg = offsets[i+1]-offsets[i];
-    return (E) ((v_deg * (v_deg-1)) / 2); 
-  }
-};
-
-tuple<bool,long,long*> cmpWedgeCounts(bipartiteCSR & GA) {
-  const long nv = GA.nv, nu = GA.nu;
-  long num_wedges_v = sequence::reduce<long>((long) 0, nv, addF<long>(), wedgeF<long>(GA.offsetsV));
-  long num_wedges_u = sequence::reduce<long>((long) 0, nu, addF<long>(), wedgeF<long>(GA.offsetsU));
-  long* tuplePrefixSum;
-  if(num_wedges_v <= num_wedges_u) {
-    tuplePrefixSum = newA(long,nv);
-    sequence::scan<long>(tuplePrefixSum,(long) 0, nv, addF<long>(),wedgeF<long>(GA.offsetsV), 0, false, false);
-  } else {
-    tuplePrefixSum = newA(long,nu);
-    sequence::scan<long>(tuplePrefixSum,(long) 0, nu, addF<long>(),wedgeF<long>(GA.offsetsU), 0, false, false);
-  }
-  return make_tuple((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u, tuplePrefixSum);
-}
-
-pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
-  const long nv = GA.nv, nu = GA.nu;
-
-  long num_wedges_v = 0;
-  for(long i=0; i < nv; ++i) {
-    uintE deg_v = GA.offsetsV[i+1]-GA.offsetsV[i];
-    num_wedges_v += deg_v * (deg_v - 1) / 2;
-  }
-
-  long num_wedges_u = 0;
-  for(long i=0; i < nu; ++i) {
-    uintE deg_u = GA.offsetsU[i+1]-GA.offsetsU[i];
-    num_wedges_u += deg_u * (deg_u - 1) / 2;
-  }
-  return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
-}
 
 
 void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
@@ -834,42 +730,61 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long ty = P.getOptionLongValue("-t",0);
   long tp = P.getOptionLongValue("-tp",0);
 
-  // Number of vertices if generating complete graph
-  // long nv = P.getOptionLongValue("-nv", 10);
-  // long nu = P.getOptionLongValue("-nu", 10);
-
-  // 1 if using input file, 0 if using generated graph
-  // long gen = P.getOptionLongValue("-i",0);
-
-  // std::string iFileConst = P.getOptionValue("-f", "");
-  // char* iFile = new char[iFileConst.length()+1];
-  // strcpy(iFile, iFileConst.c_str());
-
   // # of max wedges
   long max_wedges = P.getOptionLongValue("-m",2577500000);
-  // timer t_con;
-  // t_con.start();
 
-  //bipartiteGraph<symmetricVertex> G = bpGraphComplete<symmetricVertex>(1,1);//(gen != 0) ? bpGraphFromHypergraph(GA) : bpGraphComplete<symmetricVertex>(nv,nu);
-  //bipartiteGraph<symmetricVertex> G = (gen != 0) ? KONECTToBp<symmetricVertex>(iFile) : bpGraphComplete<symmetricVertex>(nv,nu);
-
-  // t_con.stop();
-  // t_con.reportTotal("Graph construction: ");
-  // cout << "Done processing graph\n";
-  //cout << G.nv << ", " << G.nu << "\n";
-  //fflush(stdout);
-  
+  //TODO wedgesPrefixSum not needed except in CountOrigCompactParallel_WedgeAware
   tuple<bool,long,long*> use_v_tuple = cmpWedgeCounts(GA);
   bool use_v = get<0>(use_v_tuple);
   long num_wedges = get<1>(use_v_tuple);
-  long* wedgesPrefixSum = get<2>(use_v_tuple);
   
-  CountOrigCompactParallel(GA,use_v);
-  //CountOrigCompactParallel_WedgeAware(GA,use_v,wedgesPrefixSum);
-  free(wedgesPrefixSum);
-  //CountOrigCompact(GA,use_v);
-  return;
+  //TODO seq code integrate w/count
+  if (ty == 7) CountOrigCompactParallel(GA,use_v);
+  else if (ty == 8) {
+  	long* wedgesPrefixSum = get<2>(use_v_tuple);
+  	CountOrigCompactParallel_WedgeAware(GA,use_v,wedgesPrefixSum);
+  	free(wedgesPrefixSum);
+  	return;
+  }
+  else if (ty == 9) CountOrigCompact(GA,use_v);
+
+  if (ty > 6) return;
+
+
+  timer t;
+  t.start();
+  uintE* butterflies = Count(GA, use_v, num_wedges, max_wedges, ty);
+  t.stop();
+
+  if (ty==0) t.reportTotal("Sort:");
+  else if (ty==1) t.reportTotal("SortCE:");
+  else if (ty==2) t.reportTotal("Hash:");
+  else if (ty==3) t.reportTotal("HashCE:");
+  else if (ty==4) t.reportTotal("Hist:");
+  else if (ty==6) t.reportTotal("HistCE:");
+
+  long num_idxs = use_v ? GA.nu : GA.nv;
+  long b = 0;
+  for (long i=0; i < num_idxs; ++i) {b += butterflies[i];}
+  b = b / 2;
+  cout << "number of butterflies: " << b << "\n";
   
+  //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
+  //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
+
+  // timer t2;
+  // t2.start();
+  // auto cores = Peel(G, use_v, butterflies, max_wedges, tp);
+  // t2.stop();
+  // if (tp ==0) t2.reportTotal("Hash Peel:");
+  // else if (tp==1) t2.reportTotal("Sort Peel:");
+  // else t2.reportTotal("Hist Peel:");
+
+  // uintE mc = 0;
+  // for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
+  // cout << "### Max core: " << mc << endl;
+
+  free(butterflies);
   
 // timer t3;
 // t3.start();
@@ -899,45 +814,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 // else if (tp==1) t2.reportTotal("Sort Peel:");
 // else t2.reportTotal("Hist Peel:");
 
-// timer t;
-// t.start();
-//   uintE* butterflies = Count(G,use_v, num_wedges, max_wedges, ty);
-// t.stop();
-
-//   if (ty==0) t.reportTotal("Sort:");
-//   else if (ty==1) t.reportTotal("SortCE:");
-//   else if (ty==2) t.reportTotal("Hash:");
-//   else if (ty==3) t.reportTotal("HashCE:");
-//   else if (ty==4) t.reportTotal("Hist:");
-//   else if (ty==6) t.reportTotal("HistCE:");
-//   else if (ty==7) t.reportTotal("Seq:");
-//   else if (ty==8) t.reportTotal("Orig:");
-
-//   long num_idxs = use_v ? G.nu : G.nv;
-//   long b = 0;
-//   for (long i=0; i < num_idxs; ++i) {b += butterflies[i];}
-//   b = b / 2;
-//   cout << "number of butterflies: " << b << "\n";
-  
-  //uintE* butterflies2 = Count(G,use_v, num_wedges, max_wedges, 2);
-  //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
-
-  // timer t2;
-  // t2.start();
-  // auto cores = Peel(G, use_v, butterflies, max_wedges, tp);
-  // t2.stop();
-  // if (tp ==0) t2.reportTotal("Hash Peel:");
-  // else if (tp==1) t2.reportTotal("Sort Peel:");
-  // else t2.reportTotal("Hist Peel:");
-
-  // uintE mc = 0;
-  // for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  // cout << "### Max core: " << mc << endl;
-
-  //free(butterflies);
   //eti.del();
   //free(ebutterflies);
-  //GA.del();
 }
 
 int parallel_main(int argc, char* argv[]) {

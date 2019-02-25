@@ -226,199 +226,113 @@ tuple<K,E> getAddReduce (tuple<K,E> curr, tuple<K,E> v) {
   return make_tuple(get<0>(curr),get<1>(curr) + get<1>(v));
 }
 
-
 //***********************************************************************************************
 //***********************************************************************************************
-// Graph construction + reading
 
-/*
- *  Constructs a complete bipartite graph, with nv vertices on one side and nu vertices on
- *  the otheer.
- * 
- *  nv: Number of vertices in one bipartition (V)
- *  nu: Number of vertices in the other bipartition (U)
- * 
- *  Returns: Complete bipartite graph
- */
-template<class vertex>
-bipartiteGraph<vertex> bpGraphComplete(long nv, long nu){
-  // Construct vertex partitions
-  vertex* v = newA(vertex,nv+1);
-  vertex* u = newA(vertex,nu+1);
-  // Add all neighbors to v
-  parallel_for(int i=0;i<nv;++i) {
-    uintE* neighbors_v = newA(uintE,nu);
-    parallel_for(int j=0;j<nu;++j) {
-      neighbors_v[j] = j;
-    }
-    v[i] = vertex(neighbors_v,nu);
+
+//symmetric compact bipartite
+struct bipartiteCSR {
+  uintT *offsetsV, *offsetsU;
+  uintE *edgesV, *edgesU;
+  long nv, nu, numEdges;
+
+  bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
+    offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
+  {}
+
+  void del() {
+    free(offsetsV); free(offsetsU); free(edgesV); free(edgesU);
   }
-  // Add all neighbors to u
-  parallel_for(int i=0;i<nu;++i) {
-    uintE* neighbors_u = newA(uintE,nv);
-    parallel_for(int j=0;j<nv;++j) {
-      neighbors_u[j] = j;
-    }
-    u[i] = vertex(neighbors_u,nv);
+};
+
+bipartiteCSR readBipartite(char* fname) {
+  words W;
+  _seq<char> S = readStringFromFile(fname);
+  W = stringToWords(S.A, S.n);
+
+  if (W.Strings[0] != (string) "AdjacencyHypergraph") {
+    cout << "Bad input file" << endl;
+    abort();
   }
 
-  Uncompressed_Membipartitegraph<vertex>* mem = 
-    new Uncompressed_Membipartitegraph<vertex>(v,u,nv,nu);
-  return bipartiteGraph<vertex>(v,u,nv,nu,nv*nu,nv*nu,mem);
+  long len = W.m -1;
+  long nv = atol(W.Strings[1]);
+  long mv = atol(W.Strings[2]);
+  long nu = atol(W.Strings[3]);
+  long mu = atol(W.Strings[4]);
+
+  if ((len != nv + mv + nu + mu + 4) | (mv != mu)) {
+    cout << "Bad input file" << endl;
+    abort();
+  }
+
+  uintT* offsetsV = newA(uintT,nv+1);
+  uintT* offsetsU = newA(uintT,nu+1);
+  uintE* edgesV = newA(uintE,mv);
+  uintE* edgesU = newA(uintE,mu);
+
+  {parallel_for(long i=0; i < nv; i++) offsetsV[i] = atol(W.Strings[i + 5]);}
+  offsetsV[nv] = mv;
+  
+  {parallel_for(long i=0; i<mv; i++) {
+      edgesV[i] = atol(W.Strings[i+nv+5]);
+      if(edgesV[i] < 0 || edgesV[i] >= nu) { cout << "edgesV out of range: nu = " << nu << " edge = " << edgesV[i] << endl; exit(0); }
+    }}
+
+  {parallel_for(long i=0; i < nu; i++) offsetsU[i] = atol(W.Strings[i + nv + mv + 5]);}
+  offsetsU[nu] = mu;
+  
+  {parallel_for(long i=0; i<mu; i++) {
+      edgesU[i] = atol(W.Strings[i+nv+mv+nu+5]);
+      if(edgesU[i] < 0 || edgesU[i] >= nv) { cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0); }
+    }}
+
+  //W.del(); // to deal with performance bug in malloc
+
+  return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
 }
 
-template<class vertex>
-bipartiteGraph<vertex> KONECTToBp(char* fname) {
-    _seq<char> S = readStringFromFile(fname);
-    char* S2 = newA(char,S.n);
-    //ignore starting lines with '#' and find where to start in file 
-    long k=0;
-    while(1) {
-      if(S.A[k] == '%') {
-	while(S.A[k++] != '\n') continue;
-      }
-      if(k >= S.n || S.A[k] != '%') break; 
-    }
-    
-    parallel_for(long i=0;i<S.n-k;i++) S2[i] = S.A[k+i];
-    S.del();
-
-    long spaces = 0;
-    bool prev_space = true;
-    long t = 0;
-    while(1) {
-      if (!isSpace(S2[t]) && prev_space) {
-        prev_space = false;
-        spaces++;
-      }
-      else if(isspace(S2[t])) {
-        prev_space = true;
-      }
-      if(S2[t] == '\n') break;
-      t++;
-    }
-  
-    words W = stringToWords(S2, S.n-k);
-    long m = W.m / spaces;
-    using T = pair<uintE, uintE>;
-    T *edges = newA(T,m);
-
-    parallel_for(long i=0; i < m; i++) {
-	    edges[i] = make_pair(atol(W.Strings[spaces*i]), atol(W.Strings[spaces*i + 1]));
-    }
-
-    // Remove duplicates
-    quickSort(edges, m, uintETupleLtBoth());
-    T lastRead = make_pair(UINT_E_MAX, UINT_E_MAX);
-    long offset = 0;
-    for (long i=0; i < m; ++i) {
-      if (!(edges[i].first == lastRead.first && edges[i].second == lastRead.second)) {
-        edges[offset] = edges[i];
-        offset++;
-        lastRead = edges[i];
-      }
-    }
-    m = offset;
-
-    long maxV = 0, maxU = 0;
-    for (long i=0; i < m; i++) {
-      maxV = max<intT>(maxV, edges[i].first);
-      maxU = max<intT>(maxU, edges[i].second);
-    }
-    maxV++; maxU++;
-    long nv = maxV;
-    long nu = maxU;
-
-    uintE* degV = newA(uintE, nv);
-    uintE* degU = newA(uintE, nu);
-    parallel_for(long i=0; i < nv; ++i) {degV[i] = 0;}
-    parallel_for(long i=0; i < nu; ++i) {degU[i] = 0;}
-
-    uintE* idxV = newA(uintE, nv);
-    uintE* idxU = newA(uintE, nu);
-    parallel_for(long i=0; i < nv; ++i) {idxV[i] = 0;}
-    parallel_for(long i=0; i < nu; ++i) {idxU[i] = 0;}
-
-    for (long i=0; i < m; i++) {
-      degV[edges[i].first]++;
-      degU[edges[i].second]++;
-    }
-
-    vertex* v = newA(vertex,nv+1);
-    vertex* u = newA(vertex,nu+1);
-  
-  // Add all neighbors to v
-  parallel_for(long i=0;i<nv;++i) {
-    uintE* neighbors_v = newA(uintE,degV[i]);
-    v[i] = vertex(neighbors_v, degV[i]);
+// Takes the elements of a vertex array, and returns the out degree choose 2
+template <class E>
+struct wedgeF { 
+  uintT* offsets;
+  wedgeF(uintT* _offsets) : offsets(_offsets) {}
+  inline E operator() (const uintT& i) const {
+    uintE v_deg = offsets[i+1]-offsets[i];
+    return (E) ((v_deg * (v_deg-1)) / 2); 
   }
-  // Add all neighbors to u
-  parallel_for(long i=0;i<nu;++i) {
-    uintE* neighbors_u = newA(uintE,degU[i]);
-    u[i] = vertex(neighbors_u, degU[i]);
+};
+
+tuple<bool,long,long*> cmpWedgeCounts(bipartiteCSR & GA) {
+  const long nv = GA.nv, nu = GA.nu;
+  long num_wedges_v = sequence::reduce<long>((long) 0, nv, addF<long>(), wedgeF<long>(GA.offsetsV));
+  long num_wedges_u = sequence::reduce<long>((long) 0, nu, addF<long>(), wedgeF<long>(GA.offsetsU));
+  long* tuplePrefixSum;
+  if(num_wedges_v <= num_wedges_u) {
+    tuplePrefixSum = newA(long,nv);
+    sequence::scan<long>(tuplePrefixSum,(long) 0, nv, addF<long>(),wedgeF<long>(GA.offsetsV), 0, false, false);
+  } else {
+    tuplePrefixSum = newA(long,nu);
+    sequence::scan<long>(tuplePrefixSum,(long) 0, nu, addF<long>(),wedgeF<long>(GA.offsetsU), 0, false, false);
+  }
+  return make_tuple((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u, tuplePrefixSum);
+}
+
+pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
+  const long nv = GA.nv, nu = GA.nu;
+
+  long num_wedges_v = 0;
+  for(long i=0; i < nv; ++i) {
+    uintE deg_v = GA.offsetsV[i+1]-GA.offsetsV[i];
+    num_wedges_v += deg_v * (deg_v - 1) / 2;
   }
 
-  for(long i=0;i<m;++i) {
-    uintE v_idx = edges[i].first;
-    uintE u_idx = edges[i].second;
-    (v[v_idx].neighbors)[idxV[v_idx]] = u_idx;
-    idxV[v_idx]++;
-    (u[u_idx].neighbors)[idxU[u_idx]] = v_idx;
-    idxU[u_idx]++;
+  long num_wedges_u = 0;
+  for(long i=0; i < nu; ++i) {
+    uintE deg_u = GA.offsetsU[i+1]-GA.offsetsU[i];
+    num_wedges_u += deg_u * (deg_u - 1) / 2;
   }
-
-  free(edges);
-  free(degV);
-  free(degU);
-  free(idxV);
-  free(idxU);
-    
-    Uncompressed_Membipartitegraph<vertex>* mem = new Uncompressed_Membipartitegraph<vertex>(v,u,nv,nu);
-    return bipartiteGraph<vertex>(v,u,nv,nu,mem);
-  }
-
-/*
- *  Constructs a bipartite graph from a hypergraph (by taking the vertices of the
- *  hypergraph as one vertex partition, and the edges of the hypergraph as the
- *  other vertex partition; edges of the bipartite graph are given by inclusion of 
- *  vertices in edges of the hypergraph).
- *  The vertex class is assumed to be symmetricVertex.
- * 
- *  G: Hypergraph
- * 
- *  Returns: Bipartite graph from G
- */
-template<class vertex>
-bipartiteGraph<symmetricVertex> bpGraphFromHypergraph(hypergraph<vertex> G){
-  long nv = G.nv;
-  long nu = G.nh;
-  long mv = G.mv;
-  long mu = G.mh;
-
-  symmetricVertex* v = newA(symmetricVertex,nv);
-  symmetricVertex* u = newA(symmetricVertex,nu);
-
-  // Copy all neighbors from inclusion in hypergraph
-  parallel_for(int i=0;i<nv;++i) {
-    uintE* neighbors_v = newA(uintE,G.V[i].getOutDegree());
-    parallel_for(int j=0;j<G.V[i].getOutDegree();++j) {
-      neighbors_v[j] = G.V[i].getOutNeighbor(j);
-    }
-    v[i] = symmetricVertex(neighbors_v, G.V[i].getOutDegree());
-  }
-
-  parallel_for(int i=0;i<nu;++i) {
-    uintE* neighbors_u = newA(uintE,G.H[i].getInDegree());
-    parallel_for(int j=0;j<G.H[i].getInDegree();++j) {
-      neighbors_u[j] = G.H[i].getInNeighbor(j);
-    }
-    u[i] = symmetricVertex(neighbors_u, G.H[i].getInDegree());
-  }
-
-  Uncompressed_Membipartitegraph<symmetricVertex>* mem = 
-    new Uncompressed_Membipartitegraph<symmetricVertex>(v,u,nv,nu);
-  return bipartiteGraph<symmetricVertex>(v,u,nv,nu,mv,mu,mem);
-
+  return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
 }
 
 //***********************************************************************************************
@@ -597,97 +511,53 @@ tuple<long, uintE*> intersect_hash(uintE* a, uintE* b, size_t num_a, size_t num_
 //********************************************************************************************
 
 //TODO we don't use nbhrs or save nbhrs -- delete from everything
-template<class vertex>
-pair<uintE*, uintE**> countWedgesScan(long nu, vertex* V, vertex* U, bool half=false, bool save_nbhrs=false) {
+uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false, bool save_nbhrs=false) {
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
   uintE* idxs = newA(uintE, nu + 1);
   idxs[nu] = 0;
 
-  using T = uintE*;
+  using T = uintT*;
   T* nbhd_idxs = newA(T, nu);
 
-  parallel_for(long i=0; i < nu; ++i) {
+  parallel_for(uintT i=0; i < nu; ++i) {
     idxs[i] = 0;
-    uintE u_deg = U[i].getOutDegree();
+    uintT u_offset = offsetsU[i];
+    uintE u_deg = offsetsU[i+1] - u_offset;
 
     nbhd_idxs[i] = newA(uintE, u_deg + 1);
-    parallel_for(long j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;}
+    parallel_for(uintT j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;}
 
-    parallel_for(long j=0; j < u_deg; ++j) { //TODO can parallelize this too technically
-      if (!half) (nbhd_idxs[i])[j] = V[U[i].getOutNeighbor(j)].getOutDegree() - 1; //idxs[i] +=
+    parallel_for(uintT j=0; j < u_deg; ++j) { //TODO can parallelize this too technically
+      if (!half) {
+        uintT v = edgesU[u_offset + j];
+        (nbhd_idxs[i])[j] = offsetsV[v+1] - offsetsV[v] - 1;//V[U[i].getOutNeighbor(j)].getOutDegree() - 1;
+      }
       else {
         (nbhd_idxs[i])[j] = 0;
-        vertex v = V[U[i].getOutNeighbor(j)];
-        for (long k = 0; k < v.getOutDegree(); ++k) { //TODO can parallelize this too technically
-          if (v.getOutNeighbor(k) < i) nbhd_idxs[i][j] ++;
+        uintT v = edgesU[u_offset + j];
+        uintT v_offset = offsetsV[v];
+        uintT v_deg = offsetsV[v+1] - v_offset;
+        for (uintT k = 0; k < v_deg; ++k) { //TODO can parallelize this too technically
+          if (edgesV[v_offset + k] < i) nbhd_idxs[i][j] ++;
           else break;
         }
       }
     }
 
-    sequence::plusScan(nbhd_idxs[i], nbhd_idxs[i], u_deg + 1);
-    // Set up indices associated with u
-    idxs[i] = (nbhd_idxs[i])[u_deg];
-    //if (!save_nbhrs)
+    idxs[i] = sequence::plusReduce(nbhd_idxs[i], u_deg + 1);
     free(nbhd_idxs[i]);
   }
-  //if (!save_nbhrs)
   free(nbhd_idxs);
   sequence::plusScan(idxs, idxs, nu + 1);
 
-  //return save_nbhrs ? make_pair(idxs, nbhd_idxs) : make_pair(idxs, nullptr);
-  return make_pair(idxs, nullptr);
+  return idxs;
 }
 
-/*
- *  Computes the total number of wedges on all vertices on one bipartition of our graph, as 
- *  specified by V (note that the vertices of V are considered the centers of the wedges).
- * 
- *  nv: Number of vertices in our bipartition V
- *  V : Bipartition of vertices that forms the center of our wedges
- * 
- *  Returns: Number of total wedges
- */
-template<class vertex>
-long countWedges(long nv, vertex* V) {
-  return sequence::reduce<long>((long) 0, nv, addF<long>(), chooseV<vertex, long>(V)); //TODO CHECK make sure 2* not needed
-}
-
-template<class vertex>
-long countWedges_seq(long nv, vertex* V) {
-  long num_wedges = 0;
-  for(long i=0; i < nv; ++i) {
-    uintE deg_v = V[i].getOutDegree();
-    num_wedges += deg_v * (deg_v - 1) / 2;
-  }
-  return num_wedges; //TODO CHECK
-}
-
-template <class vertex>
-pair<bool,long> cmpWedgeCounts_seq(bipartiteGraph<vertex> GA) {
-  const long nv = GA.nv, nu = GA.nu;
-  long num_wedges_v = countWedges_seq<vertex>(nv,GA.V);
-  long num_wedges_u = countWedges_seq<vertex>(nu, GA.U);
-  return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
-}
-
-/*
- *  Compares the total number of wedges on all vertices on one bipartition of our graph
- *  to the other bipartition. Returns the side with the least number of wedges, and
- *  the total number of wedges on that side.
- * 
- *  GA: Bipartite graph
- * 
- *  Returns: True if GA.V is the side with the least number of wedges total. False
- *           otherwise. Also, returns the total number of wedges on the corresponding
- *           side.
- */
-template <class vertex>
-pair<bool,long> cmpWedgeCounts(bipartiteGraph<vertex> GA) {
-  const long nv = GA.nv, nu = GA.nu;
-  long num_wedges_v = countWedges<vertex>(nv,GA.V);
-  long num_wedges_u = countWedges<vertex>(nu, GA.U);
-  return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
-}
 
 //***************************************************************************************************
 //***************************************************************************************************
@@ -877,94 +747,126 @@ long getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeC
 //***************************************************************************************************
 //***************************************************************************************************
 
-template<class wedge, class vertex, class wedgeCons>
-wedge* _getWedges_seq(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long num_wedges,
-  long curr_idx, long next_idx) {
-  wedge* seagulls = newA(wedge, num_wedges);
+template<class wedge, class wedgeCons>
+wedge* _getWedges_seq(bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintT curr_idx, uintT next_idx) {
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  wedge* wedges = newA(wedge, num_wedges);
+  
   long idx = 0;
-  for(long i=curr_idx; i < next_idx; ++i) {
-    for(long j=0; j < U[i].getOutDegree(); ++j) {
-      vertex v = V[U[i].getOutNeighbor(j)];
+  for(uintT i=curr_idx; i < next_idx; ++i) {
+    uintT u_offset = offsetsU[i];
+    uintT u_deg = offsetsU[i+1] - u_offset;
+    for(uintT j=0; j < u_deg; ++j) {
+      uintT v = edgesU[u_offset+j];
+      uintT v_offset = offsetsV[v];
+      uintT v_deg = offsetsV[v+1] - v_offset;
       // Find neighbors (not equal to u) of v
-      for (long k = 0; k < v.getOutDegree(); ++k) {
-        uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx < i) {
-          seagulls[idx] = cons(i, u2_idx, U[i].getOutNeighbor(j));
+      for (uintT k = 0; k < v_deg; ++k) {
+        uintT u2 = edgesV[v_offset+k];
+        if (u2 < i) {
+          wedges[idx] = cons(i, u2, v);
           ++idx;
         }
         else break; 
       }
     }
   }
-  return seagulls;
+  return wedges;
 }
 
-template<class wedge, class vertex, class wedgeCons>
-wedge* _getWedges(const long nu, const vertex* V, const vertex* U, wedgeCons cons,
-  long num_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, long curr_idx=0, long next_idx=-1) {
+template<class wedge, class wedgeCons>
+wedge* _getWedges(bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintE* wedge_idxs, uintT curr_idx=0, uintT next_idx=-1) {
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
   if (next_idx == -1) next_idx = nu;
-  if (num_wedges < 10000) return _getWedges_seq<wedge>(nu, V, U, cons, num_wedges, curr_idx, next_idx);
+  if (num_wedges < 10000) return _getWedges_seq<wedge>(GA, use_v, cons, num_wedges, curr_idx, next_idx);
  
   // Allocate space for seagull storage
-  long num_sg = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
-  wedge* seagulls = newA(wedge, num_sg);
+  num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
+  wedge* wedges = newA(wedge, num_wedges);
   // Store seagulls in parallel
-  parallel_for(long i=curr_idx; i < next_idx; ++i) {
-    long sg_idx = wedge_idxs[i] - wedge_idxs[curr_idx];
+  parallel_for(uintT i=curr_idx; i < next_idx; ++i) {
+    long wedge_idx = wedge_idxs[i] - wedge_idxs[curr_idx];
     // Consider each neighbor v of active vertex u
-    //parallel_for(long j=0; j < U[i].getOutDegree(); ++j) {
+    uintT u_offset = offsetsU[i];
+    uintT u_deg = offsetsU[i+1] - u_offset;
     long idx = 0;
-    for(long j=0; j < U[i].getOutDegree(); ++j) {
-      const vertex v = V[U[i].getOutNeighbor(j)];
-      //long nbhd_idx = (nbhd_idxs[i])[j];
-      //long idx = 0;
+    for(uintT j=0; j < u_deg; ++j) {
+      uintT v = edgesU[u_offset+j];
+      uintT v_offset = offsetsV[v];
+      uintT v_deg = offsetsV[v+1] - v_offset;
       // Find neighbors (not equal to u) of v
-      for (long k = 0; k < v.getOutDegree(); ++k) {
-        uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx < i) {
-          seagulls[sg_idx+idx] = cons(i, u2_idx, U[i].getOutNeighbor(j));
+      for (uintT k = 0; k < v_deg; ++k) {
+        uintT u2 = edgesV[v_offset+k];
+        if (u2 < i) {
+          wedges[wedge_idx+idx] = cons(i, u2, v);
           ++idx;
         }
         else break;
       }
     }
   }
-  /*parallel_for(long i=curr_idx; i<next_idx;++i) { 
-    free(nbhd_idxs[i]); 
-  }*/
 
-  return seagulls;
+  return wedges;
 }
 
-template<class vertex, class wedgeCons, class T>
-void _getWedgesHash(T& wedges,long nu, vertex* V, vertex* U, wedgeCons cons, long num_wedges, long curr_idx=0, long next_idx=-1) {
+template<class wedgeCons, class T>
+void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintT curr_idx=0, uintT next_idx=-1) {
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
   if (next_idx == -1) next_idx = nu;
   wedges.resize(num_wedges);
   hashInsertTimer.start();
-  parallel_for(long i=curr_idx; i < next_idx; ++i){
+  parallel_for(uintT i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
-    parallel_for (long j=0; j < U[i].getOutDegree(); ++j ) {
-        const vertex v = V[U[i].getOutNeighbor(j)];
-        // Find all seagulls with center v and endpoint u
-        for (long k=0; k < v.getOutDegree(); ++k) { 
-          const uintE u2_idx = v.getOutNeighbor(k);
-          if (u2_idx < i) wedges.insert(make_pair(cons(i,u2_idx,U[i].getOutNeighbor(j)),1)); //(u_idx * nu + u2_idx, 1)
-          else break;
-        }
+    uintT u_offset = offsetsU[i];
+    uintT u_deg = offsetsU[i+1] - u_offset;
+    parallel_for (long j=0; j < u_deg; ++j ) {
+      uintT v = edgesU[u_offset+j];
+      uintT v_offset = offsetsV[v];
+      uintT v_deg = offsetsV[v+1] - v_offset;
+      // Find all seagulls with center v and endpoint u
+      for (long k=0; k < v_deg; ++k) { 
+        uintT u2 = edgesV[v_offset+k];
+        if (u2 < i) wedges.insert(make_pair(cons(i,u2,v),1));
+        else break;
+      }
     }
   }
   hashInsertTimer.stop();
 }
 
-template<class vertex>
-long getNextWedgeIdx_seq(long nu, vertex* V, vertex* U, long max_wedges, long curr_idx) {
+uintT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, uintT curr_idx) {
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
   long orig = max_wedges;
-  for(long i=curr_idx; i < nu; ++i) {
-    for(long j=0; j < U[i].getOutDegree(); ++j) {
-      vertex v = V[U[i].getOutNeighbor(j)];
+  for(uintT i=curr_idx; i < nu; ++i) {
+    uintT u_offset = offsetsU[i];
+    uintT u_deg = offsetsU[i+1] - u_offset;
+    for(uintT j=0; j < u_deg; ++j) {
+      uintT v = edgesU[u_offset+j];
+      uintT v_offset = offsetsV[v];
+      uintT v_deg = offsetsV[v+1] - v_offset;
       uintE num = 0;
-      for (long k=0; k < v.getOutDegree(); ++k) {
-        if (v.getOutNeighbor(k) < i) num ++;
+      for (uintT k=0; k < v_deg; ++k) {
+        if (edgesV[v_offset+k] < i) num ++;
         else break;
       }
       if (num > max_wedges) {
@@ -978,10 +880,10 @@ long getNextWedgeIdx_seq(long nu, vertex* V, vertex* U, long max_wedges, long cu
 }
 
 // TODO doubling search
-template<class vertex>
-long getNextWedgeIdx(long nu, vertex* V, vertex* U, long max_wedges, long curr_idx, uintE* wedge_idxs) {
+uintT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, uintT curr_idx, uintE* wedge_idxs) {
+  const long nu = use_v ? GA.nu : GA.nv;
   nextWedgeTimer.start();
-  if (nu - curr_idx < 2000) return getNextWedgeIdx_seq(nu, V, U, max_wedges, curr_idx);
+  if (nu - curr_idx < 2000) return getNextWedgeIdx_seq(GA, use_v, max_wedges, curr_idx);
 
   auto idx_map = make_in_imap<uintT>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
   auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
@@ -991,24 +893,27 @@ long getNextWedgeIdx(long nu, vertex* V, vertex* U, long max_wedges, long curr_i
   return find_idx; //TODO make sure right
 }
 
-template<class wedge, class vertex, class wedgeCons>
-pair<pair<wedge*,long>, long> getWedges(const long nu, const vertex* V, const vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges, uintE* wedge_idxs, uintE** nbhd_idxs) {
-  if (max_wedges >= num_wedges) return make_pair(make_pair(_getWedges<wedge>(nu, V, U, cons, num_wedges, wedge_idxs, nbhd_idxs), num_wedges), nu);
-  long next_idx = getNextWedgeIdx(nu, V, U, max_wedges, curr_idx, wedge_idxs);
+//TODO 3 tuple instead of nested pairs
+template<class wedge, class wedgeCons>
+pair<pair<wedge*,long>, uintT> getWedges(bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, uintT curr_idx, long num_wedges, uintE* wedge_idxs) {
+  const long nu = use_v ? GA.nu : GA.nv;
+  if (max_wedges >= num_wedges) return make_pair(make_pair(_getWedges<wedge>(GA, use_v, cons, num_wedges, wedge_idxs), num_wedges), nu);
+  long next_idx = getNextWedgeIdx(GA, use_v, max_wedges, curr_idx, wedge_idxs);
   num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
-  wedge* wedges = _getWedges<wedge>(nu, V, U, cons, num_wedges, wedge_idxs, nbhd_idxs, curr_idx, next_idx);
+  wedge* wedges = _getWedges<wedge>(GA, use_v, cons, num_wedges, wedge_idxs, curr_idx, next_idx);
   return make_pair(make_pair(wedges, num_wedges), next_idx);
 }
 
-template<class vertex, class wedgeCons, class T>
-long getWedgesHash(T& wedges, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges, uintE* wedge_idxs) {
-if (max_wedges >= num_wedges) {
-    _getWedgesHash(wedges, nu, V, U, cons, num_wedges);
+template<class wedgeCons, class T>
+uintT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, uintT curr_idx, long num_wedges, uintE* wedge_idxs) {
+  const long nu = use_v ? GA.nu : GA.nv;
+  if (max_wedges >= num_wedges) {
+    _getWedgesHash(wedges, GA, use_v, cons, num_wedges);
     return nu;
   }
-  long next_idx = getNextWedgeIdx(nu, V, U, max_wedges, curr_idx, wedge_idxs);
+  uintT next_idx = getNextWedgeIdx(GA, use_v, max_wedges, curr_idx, wedge_idxs);
   num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
-  _getWedgesHash(wedges, nu, V, U, cons, num_wedges, curr_idx, next_idx);
+  _getWedgesHash(wedges, GA, use_v, cons, num_wedges, curr_idx, next_idx);
   return next_idx;
 }
 

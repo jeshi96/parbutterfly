@@ -84,7 +84,7 @@ pair<uintE*, long> getWedgeFreqs(long nv, long nu, UVertexPair* wedges, long num
 }
 
 void countButterfliesSortCE(uintE* butterflies, long nv, long nu, UVertexPair* wedges, uintE* wedge_freqs_f, 
-            long num_wedge_freqs_f, bool use_v1) {
+  long num_wedge_freqs_f, bool use_v1) {
   // Given this list wedge_freqs_f, retrieve a list of indices for wedge_freqs_f such that
   // consecutive wedges have different first vertices
   // That is to say, the list we construct par_idxs_f is a list of indices on wedge_freqs_f,
@@ -123,19 +123,15 @@ void countButterfliesSort(uintE* butterflies, UVertexPair* wedges, uintE* wedge_
 }
 
 // This is the original compute function, without the more cache-efficient sorting method
-template <class vertex>
-long CountSort(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, long curr_idx=0) {
+uintT CountSort(bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
 
-  pair<pair<UVertexPair*,long>, long> wedges_pair  = getWedges<UVertexPair>(nu, V, U, UVertexPairCons(), max_wedges, curr_idx, num_wedges,
-    wedge_idxs, nbhd_idxs);
+  pair<pair<UVertexPair*,long>, uintT> wedges_pair  = getWedges<UVertexPair>(GA, use_v, UVertexPairCons(), max_wedges, curr_idx, num_wedges,
+    wedge_idxs);
 
   UVertexPair* wedges = wedges_pair.first.first;
   long num_wedges_curr = wedges_pair.first.second;
-
 
   // Retrieve frequency counts for all wedges with the same key
   // First, retrieve a list of indices where consecutive wedges have different keys
@@ -150,15 +146,12 @@ long CountSort(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* bu
 }
 
 // This is the new compute function, with cache efficient sorting
-template <class vertex>
-long CountSortCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, long curr_idx=0) {
+uintT CountSortCE(bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
 
-  pair<pair<UVertexPair*,long>, long> wedges_pair = getWedges<UVertexPair>(nu, V, U, UVertexPairCons(), max_wedges,
-    curr_idx, num_wedges, wedge_idxs, nbhd_idxs);
+  pair<pair<UVertexPair*,long>, uintT> wedges_pair = getWedges<UVertexPair>(GA, use_v, UVertexPairCons(), max_wedges,
+    curr_idx, num_wedges, wedge_idxs);
   UVertexPair* wedges = wedges_pair.first.first;
   long num_wedges_curr = wedges_pair.first.second;
 
@@ -183,16 +176,13 @@ long CountSortCE(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* 
 //********************************************************************************************
 
 // TODO modularize this stuff better
-template <class vertex>
-long CountHash(sparseAdditiveSet<uintE> wedges, bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, long curr_idx=0) {
+uintT CountHash(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
 
   using T = pair<uintE,uintE>;
 
-  long next_idx = getWedgesHash(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
+  uintT next_idx = getWedgesHash(wedges, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   
   _seq<T> wedge_freqs = wedges.entries();
 
@@ -200,8 +190,8 @@ long CountHash(sparseAdditiveSet<uintE> wedges, bipartiteGraph<vertex> GA, bool 
   parallel_for (long i=0; i < wedge_freqs.n; ++i) {
     T wedge_freq_pair = wedge_freqs.A[i];
     uintE num_butterflies = wedge_freq_pair.second;
-    uintE v1 = wedge_freq_pair.first / nu;
-    uintE v2 = wedge_freq_pair.first % nu;
+    uintT v1 = wedge_freq_pair.first / nu;
+    uintT v2 = wedge_freq_pair.first % nu;
     num_butterflies = num_butterflies * (num_butterflies - 1)/2;
 
     if (num_butterflies > 0){
@@ -214,24 +204,19 @@ long CountHash(sparseAdditiveSet<uintE> wedges, bipartiteGraph<vertex> GA, bool 
   return next_idx;
 }
 
-template <class vertex>
-long CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteGraph<vertex>& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, long curr_idx=0) {
+uintT CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
 
   using T = pair<uintE,uintE>;
 
-  long next_idx = getWedgesHash(wedges, nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
+  uintT next_idx = getWedgesHash(wedges, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   getWedgesFromHashTimer.start();
   _seq<T> wedge_freqs = wedges.entries();
   getWedgesFromHashTimer.stop();
   numButterfliesHashInsertTimer.start();
 
-  //sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);
   wedges.clear();
-
 
   // Retrieve count on each key; that number choose 2 is the number of butterflies
   parallel_for (long i=0; i < wedge_freqs.n; ++i) {
@@ -264,15 +249,13 @@ long CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteGraph<vertex>& GA, b
 //********************************************************************************************
 //********************************************************************************************
 
-template <class vertex>
-long CountHist(pbbsa::sequence<tuple<uintE, uintE>> tmp, pbbsa::sequence<tuple<uintE, uintE>> out, bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, long curr_idx=0) {
-  const long nv = use_v ? GA.nv : GA.nu;
+uintT CountHist(pbbsa::sequence<tuple<uintE, uintE>> tmp, pbbsa::sequence<tuple<uintE, uintE>> out,
+  bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
+
   using T = tuple<uintE,uintE>;
 
-  pair<pair<uintE*,long>, long> wedges_list_pair = getWedges<uintE>(nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs, nbhd_idxs);
+  pair<pair<uintE*,long>, uintT> wedges_list_pair = getWedges<uintE>(GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   uintE* wedges_list = wedges_list_pair.first.first;
   long num_wedges_curr = wedges_list_pair.first.second;
   pbbsa::sequence<uintE> wedges_seq = pbbsa::sequence<uintE>(wedges_list,num_wedges_curr);
@@ -289,8 +272,8 @@ long CountHist(pbbsa::sequence<tuple<uintE, uintE>> tmp, pbbsa::sequence<tuple<u
     uintE num_butterflies = get<1>(wedge_freq_pair);
     uintE wedge_freq_pair_first = get<0>(wedge_freq_pair);
 
-    uintE v1 = wedge_freq_pair_first / nu;
-    uintE v2 = wedge_freq_pair_first % nu;
+    uintT v1 = wedge_freq_pair_first / nu;
+    uintT v2 = wedge_freq_pair_first % nu;
 
     num_butterflies = num_butterflies * (num_butterflies - 1)/2;
 
@@ -300,21 +283,19 @@ long CountHist(pbbsa::sequence<tuple<uintE, uintE>> tmp, pbbsa::sequence<tuple<u
     }
   }
 
-  //free(wedge_freqs);
   free(wedges_list);
   return wedges_list_pair.second;
 }
 
-template <class vertex>
-long CountHistCE(pbbsa::sequence<tuple<uintE, uintE>>& tmp, pbbsa::sequence<tuple<uintE, uintE>>& out, bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, long curr_idx=0) {
-  const long nv = use_v ? GA.nv : GA.nu;
+//TODO can reuse more space
+uintT CountHistCE(pbbsa::sequence<tuple<uintE, uintE>>& tmp, pbbsa::sequence<tuple<uintE, uintE>>& out, 
+  bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
+  const long nv = use_v ? GA.nv : GA.nu;
 
   using X = tuple<uintE,uintE>;
 
-  pair<pair<uintE*,long>, long> wedges_list_pair = getWedges<uintE>(nu, V, U, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs, nbhd_idxs);
+  pair<pair<uintE*,long>, uintT> wedges_list_pair = getWedges<uintE>(GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   uintE* wedges_list = wedges_list_pair.first.first;
   long num_wedges_curr = wedges_list_pair.first.second;
   pbbsa::sequence<uintE> wedges_seq = pbbsa::sequence<uintE>(wedges_list,num_wedges_curr);
@@ -357,117 +338,7 @@ long CountHistCE(pbbsa::sequence<tuple<uintE, uintE>>& tmp, pbbsa::sequence<tupl
 //********************************************************************************************
 //********************************************************************************************
 
-template <class E, class I>
-struct nestA { 
-  E* arr1;
-  E* arr2;
-  nestA(E* _arr1, E* _arr2) : arr1(_arr1), arr2(_arr2) {}
-  inline E operator() (const I& i) const {
-    return arr1[arr2[i]] * (arr1[arr2[i]]-1) / 2;
-  }
-};
-
-template <class vertex>
-void CountSeq_helper(long curr_idx, long next_idx, uintE* wedges, uintE* used, uintE* butterflies,
-  const long nv, const long nu, const vertex* V, const vertex* U) {
-  parallel_for_1(long i=curr_idx; i < next_idx; ++i){
-    //seqLoopTimer.start();
-    //parallel_for(long i=0; i < nu; ++i) { wedges[i] = 0; }
-    //seqLoopTimer.stop();
-    long used_idx=0;
-    long shift = (i-curr_idx) * nu;
-    vertex u = U[i];
-    for (long j=0; j < u.getOutDegree(); ++j ) {
-      vertex v = V[u.getOutNeighbor(j)];
-      // Find all seagulls with center v and endpoint u
-      for (long k=0; k < v.getOutDegree(); ++k) { 
-        uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx < i) {
-	  
-          writeAdd(&butterflies[i*16], wedges[shift+u2_idx]);
-          writeAdd(&butterflies[u2_idx*16], wedges[shift+u2_idx]);
-          //writeAdd(&butterflies[8*(i-curr_idx)],wedges[shift + u2_idx]);
-	  wedges[shift+u2_idx]++;
-          if (wedges[shift + u2_idx] == 1) {used[shift + used_idx] = shift + u2_idx; used_idx++;}
-        }
-        else break;
-      }
-    }
-    //seqWriteTimer.start();
-    //uintE total = used_idx == 0 ? 0 : sequence::reduce<long>((long) shift, (long) shift + used_idx, addF<uintE>(), nestA<uintE, long>(wedges, used));
-    //cout << (double)used_idx/nu << endl;
-    //writeAdd(&butterflies[0], 2*total);
-    /* parallel_for(long j=shift; j < shift + used_idx; ++j) { */
-    /*   uintE num_butterflies = wedges[used[j]] * (wedges[used[j]] - 1) / 2; */
-    /*   writeAdd(&butterflies[used[j] - shift], num_butterflies); */
-    /* } */
-    //seqWriteTimer.stop();
-    parallel_for(long j=shift; j < shift + used_idx; ++j) { wedges[used[j]] = 0; }
-  }
-}
-
-template <class vertex>
-void CountSeq(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies, long max_wedges) {
-  const long nv = use_v ? GA.nv : GA.nu;
-  const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
-
-  long step = 1000;//max_wedges / nu;
-  uintE* wedges = newA(uintE, step * nu);
-  uintE* used = newA(uintE, step * nu);
-  parallel_for(long i=0; i < step * nu; ++i) { wedges[i] = 0; }
-  for(long i=0; i < nu; i += step) {
-    CountSeq_helper(i, i+step < nu ? i+step : nu, wedges, used, butterflies, nv, nu, V, U);
-  }
-
-  free(wedges);
-  free(used);
-}
-
-template <class vertex>
-void CountOrig(bipartiteGraph<vertex> GA, bool use_v, uintE* butterflies) {
-  const long nv = use_v ? GA.nv : GA.nu;
-  const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
-
-  long results = 0;
-
-  uintE* wedges = newA(uintE, nu);
-  uintE* used = newA(uintE, nu);
-  for(long i=0; i < nu; ++i) { wedges[i] = 0; }
-
-  for(long i=0; i < nu; ++i){
-    long used_idx = 0;
-    vertex u = U[i];
-    for (long j=0; j < U[i].getOutDegree(); ++j ) {
-      vertex v = V[U[i].getOutNeighbor(j)];
-      for (long k=0; k < v.getOutDegree(); ++k) { 
-        uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx < i) {
-          //butterflies[i] += wedges[u2_idx];
-          //butterflies[u2_idx] += wedges[u2_idx];
-          results += wedges[u2_idx];
-          wedges[u2_idx]++;
-          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
-        }
-        else break;
-      }
-    }
-    for(long j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
-  }
-  
-  free(wedges);
-  free(used);
-  cout << "num: " << results << "\n";
-}
-
-//********************************************************************************************
-//********************************************************************************************
-
-template <class vertex>
-void CountHash_helper(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, long type) {
+void CountHash_helper(bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, long type) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
 
@@ -484,7 +355,7 @@ void CountHash_helper(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, ui
     wedges.del();
     return;
   }
-  long curr_idx = 0;
+  uintT curr_idx = 0;
   while(curr_idx < nu) {
     if (type ==2) curr_idx = CountHash(wedges, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
     else curr_idx = CountHashCE(wedges, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
@@ -499,8 +370,7 @@ void CountHash_helper(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, ui
   numButterfliesHashInsertTimer.reportTotal("init and inserting into second hash table");
 }
 
-template <class vertex>
-void CountHist_helper(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE** nbhd_idxs, long type) {
+void CountHist_helper(bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, long type) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
 
@@ -508,70 +378,56 @@ void CountHist_helper(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, ui
   pbbsa::sequence<tuple<uintE, uintE>> out = pbbsa::sequence<tuple<uintE, uintE>>();
 
   if (max_wedges >= num_wedges) {
-    if (type == 4) CountHist(tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs);
-    else CountHistCE(tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs);
+    if (type == 4) CountHist(tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs);
+    else CountHistCE(tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs);
     return;
   }
-  long curr_idx = 0;
+  uintT curr_idx = 0;
   while(curr_idx < nu) {
-    if (type == 4) curr_idx = CountHist(tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, curr_idx);
-    else curr_idx = CountHistCE(tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, curr_idx);
+    if (type == 4) curr_idx = CountHist(tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
+    else curr_idx = CountHistCE(tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
   }
 }
 
-template <class vertex>
-uintE* Count(bipartiteGraph<vertex> GA, bool use_v, long num_wedges, long max_wedges, long type=0) {
+uintE* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long type=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
-  const vertex* V = use_v ? GA.V : GA.U;
-  const vertex* U = use_v ? GA.U : GA.V;
 
-  uintE* butterflies = newA(uintE, 16*nu);
-  parallel_for(long i=0;i<nu*16;++i){
+  //TODO put in thing where we don't have contention b./c of cache line
+  uintE* butterflies = newA(uintE, nu);
+  parallel_for(long i=0;i<nu;++i){
     butterflies[i] = 0;
   }
 
-  uintE* wedge_idxs = nullptr;
-  uintE** nbhd_idxs = nullptr;
+  uintE* wedge_idxs = countWedgesScan(GA, use_v, true, type != 2 && type != 3);
 
-  pair<uintE*, uintE**> idxs_pair = countWedgesScan(nu, V, U, true, type != 2 && type != 3);
-  wedge_idxs = idxs_pair.first;
-  nbhd_idxs = idxs_pair.second;
+  // TODO make enums?
+  if (type > 6 || type == 5) return butterflies;
 
-  if (type > 8 || type == 5) return butterflies;
-
+  // TODO make CountSorthelper so that this is more streamlined
   if (type == 2 || type == 3) {
     CountHash_helper(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, type);
+    free(wedge_idxs);
     return butterflies;
   }
   else if (type == 4 || type == 6) {
-    CountHist_helper(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, type);
-    return butterflies;
-  }
-  else if (type == 7) {
-    CountSeq(GA, use_v, butterflies, max_wedges);
-    seqWriteTimer.reportTotal("seq write time");
-    seqLoopTimer.reportTotal("seq allocate space time");
-    return butterflies;
-  }
-  else if (type ==8) {
-    CountOrig(GA, use_v, butterflies);
+    CountHist_helper(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, type);
+    free(wedge_idxs);
     return butterflies;
   }
 
   if (max_wedges >= num_wedges) {
-    if (type == 0) CountSort(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs);
-    else if (type == 1) CountSortCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs);
+    if (type == 0) CountSort(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs);
+    else if (type == 1) CountSortCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs);
     return butterflies;
   }
   long curr_idx = 0;
   while(curr_idx < nu) {
-    if (type == 0) curr_idx = CountSort(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, curr_idx);
-    else if (type == 1) curr_idx = CountSortCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, nbhd_idxs, curr_idx);
+    if (type == 0) curr_idx = CountSort(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
+    else if (type == 1) curr_idx = CountSortCE(GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
   }
 
-  if (wedge_idxs) free(wedge_idxs);
-  if (nbhd_idxs) free(nbhd_idxs);
+  free(wedge_idxs);
   return butterflies;
 
 }
