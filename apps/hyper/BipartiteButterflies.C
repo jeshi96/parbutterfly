@@ -596,15 +596,51 @@ tuple<bool,long,long*> cmpWedgeCounts(bipartiteCSR & GA) {
   const long nv = GA.nv, nu = GA.nu;
   long num_wedges_v = sequence::reduce<long>((long) 0, nv, addF<long>(), wedgeF<long>(GA.offsetsV));
   long num_wedges_u = sequence::reduce<long>((long) 0, nu, addF<long>(), wedgeF<long>(GA.offsetsU));
-  long* tuplePrefixSum;
+  long* workPrefixSum;
   if(num_wedges_v <= num_wedges_u) {
-    tuplePrefixSum = newA(long,nv);
-    sequence::scan<long>(tuplePrefixSum,(long) 0, nv, addF<long>(),wedgeF<long>(GA.offsetsV), 0, false, false);
+    workPrefixSum = newA(long,nu);
+    parallel_for(intT i=0;i<nu;i++) {
+      long u_work = 0;
+      intT u_offset = GA.offsetsU[i];
+      intT u_deg = GA.offsetsU[i+1]-GA.offsetsU[i];
+      for(intT j=0; j<u_deg;j++) {
+	intT v = GA.edgesU[u_offset+j];
+	intT v_offset = GA.offsetsV[v];
+	intT v_deg = GA.offsetsV[v+1]-GA.offsetsV[v];
+	// for(intT k=0; k<v_deg;k++) {
+	//   uintE u2_idx = GA.edgesV[v_offset+k];
+	//   if(u2_idx < i) u_work++;
+	//   else break;
+	
+	// }
+	u_work += GA.offsetsV[v+1]-GA.offsetsV[v];
+      }
+      workPrefixSum[i] = u_work;
+    }
+    sequence::plusScan(workPrefixSum,workPrefixSum,nu);
   } else {
-    tuplePrefixSum = newA(long,nu);
-    sequence::scan<long>(tuplePrefixSum,(long) 0, nu, addF<long>(),wedgeF<long>(GA.offsetsU), 0, false, false);
+    workPrefixSum = newA(long,nv);
+    parallel_for(intT i=0;i<nv;i++) {
+      long v_work = 0;
+      intT v_offset = GA.offsetsV[i];
+      intT v_deg = GA.offsetsV[i+1]-GA.offsetsV[i];
+      for(intT j=0; j<v_deg;j++) {
+	intT u = GA.edgesV[v_offset+j];
+	intT u_offset = GA.offsetsU[u];
+	intT u_deg = GA.offsetsU[u+1]-GA.offsetsU[u];
+	// for(intT k=0; k<u_deg; k++) {
+	//   uintE v2_idx = GA.edgesU[u_offset+k];
+	//   if(v2_idx < i) v_work++;
+	//   else break;
+	// }
+	v_work += GA.offsetsU[u+1]-GA.offsetsU[u];
+      }
+      workPrefixSum[i] = v_work;
+    }
+    sequence::plusScan(workPrefixSum,workPrefixSum,nv);
+    //sequence::scan<long>(tuplePrefixSum,(long) 0, nu, addF<long>(),wedgeF<long>(GA.offsetsU), 0, false, false);
   }
-  return make_tuple((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u, tuplePrefixSum);
+  return make_tuple((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u, workPrefixSum);
 }
 
 pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
@@ -784,7 +820,7 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* wed
       std::function<void(intT,intT)> recursive_lambda =
 	[&]
 	(intT start, intT end){
-	if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 2000)){ 
+	if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
 	  for (intT i = start; i < end; i++){
 	    intT used_idx = 0;
 	    intT shift = nu*(i-step*stepSize);
@@ -858,15 +894,17 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   // cout << "Done processing graph\n";
   //cout << G.nv << ", " << G.nu << "\n";
   //fflush(stdout);
-  
+  timer t1;
+  t1.start();
   tuple<bool,long,long*> use_v_tuple = cmpWedgeCounts(GA);
   bool use_v = get<0>(use_v_tuple);
   long num_wedges = get<1>(use_v_tuple);
-  long* wedgesPrefixSum = get<2>(use_v_tuple);
+  long* workPrefixSum = get<2>(use_v_tuple);
+  t1.reportTotal("compute wedge counts + work prefix sum");
   
   CountOrigCompactParallel(GA,use_v);
-  //CountOrigCompactParallel_WedgeAware(GA,use_v,wedgesPrefixSum);
-  free(wedgesPrefixSum);
+  //CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
+  free(workPrefixSum);
   //CountOrigCompact(GA,use_v);
   return;
   
