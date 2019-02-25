@@ -518,8 +518,6 @@ array_imap<uintE> Peel(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflie
   }
   return D;
 }
- 
-
 
 void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
   timer t1,t2;
@@ -680,7 +678,7 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* wed
       std::function<void(intT,intT)> recursive_lambda =
 	[&]
 	(intT start, intT end){
-	if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 2000)){ 
+	if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
 	  for (intT i = start; i < end; i++){
 	    intT used_idx = 0;
 	    intT shift = nu*(i-step*stepSize);
@@ -734,16 +732,19 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long max_wedges = P.getOptionLongValue("-m",2577500000);
 
   //TODO wedgesPrefixSum not needed except in CountOrigCompactParallel_WedgeAware
+  timer t1;
+  t1.start();
   tuple<bool,long,long*> use_v_tuple = cmpWedgeCounts(GA);
   bool use_v = get<0>(use_v_tuple);
   long num_wedges = get<1>(use_v_tuple);
+  t1.reportTotal("compute wedge counts + work prefix sum");
   
   //TODO seq code integrate w/count
   if (ty == 7) CountOrigCompactParallel(GA,use_v);
   else if (ty == 8) {
-  	long* wedgesPrefixSum = get<2>(use_v_tuple);
-  	CountOrigCompactParallel_WedgeAware(GA,use_v,wedgesPrefixSum);
-  	free(wedgesPrefixSum);
+  	long* workPrefixSum = get<2>(use_v_tuple);
+  	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
+  	free(workPrefixSum);
   	return;
   }
   else if (ty == 9) CountOrigCompact(GA,use_v);
