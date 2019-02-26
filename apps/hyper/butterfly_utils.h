@@ -783,15 +783,13 @@ long getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeC
 //***************************************************************************************************
 
 template<class wedge, class wedgeCons>
-wedge* _getWedges_seq(bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintT curr_idx, uintT next_idx) {
+void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintT curr_idx, uintT next_idx) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  wedge* wedges = newA(wedge, num_wedges);
-  
   long idx = 0;
   for(uintT i=curr_idx; i < next_idx; ++i) {
     uintT u_offset = offsetsU[i];
@@ -811,23 +809,26 @@ wedge* _getWedges_seq(bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wed
       }
     }
   }
-  return wedges;
 }
 
 template<class wedge, class wedgeCons>
-wedge* _getWedges(bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintE* wedge_idxs, uintT curr_idx=0, uintT next_idx=-1) {
+void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintE* wedge_idxs, uintT curr_idx=0, uintT next_idx=-1) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  if (next_idx == -1) next_idx = nu;
-  if (num_wedges < 10000) return _getWedges_seq<wedge>(GA, use_v, cons, num_wedges, curr_idx, next_idx);
- 
   // Allocate space for seagull storage
-  num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
-  wedge* wedges = newA(wedge, num_wedges);
+  if (wedges_seq.n < num_wedges) {
+    free(wedges_seq.A);
+    wedges_seq.A = newA(wedge, num_wedges);
+    wedges_seq.n = num_wedges;
+  }
+
+  if (next_idx == -1) next_idx = nu;
+  if (num_wedges < 10000) return _getWedges_seq<wedge>(wedges_seq.A, GA, use_v, cons, num_wedges, curr_idx, next_idx);
+ 
   // Store seagulls in parallel
   parallel_for(uintT i=curr_idx; i < next_idx; ++i) {
     long wedge_idx = wedge_idxs[i] - wedge_idxs[curr_idx];
@@ -843,15 +844,13 @@ wedge* _getWedges(bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
       for (uintT k = 0; k < v_deg; ++k) {
         uintT u2 = edgesV[v_offset+k];
         if (u2 < i) {
-          wedges[wedge_idx+idx] = cons(i, u2, v);
+          wedges_seq.A[wedge_idx+idx] = cons(i, u2, v);
           ++idx;
         }
         else break;
       }
     }
   }
-
-  return wedges;
 }
 
 template<class wedgeCons, class T>
@@ -930,13 +929,16 @@ uintT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, uintT curr_
 
 //TODO 3 tuple instead of nested pairs
 template<class wedge, class wedgeCons>
-pair<pair<wedge*,long>, uintT> getWedges(bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, uintT curr_idx, long num_wedges, uintE* wedge_idxs) {
+pair<long, uintT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, uintT curr_idx, long num_wedges, uintE* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
-  if (max_wedges >= num_wedges) return make_pair(make_pair(_getWedges<wedge>(GA, use_v, cons, num_wedges, wedge_idxs), num_wedges), nu);
+  if (max_wedges >= num_wedges) {
+    _getWedges<wedge>(wedges, GA, use_v, cons, num_wedges, wedge_idxs);
+    return make_pair(num_wedges, nu);
+  }
   long next_idx = getNextWedgeIdx(GA, use_v, max_wedges, curr_idx, wedge_idxs);
   num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
-  wedge* wedges = _getWedges<wedge>(GA, use_v, cons, num_wedges, wedge_idxs, curr_idx, next_idx);
-  return make_pair(make_pair(wedges, num_wedges), next_idx);
+  _getWedges<wedge>(wedges, GA, use_v, cons, num_wedges, wedge_idxs, curr_idx, next_idx);
+  return make_pair(num_wedges, next_idx);
 }
 
 template<class wedgeCons, class T>
