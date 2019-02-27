@@ -210,10 +210,10 @@ intT CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v,
   using T = pair<uintE,uintE>;
 
   intT next_idx = getWedgesHash(wedges, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
-  getWedgesFromHashTimer.start();
+  //getWedgesFromHashTimer.start();
   _seq<T> wedge_freqs = wedges.entries();
-  getWedgesFromHashTimer.stop();
-  numButterfliesHashInsertTimer.start();
+  //getWedgesFromHashTimer.stop();
+  //numButterfliesHashInsertTimer.start();
 
   wedges.clear();
 
@@ -238,7 +238,7 @@ intT CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v,
     T butterfly_pair = butterflies_seq.A[i];
     butterflies[butterfly_pair.first] += butterfly_pair.second;
   }
-  numButterfliesHashInsertTimer.stop();  
+  //numButterfliesHashInsertTimer.stop();  
   butterflies_seq.del();
   return next_idx;
 }
@@ -335,12 +335,12 @@ void CountHash_helper(bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butt
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
 
-  initHashTimer.start();
+  //initHashTimer.start();
 
   sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);
   // TODO fix hist so that it saves storage
   // TODO also can config float factor for hash table
-  initHashTimer.stop();
+  //initHashTimer.stop();
 
   if (max_wedges >= num_wedges) {
     if (type == 2) CountHash(wedges, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs);
@@ -356,11 +356,11 @@ void CountHash_helper(bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butt
   }
   wedges.del();
 
-  nextWedgeTimer.reportTotal("getting next wedge");
+  /*nextWedgeTimer.reportTotal("getting next wedge");
   initHashTimer.reportTotal("init first hash table");
   hashInsertTimer.reportTotal("inserting into first hash table");
   getWedgesFromHashTimer.reportTotal("extract from first hash table");
-  numButterfliesHashInsertTimer.reportTotal("init and inserting into second hash table");
+  numButterfliesHashInsertTimer.reportTotal("init and inserting into second hash table");*/
 }
 
 void CountHist_helper(bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, long type) {

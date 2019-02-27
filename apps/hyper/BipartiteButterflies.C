@@ -762,7 +762,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
-
+/*
   timer t2;
   t2.start();
   auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
@@ -773,7 +773,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   uintE mc = 0;
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;
+  cout << "### Max core: " << mc << endl;*/
 
   free(butterflies);
 /*  
@@ -810,7 +810,7 @@ int parallel_main(int argc, char* argv[]) {
   char* iFile = P.getArgument(0);
   //long rounds = P.getOptionLongValue("-rounds",3);
 
-  bipartiteCSR G = readBipartite(iFile);
+  bipartiteCSR G = KONECTToBp(iFile);//readBipartite(iFile);
 
   Compute(G,P);
   // for(int r=0;r<rounds;r++) {
