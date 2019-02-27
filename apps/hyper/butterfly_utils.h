@@ -296,6 +296,15 @@ bipartiteCSR readBipartite(char* fname) {
       if(edgesU[i] < 0 || edgesU[i] >= nv) { cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0); }
     }}
 
+  {parallel_for(long i=0; i < nu; ++i) {
+  	// Sort from edgesU[offsetsU[i]] to edgesU[offsetsU[i+1]-1]
+  	quickSort(&edgesU[offsetsU[i]], offsetsU[i+1] - offsetsU[i], less<uintE>());
+  }}
+
+  {parallel_for(long i=0; i < nv; ++i) {
+  	// Sort from edgesU[offsetsU[i]] to edgesU[offsetsU[i+1]-1]
+  	quickSort(&edgesV[offsetsV[i]], offsetsV[i+1] - offsetsV[i], less<uintE>());
+  }}
   //W.del(); // to deal with performance bug in malloc
 
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
@@ -588,7 +597,7 @@ uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
         intT v_deg = offsetsV[v+1] - v_offset;
         for (intT k = 0; k < v_deg; ++k) { //TODO can parallelize this too technically
           if (edgesV[v_offset + k] < i) nbhd_idxs[i][j] ++;
-          //else break;
+          else break;
         }
       }
     }
@@ -855,7 +864,7 @@ void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons,
           wedges[idx] = cons(i, u2, v);
           ++idx;
         }
-        //else break; 
+        else break; 
       }
     }
   }
@@ -897,7 +906,7 @@ void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons
           wedges_seq.A[wedge_idx+idx] = cons(i, u2, v);
           ++idx;
         }
-        //else break;
+        else break;
       }
     }
   }
@@ -926,7 +935,7 @@ void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, lon
       for (long k=0; k < v_deg; ++k) { 
         uintE u2 = edgesV[v_offset+k];
         if (u2 < i) wedges.insert(make_pair(cons(i,u2,v),1));
-        //else break;
+        else break;
       }
     }
   }
@@ -951,7 +960,7 @@ intT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, intT cur
       uintE num = 0;
       for (intT k=0; k < v_deg; ++k) {
         if (edgesV[v_offset+k] < i) num ++;
-        //else break;
+        else break;
       }
       if (num > max_wedges) {
         if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
