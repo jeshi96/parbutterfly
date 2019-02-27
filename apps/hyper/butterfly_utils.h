@@ -44,30 +44,39 @@ struct getV {
   }
 };
 
-template <class vertex, class E>
+template <class E>
 struct seagullSumHelper { 
-  vertex* V;
-  vertex u;
-  seagullSumHelper(vertex* _V,vertex _u) : V(_V),u(_u) {}
+  uintE u;
+  uintT* offsetsU;
+  uintT* offsetsV;
+  uintE* edgesU;
+  seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) : u(_u), offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU) {}
   inline E operator() (const E& i) const {
-	return (E) (V[u.getOutNeighbor(i)].getOutDegree() - 1);
+    intT u_offset = offsetsU[u];
+    uintE v = edgesU[u_offset + i];
+	  return (E) (offsetsV[v+1] - offsetsV[v] - 1);
   }
 };
 
-template <class vertex, class E>
+template <class E>
 struct seagullSum { 
-  vertex* V;
-  vertex* U;
+  uintT* offsetsU;
+  uintT* offsetsV;
+  uintE* edgesU;
   uintE* active;
-  seagullSum(vertex* _V,vertex* _U, uintE* _active) : V(_V),U(_U),active(_active) {}
+  seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) : offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
   inline E operator() (const E& i) const {
-	const vertex u = U[active[i]];
-  E ret=0;
-  for (long k=0; k < u.getOutDegree(); ++k) {
-    ret += V[u.getOutNeighbor(k)].getOutDegree() - 1;
-  }
+    uintE u = active[i];
+    intT u_offset = offsetsU[u];
+    intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
+    E ret=0;
+    for (long k=0; k < u_deg; ++k) {
+      uintE v = edgesU[u_offset + k];
+      ret += (offsetsV[v+1] - offsetsV[v] - 1);
+    }
   return ret;
-	//return sequence::reduce<E>((E) 0, (long) U[u_idx].getOutDegree(), addF<E>(),seagullSumHelper<vertex,E>(V,U[u_idx]));
+    //long u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
+	//  return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
   }
 };
 
@@ -546,7 +555,7 @@ tuple<long, uintE*> intersect_hash(uintE* a, uintE* b, size_t num_a, size_t num_
 //********************************************************************************************
 
 //TODO we don't use nbhrs or save nbhrs -- delete from everything
-uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false, bool save_nbhrs=false) {
+uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -559,27 +568,27 @@ uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false, bool save_
   using T = uintT*;
   T* nbhd_idxs = newA(T, nu);
 
-  parallel_for(uintT i=0; i < nu; ++i) {
+  parallel_for(intT i=0; i < nu; ++i) {
     idxs[i] = 0;
-    uintT u_offset = offsetsU[i];
-    uintE u_deg = offsetsU[i+1] - u_offset;
+    intT u_offset = offsetsU[i];
+    intT u_deg = offsetsU[i+1] - u_offset;
 
     nbhd_idxs[i] = newA(uintE, u_deg + 1);
-    parallel_for(uintT j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;}
+    parallel_for(intT j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;}
 
-    parallel_for(uintT j=0; j < u_deg; ++j) { //TODO can parallelize this too technically
+    parallel_for(intT j=0; j < u_deg; ++j) { //TODO can parallelize this too technically
       if (!half) {
-        uintT v = edgesU[u_offset + j];
+        uintE v = edgesU[u_offset + j];
         (nbhd_idxs[i])[j] = offsetsV[v+1] - offsetsV[v] - 1;//V[U[i].getOutNeighbor(j)].getOutDegree() - 1;
       }
       else {
         (nbhd_idxs[i])[j] = 0;
-        uintT v = edgesU[u_offset + j];
-        uintT v_offset = offsetsV[v];
-        uintT v_deg = offsetsV[v+1] - v_offset;
-        for (uintT k = 0; k < v_deg; ++k) { //TODO can parallelize this too technically
+        uintE v = edgesU[u_offset + j];
+        intT v_offset = offsetsV[v];
+        intT v_deg = offsetsV[v+1] - v_offset;
+        for (intT k = 0; k < v_deg; ++k) { //TODO can parallelize this too technically
           if (edgesV[v_offset + k] < i) nbhd_idxs[i][j] ++;
-          else break;
+          //else break;
         }
       }
     }
@@ -597,34 +606,53 @@ uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false, bool save_
 //***************************************************************************************************
 //***************************************************************************************************
 
-template<class wedge, class vertex, class wedgeCons, class Sequence>
-wedge* _getWedges_seq2(Sequence I, const long nu, const vertex* V, const vertex* U, wedgeCons cons, long num_wedges,
-  long curr_idx, long next_idx) {
-  wedge* seagulls = newA(wedge, num_wedges);
+template<class wedge, class wedgeCons, class Sequence>
+void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
+  intT curr_idx, intT next_idx) {
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
   long idx = 0;
-  for(long i=curr_idx; i < next_idx; ++i) {
-    uintE u_idx = I[i];
-    vertex u = U[u_idx];
-    for(long j=0; j < u.getOutDegree(); ++j) {
-      vertex v = V[u.getOutNeighbor(j)];
+  for(intT i=curr_idx; i < next_idx; ++i) {
+    uintE u = I[i];
+    intT u_offset = offsetsU[u];
+    intT u_deg = offsetsU[u+1] - u_offset;
+    for(intT j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset + j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
       // Find neighbors (not equal to u) of v
-      for (long k = 0; k < v.getOutDegree(); ++k) {
-        uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx != u_idx) {
-          seagulls[idx] = cons(u_idx, u2_idx, u.getOutNeighbor(j));
+      for (intT k = 0; k < v_deg; ++k) {
+        uintE u2 = edgesV[v_offset + k];
+        if (u2 != u) {
+          wedges_seq.A[idx] = cons(u, u2, v);
           ++idx;
         }
       }
     }
   }
-  return seagulls;
 }
 
-template<class wedge, class vertex, class wedgeCons, class Sequence, class F>
-wedge* _getWedges2(Sequence I, const long nu, const vertex* V, const vertex* U, wedgeCons cons,
-  long num_wedges, long curr_idx=0, long next_idx=-1) {
-  if (next_idx == -1) next_idx = nu;
-  if (num_wedges < 10000) return _getWedges_seq2<wedge>(I, nu, V, U, cons, num_wedges, curr_idx, next_idx);
+template<class wedge, class wedgeCons, class Sequence>
+void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
+  intT curr_idx=0, intT next_idx=INT_T_MAX) {
+
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  if (wedges_seq.n < num_wedges) {
+    free(wedges_seq.A);
+    wedges_seq.A = newA(wedge, num_wedges);
+    wedges_seq.n = num_wedges;
+  }
+
+  if (next_idx == INT_T_MAX) next_idx = num_I;
+  if (num_wedges < 10000) return _getActiveWedges_seq<wedge>(wedges_seq, I, num_I, GA, use_v, cons, num_wedges, curr_idx, next_idx);
+
   // First, we must retrive the indices at which to store each seagull (so that storage can be parallelized)
   // Array of indices associated with seagulls for each active vertex
   long* sg_idxs = newA(long, next_idx - curr_idx + 1);
@@ -634,16 +662,18 @@ wedge* _getWedges2(Sequence I, const long nu, const vertex* V, const vertex* U, 
   using T = long*;
   T* nbhd_idxs = newA(T, next_idx-curr_idx); 
 
-  parallel_for(long i=curr_idx; i < next_idx; ++i) {
+  parallel_for(intT i=curr_idx; i < next_idx; ++i) {
     // Set up for each active vertex
-    const uintE u_idx = I[i];
-    const uintE u_deg = U[u_idx].getOutDegree();
+    uintE u = I[i];
+    intT u_offset = offsetsU[u];
+    long u_deg = offsetsU[u+1] - u_offset;
     // Allocate space for indices associated with each neighbor of u
     nbhd_idxs[i-curr_idx] = newA(long, u_deg + 1);
     (nbhd_idxs[i-curr_idx])[u_deg] = 0;
     // Assign indices associated with each neighbor of u
-    parallel_for(long j=0; j < u_deg; ++j) {
-      (nbhd_idxs[i-curr_idx])[j] = V[U[u_idx].getOutNeighbor(j)].getOutDegree()-1;
+    parallel_for(intT j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset + j];
+      (nbhd_idxs[i-curr_idx])[j] = offsetsV[v+1] - offsetsV[v] - 1;
     }
     sequence::plusScan(nbhd_idxs[i-curr_idx], nbhd_idxs[i-curr_idx], u_deg+1);
     // Set up indices associated with u
@@ -652,25 +682,24 @@ wedge* _getWedges2(Sequence I, const long nu, const vertex* V, const vertex* U, 
   // Assign indices associated with each active vertex
   sequence::plusScan(sg_idxs, sg_idxs, next_idx-curr_idx + 1);
 
-  // Allocate space for seagull storage
-  long num_sg = sg_idxs[next_idx-curr_idx];
-  wedge* seagulls = newA(wedge, num_sg);
-
   // Store seagulls in parallel
-  parallel_for(long i=curr_idx; i < next_idx; ++i) {
-    uintE u_idx = I[i];
+  parallel_for(intT i=curr_idx; i < next_idx; ++i) {
+    uintE u = I[i];
+    intT u_offset = offsetsU[u];
+    intT u_deg = offsetsU[u+1] - u_offset;
     long sg_idx = sg_idxs[i-curr_idx];
     // Consider each neighbor v of active vertex u
-    parallel_for(long j=0; j < U[u_idx].getOutDegree(); ++j) {
-      const vertex v = V[U[u_idx].getOutNeighbor(j)];
-      const uintE v_deg = v.getOutDegree();
+    parallel_for(intT j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset + j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
       long nbhd_idx = (nbhd_idxs[i-curr_idx])[j];
       long idx = 0;
       // Find neighbors (not equal to u) of v
-      for (long k = 0; k < v_deg; ++k) {
-        uintE u2_idx = v.getOutNeighbor(k);
-        if (u2_idx != u_idx) {
-          seagulls[sg_idx+nbhd_idx+idx] = cons(u_idx, u2_idx, U[u_idx].getOutNeighbor(j));
+      for (intT k = 0; k < v_deg; ++k) {
+        uintE u2 = edgesV[v_offset + k];
+        if (u2 != u) {
+          wedges_seq.A[sg_idx+nbhd_idx+idx] = cons(u, u2, v);
           ++idx;
         }
       }
@@ -678,141 +707,162 @@ wedge* _getWedges2(Sequence I, const long nu, const vertex* V, const vertex* U, 
   }
 
   // Cleanup
-  parallel_for(long i=curr_idx; i<next_idx;++i) { 
-    free(nbhd_idxs[i]); 
+  parallel_for(intT i=curr_idx; i<next_idx;++i) { 
+    free(nbhd_idxs[i-curr_idx]); 
   }
   free(nbhd_idxs);
   free(sg_idxs);
-
-  return seagulls;
 }
 
-template<class vertex, class wedgeCons, class T, class Sequence>
-void _getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeCons cons, long num_wedges, long curr_idx=0, long next_idx=-1) {
-  if (next_idx == -1) next_idx = nu;
+template<class wedgeCons, class T, class Sequence>
+void _getActiveWedgesHash(T& wedges, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, 
+  intT curr_idx=0, intT next_idx=INT_T_MAX) {
+
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  if (next_idx == INT_T_MAX) next_idx = num_I;
   wedges.resize(num_wedges);
-  hashInsertTimer.start();
-  parallel_for(long i=curr_idx; i < next_idx; ++i){
+
+  parallel_for(intT i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
-    const uintE u_idx = I[i];
-    const uintE u_deg = U[u_idx].getOutDegree();
-
-    parallel_for (long j=0; j < u_deg; ++j ) {
-        const vertex v = V[U[u_idx].getOutNeighbor(j)];
-        const uintE v_deg = v.getOutDegree();
-        // Find all seagulls with center v and endpoint u
-        for (long k=0; k < v_deg; ++k) { 
-          const uintE u2_idx = v.getOutNeighbor(k);
-
-          if (u2_idx != u_idx) wedges.insert(make_pair(cons(u_idx,u2_idx,U[u_idx].getOutNeighbor(j)),1)); //(u_idx * nu + u2_idx, 1)
-	}
+    uintE u = I[i];
+    intT u_offset = offsetsU[u];
+    intT u_deg = offsetsU[u+1] - u_offset;
+    parallel_for (intT j=0; j < u_deg; ++j ) {
+      uintE v = edgesU[u_offset + j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
+      // Find all seagulls with center v and endpoint u
+      for (intT k=0; k < v_deg; ++k) { 
+        uintE u2 = edgesV[v_offset + k];
+        if (u2 != u) wedges.insert(make_pair(cons(u,u2,v),1));
+	    }
     }
   }
-  hashInsertTimer.stop();
 }
 
-template<class vertex, class Sequence>
-pair<long,long> getNextWedgeIdx_seq2(Sequence I, long nu, vertex* V, vertex* U, long max_wedges, long curr_idx) {
-  long orig = max_wedges;
-  for(long i=curr_idx; i < nu; ++i) {
-    uintE u_idx = I[i];
-    for(long j=0; j < U[u_idx].getOutDegree(); ++j) {
-      uintE num = V[U[u_idx].getOutNeighbor(j)].getOutDegree() - 1;
-      if (num > max_wedges) {
+template<class Sequence>
+pair<long,intT> getNextActiveWedgeIdx_seq(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  long num_wedges = 0;
+  for(intT i=curr_idx; i < num_I; ++i) {
+    uintE u = I[i];
+    intT u_offset = offsetsU[u];
+    intT u_deg = offsetsU[u+1] - u_offset;
+    long num = 0;
+    for(intT j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset + j];
+      intT v_deg = offsetsV[v+1] - offsetsV[v];
+      num += (v_deg - 1);
+      if (num_wedges + num > max_wedges) {
         if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
-        return make_pair(i, orig - max_wedges);
+        return make_pair(num_wedges, i);
       }
-      else { max_wedges -= num; }
     }
+    num_wedges += num;
   }
-  return make_pair(nu, orig - max_wedges);
+  return make_pair(num_wedges, num_I);
 }
 
 // TODO based on half can also optimize this stuff? but will be hard to parallelize later so maybe not
 //JS: there looks to be some inefficiency here. we should have gotten the prefix sum of wedges for all vertices at the beginning, so we don't need to recompute it here. binary search can use a doubling search instead, starting at the last index until getting the right range, then binary search inside.
-template<class vertex, class Sequence>
-pair<long,long> getNextWedgeIdx2(Sequence I, long nu, vertex* V, vertex* U, long max_wedges, long curr_idx) {
-  nextWedgeTimer.start();
-  if (nu - curr_idx < 10000) return getNextWedgeIdx_seq2(I, nu, V, U, max_wedges, curr_idx);
-  uintE* idxs = newA(uintE, nu - curr_idx + 1);
-  idxs[nu-curr_idx] = 0;
-  parallel_for(long i=curr_idx; i < nu; ++i) {
+template<class Sequence>
+pair<long, intT> getNextActiveWedgeIdx(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  if (num_I - curr_idx < 10000) return getNextActiveWedgeIdx_seq(I, num_I, GA, use_v, max_wedges, curr_idx);
+  long* idxs = newA(long, num_I - curr_idx + 1);
+  idxs[num_I-curr_idx] = 0;
+  parallel_for(intT i=curr_idx; i < num_I; ++i) {
     idxs[i-curr_idx] = 0;
-    uintE u_idx = I[i];
-    for(long j=0; j < U[u_idx].getOutDegree(); ++j) {
-      idxs[i-curr_idx] += V[U[u_idx].getOutNeighbor(j)].getOutDegree() - 1;
+    uintE u = I[i];
+    intT u_offset = offsetsU[u];
+    intT u_deg = offsetsU[u+1] - u_offset;
+    for(intT j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset + j];
+      intT v_deg = offsetsV[v+1] - offsetsV[v];
+      idxs[i-curr_idx] += (v_deg - 1);
     }
   }
-  sequence::plusScan(idxs, idxs, nu - curr_idx + 1);
+  sequence::plusScan(idxs, idxs, num_I - curr_idx + 1);
 
-  auto idx_map = make_in_imap<uintT>(nu - curr_idx, [&] (size_t i) { return idxs[i+1]; });
-  auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
+  auto idx_map = make_in_imap<long>(num_I - curr_idx, [&] (size_t i) { return idxs[i+1]; });
+  auto lte = [] (const long& l, const long& r) { return l <= r; };
   size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
   long num = idxs[find_idx - curr_idx];
   free(idxs);
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
-  nextWedgeTimer.stop();
-  return make_pair(find_idx, num); //TODO make sure right
+
+  return make_pair(num, find_idx); //TODO make sure right
 }
 
-template<class wedge, class vertex, class wedgeCons, class Sequence, class F>
-pair<pair<wedge*,long>, long> getWedges2(Sequence I, const long nu, const vertex* V, const vertex* U, wedgeCons cons,
-  long max_wedges, long curr_idx, long num_wedges) {
-  if (max_wedges >= num_wedges) return make_pair(make_pair(_getWedges2<wedge>(I, nu, V, U, cons, num_wedges), num_wedges), nu);
-
-  pair<long, long> p = getNextWedgeIdx2(I, nu, V, U, max_wedges, curr_idx);
-  long next_idx = p.first;
-  num_wedges = p.second;
-  return make_pair(make_pair(_getWedges2<wedge>(I, nu, V, U, cons, num_wedges, curr_idx, next_idx), num_wedges), next_idx);
-}
-
-template<class vertex, class wedgeCons, class T, class Sequence>
-long getWedgesHash2(T& wedges, Sequence I, long nu, vertex* V, vertex* U, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges) {
+template<class wedge, class wedgeCons, class Sequence>
+pair<long, intT> getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+  long max_wedges, intT curr_idx, long num_wedges) {
   if (max_wedges >= num_wedges) {
-    _getWedgesHash2(wedges, I, nu, V, U, cons, num_wedges);
-    return nu;
+    _getActiveWedges<wedge>(wedges_seq, I, num_I, GA, use_v, cons, num_wedges);
+    return make_pair(num_wedges, num_I);
   }
-  pair<long, long> p = getNextWedgeIdx2(I, nu, V, U, max_wedges, curr_idx);
-  long next_idx = p.first;
-  num_wedges = p.second;
-  _getWedgesHash2(wedges, I, nu, V, U, cons, num_wedges, curr_idx, next_idx);
-  return next_idx;
+
+  pair<long, intT> p = getNextActiveWedgeIdx(I, num_I, GA, use_v, max_wedges, curr_idx);
+  _getActiveWedges<wedge>(wedges_seq, I, num_I, GA, use_v, cons, p.first, curr_idx, p.second);
+  return p;
+}
+
+template<class wedgeCons, class T, class Sequence>
+long getActiveWedgesHash(T& wedges, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges) {
+  if (max_wedges >= num_wedges) {
+    _getActiveWedgesHash(wedges, I, num_I, GA, use_v, cons, num_wedges);
+    return num_I;
+  }
+  pair<long, intT> p = getNextActiveWedgeIdx(I, num_I, GA, use_v, max_wedges, curr_idx);
+  _getActiveWedgesHash(wedges, I, num_I, GA, use_v, cons, p.first, curr_idx, p.second);
+  return p.second;
 }
 
 //***************************************************************************************************
 //***************************************************************************************************
 
 template<class wedge, class wedgeCons>
-void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintT curr_idx, uintT next_idx) {
+void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx, intT next_idx) {
   const long nu = use_v ? GA.nu : GA.nv;
+  const long nv = use_v ? GA.nv : GA.nu;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   long idx = 0;
-  for(uintT i=curr_idx; i < next_idx; ++i) {
-    uintT u_offset = offsetsU[i];
-    uintT u_deg = offsetsU[i+1] - u_offset;
-    for(uintT j=0; j < u_deg; ++j) {
-      uintT v = edgesU[u_offset+j];
-      uintT v_offset = offsetsV[v];
-      uintT v_deg = offsetsV[v+1] - v_offset;
+  for(intT i=curr_idx; i < next_idx; ++i) {
+    intT u_offset = offsetsU[i];
+    intT u_deg = offsetsU[i+1] - u_offset;
+    for(intT j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
       // Find neighbors (not equal to u) of v
-      for (uintT k = 0; k < v_deg; ++k) {
-        uintT u2 = edgesV[v_offset+k];
+      for (intT k = 0; k < v_deg; ++k) {
+        uintE u2 = edgesV[v_offset+k];
         if (u2 < i) {
           wedges[idx] = cons(i, u2, v);
           ++idx;
         }
-        else break; 
+        //else break; 
       }
     }
   }
 }
 
 template<class wedge, class wedgeCons>
-void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintE* wedge_idxs, uintT curr_idx=0, uintT next_idx=-1) {
+void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintE* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -826,64 +876,64 @@ void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons
     wedges_seq.n = num_wedges;
   }
 
-  if (next_idx == -1) next_idx = nu;
+  if (next_idx == INT_T_MAX) next_idx = nu;
   if (num_wedges < 10000) return _getWedges_seq<wedge>(wedges_seq.A, GA, use_v, cons, num_wedges, curr_idx, next_idx);
  
   // Store seagulls in parallel
-  parallel_for(uintT i=curr_idx; i < next_idx; ++i) {
+  parallel_for(intT i=curr_idx; i < next_idx; ++i) {
     long wedge_idx = wedge_idxs[i] - wedge_idxs[curr_idx];
     // Consider each neighbor v of active vertex u
-    uintT u_offset = offsetsU[i];
-    uintT u_deg = offsetsU[i+1] - u_offset;
+    intT u_offset = offsetsU[i];
+    intT u_deg = offsetsU[i+1] - u_offset;
     long idx = 0;
-    for(uintT j=0; j < u_deg; ++j) {
-      uintT v = edgesU[u_offset+j];
-      uintT v_offset = offsetsV[v];
-      uintT v_deg = offsetsV[v+1] - v_offset;
+    for(intT j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
       // Find neighbors (not equal to u) of v
-      for (uintT k = 0; k < v_deg; ++k) {
-        uintT u2 = edgesV[v_offset+k];
+      for (intT k = 0; k < v_deg; ++k) {
+        intT u2 = edgesV[v_offset+k];
         if (u2 < i) {
           wedges_seq.A[wedge_idx+idx] = cons(i, u2, v);
           ++idx;
         }
-        else break;
+        //else break;
       }
     }
   }
 }
 
 template<class wedgeCons, class T>
-void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintT curr_idx=0, uintT next_idx=-1) {
+void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx=0, intT next_idx=INT_T_MAX) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  if (next_idx == -1) next_idx = nu;
+  if (next_idx == INT_T_MAX) next_idx = nu;
   wedges.resize(num_wedges);
   hashInsertTimer.start();
-  parallel_for(uintT i=curr_idx; i < next_idx; ++i){
+  parallel_for(intT i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
-    uintT u_offset = offsetsU[i];
-    uintT u_deg = offsetsU[i+1] - u_offset;
+    intT u_offset = offsetsU[i];
+    intT u_deg = offsetsU[i+1] - u_offset;
     parallel_for (long j=0; j < u_deg; ++j ) {
-      uintT v = edgesU[u_offset+j];
-      uintT v_offset = offsetsV[v];
-      uintT v_deg = offsetsV[v+1] - v_offset;
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
       // Find all seagulls with center v and endpoint u
       for (long k=0; k < v_deg; ++k) { 
-        uintT u2 = edgesV[v_offset+k];
+        uintE u2 = edgesV[v_offset+k];
         if (u2 < i) wedges.insert(make_pair(cons(i,u2,v),1));
-        else break;
+        //else break;
       }
     }
   }
   hashInsertTimer.stop();
 }
 
-uintT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, uintT curr_idx) {
+intT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -891,17 +941,17 @@ uintT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, uintT c
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   long orig = max_wedges;
-  for(uintT i=curr_idx; i < nu; ++i) {
-    uintT u_offset = offsetsU[i];
-    uintT u_deg = offsetsU[i+1] - u_offset;
-    for(uintT j=0; j < u_deg; ++j) {
-      uintT v = edgesU[u_offset+j];
-      uintT v_offset = offsetsV[v];
-      uintT v_deg = offsetsV[v+1] - v_offset;
+  for(intT i=curr_idx; i < nu; ++i) {
+    intT u_offset = offsetsU[i];
+    intT u_deg = offsetsU[i+1] - u_offset;
+    for(intT j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
       uintE num = 0;
-      for (uintT k=0; k < v_deg; ++k) {
+      for (intT k=0; k < v_deg; ++k) {
         if (edgesV[v_offset+k] < i) num ++;
-        else break;
+        //else break;
       }
       if (num > max_wedges) {
         if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
@@ -914,12 +964,12 @@ uintT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, uintT c
 }
 
 // TODO doubling search
-uintT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, uintT curr_idx, uintE* wedge_idxs) {
+intT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx, uintE* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   nextWedgeTimer.start();
   if (nu - curr_idx < 2000) return getNextWedgeIdx_seq(GA, use_v, max_wedges, curr_idx);
 
-  auto idx_map = make_in_imap<uintT>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
+  auto idx_map = make_in_imap<uintE>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
   auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
   size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
@@ -929,7 +979,7 @@ uintT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, uintT curr_
 
 //TODO 3 tuple instead of nested pairs
 template<class wedge, class wedgeCons>
-pair<long, uintT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, uintT curr_idx, long num_wedges, uintE* wedge_idxs) {
+pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, uintE* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   if (max_wedges >= num_wedges) {
     _getWedges<wedge>(wedges, GA, use_v, cons, num_wedges, wedge_idxs);
@@ -942,13 +992,13 @@ pair<long, uintT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, w
 }
 
 template<class wedgeCons, class T>
-uintT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, uintT curr_idx, long num_wedges, uintE* wedge_idxs) {
+intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, uintE* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   if (max_wedges >= num_wedges) {
     _getWedgesHash(wedges, GA, use_v, cons, num_wedges);
     return nu;
   }
-  uintT next_idx = getNextWedgeIdx(GA, use_v, max_wedges, curr_idx, wedge_idxs);
+  intT next_idx = getNextWedgeIdx(GA, use_v, max_wedges, curr_idx, wedge_idxs);
   num_wedges = wedge_idxs[next_idx] - wedge_idxs[curr_idx];
   _getWedgesHash(wedges, GA, use_v, cons, num_wedges, curr_idx, next_idx);
   return next_idx;

@@ -244,7 +244,9 @@ namespace pbbsa {
   tuple<size_t, tuple<s_size_t, ct_t>* > sparse_histogram(Seq A, size_t m) {
     sequence<tuple<s_size_t, ct_t>> tmp_seq = sequence<tuple<s_size_t, ct_t>>();
     sequence<tuple<s_size_t, ct_t>> out_seq = sequence<tuple<s_size_t, ct_t>>();
-    return sparse_histogram<s_size_t, ct_t>(A, m, tmp_seq, out_seq);
+    auto out = sparse_histogram<s_size_t, ct_t>(A, m, tmp_seq, out_seq);
+    out_seq.allocated = false;
+    return out;
   }
 
   template <typename s_size_t, typename ct_t, typename Seq>
@@ -738,7 +740,9 @@ template <typename s_size_t, typename ct_t, typename E, typename V, typename F, 
   tuple<size_t, tuple<s_size_t, ct_t>* > sparse_histogram_f(sequence<tuple<E,V>> A, size_t m, F& f, G& f_reduce) {
     sequence<tuple<s_size_t, ct_t>> tmp_seq = sequence<tuple<s_size_t, ct_t>>();
     sequence<tuple<s_size_t, ct_t>> out_seq = sequence<tuple<s_size_t, ct_t>>();
-    return sparse_histogram_f<s_size_t, ct_t>(A, m, f, f_reduce, tmp_seq, out_seq);
+    auto out =  sparse_histogram_f<s_size_t, ct_t>(A, m, f, f_reduce, tmp_seq, out_seq);
+    out_seq.allocated = false;
+    return out;
   }
 
   template <typename s_size_t, typename ct_t, typename E, typename V, typename F, typename G>

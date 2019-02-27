@@ -5,6 +5,7 @@ template <typename E>
 struct sequence {
 public:
   using T = E;
+  bool allocated = false;
 
   sequence() { s = NULL; e = NULL; allocated = false; }
 
@@ -105,7 +106,6 @@ private:
   }
   E *s; // = NULL;
   E *e; // = NULL;
-  bool allocated = false;
 };
 
 template <typename E, typename F>
