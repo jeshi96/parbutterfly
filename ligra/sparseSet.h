@@ -41,12 +41,12 @@ template <class E>
 class sparseAdditiveSet {
   typedef pair<uintE,E> kvPair;
  public:
-  uintT m;
+  uintT m=0;
   intT mask;
   kvPair empty;
   kvPair* TA;
   float loadFactor;
-  bool alloc;
+  bool alloc=false;
 
   // needs to be in separate routine due to Cilk bugs
   static void clearA(kvPair* A, long n, kvPair v) {
@@ -71,6 +71,8 @@ class sparseAdditiveSet {
       { empty=make_pair(UINT_E_MAX,zero); clearA(TA,m,empty); alloc=true; }
 
   sparseAdditiveSet() {}
+
+  sparseAdditiveSet(E zero) {empty=make_pair(UINT_E_MAX,zero); alloc=false; m=0;}
 
   sparseAdditiveSet(kvPair* _TA, long size, float _loadFactor, E zero) : loadFactor(_loadFactor), m(size*_loadFactor), mask(m-1), TA(_TA) {
     empty=make_pair(UINT_E_MAX,zero); alloc=false;

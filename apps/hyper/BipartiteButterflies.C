@@ -415,59 +415,55 @@ intT PeelHash(sparseAdditiveSet<uintE>& wedges, vertexSubset& active, uintE* but
 //***************************************************************************************************
 //***************************************************************************************************
 
-void PeelHash_helper(vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v, long max_wedges) {
-  const long nu = use_v ? GA.nu : GA.nv;
-  long num_wedges = countSeagulls(GA, use_v, active);
-  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);
-  if (max_wedges >= num_wedges) {
-    PeelHash(wedges, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
-    wedges.del();
-    return;
+struct PeelSpace {
+  long type;
+  long nu;
+  _seq<UVertexPair> wedges_seq_uvp;
+  _seq<uintE> wedges_seq_int;
+  sparseAdditiveSet<uintE> wedges_hash;
+  PeelSpace(long _type, long _nu) : type(_type), nu(_nu) {
+    if (type == 0) wedges_hash = sparseAdditiveSet<uintE>(UINT_E_MAX);
+    else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+    else wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
   }
-  intT curr_idx = 0;
-  while(curr_idx < active.size()) {
-    curr_idx = PeelHash(wedges, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
-    wedges.clear();
-  }
-  wedges.del();
-}
 
-void PeelSort_helper(vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v, long max_wedges) {
+  void clear() {
+    if (type == 0) {
+      wedges_hash.del();
+      wedges_hash = sparseAdditiveSet<uintE>(UINT_E_MAX);
+    }
+  }
+
+  void del() {
+    if (type == 0) wedges_hash.del();
+    else if (type == 1) wedges_seq_uvp.del();
+    else wedges_seq_int.del();
+  }
+};
+
+void Peel_helper (PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v, long max_wedges, long type) {
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
   long num_wedges = countSeagulls(GA, use_v, active);
-  _seq<UVertexPair> wedges_seq = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-  if (max_wedges >= num_wedges) {
-    if (is_seq) PeelSort_seq(wedges_seq, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
-    else PeelSort(wedges_seq, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
-    wedges_seq.del();
-    return;
-  }
-  intT curr_idx = 0;
-  while(curr_idx < active.size()) {
-  	if (is_seq) curr_idx = PeelSort_seq(wedges_seq, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
-    else curr_idx = PeelSort(wedges_seq, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
-  }
-  wedges_seq.del();
-}
 
-void PeelHist_helper(vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v, long max_wedges) {
-  const long nu = use_v ? GA.nu : GA.nv;
-  bool is_seq = (active.size() < 1000);
-  long num_wedges = countSeagulls(GA, use_v, active);
-  _seq<uintE> wedges_seq = _seq<uintE>(newA(uintE, nu), nu);
   if (max_wedges >= num_wedges) {
-    if (is_seq) PeelHist_seq(wedges_seq, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
-    else PeelHist(wedges_seq, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
-    wedges_seq.del();
+    if (type == 0) PeelHash(ps.wedges_hash, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
+    else if (type == 1 && is_seq) PeelSort_seq(ps.wedges_seq_uvp, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
+    else if (type == 1) PeelSort(ps.wedges_seq_uvp, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
+    else if (type == 2 && is_seq) PeelHist_seq(ps.wedges_seq_int, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
+    else PeelHist(ps.wedges_seq_int, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
+    ps.clear();
     return;
   }
   intT curr_idx = 0;
   while(curr_idx < active.size()) {
-  	if (is_seq) curr_idx = PeelHist_seq(wedges_seq, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
-    else curr_idx = PeelHist(wedges_seq, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
+    if (type == 0) curr_idx = PeelHash(ps.wedges_hash, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else if (type == 1 && is_seq) curr_idx = PeelSort_seq(ps.wedges_seq_uvp, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else if (type == 1) curr_idx = PeelSort(ps.wedges_seq_uvp, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
+  	else if (type == 2 && is_seq) curr_idx = PeelHist_seq(ps.wedges_seq_int, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else curr_idx = PeelHist(ps.wedges_seq_int, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
+    ps.clear();
   }
-  wedges_seq.del();
 }
 
 array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long max_wedges, long type=0, size_t num_buckets=128) {
@@ -481,6 +477,7 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
   auto b = make_buckets(nu, D, increasing, num_buckets);
 
   bool* update_dense = newA(bool, nu);
+  PeelSpace ps = PeelSpace(type, nu);
 
   size_t finished = 0;
   while (finished != nu) {
@@ -491,9 +488,7 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
     bool is_seq = (active.size() < 1000);
 
     parallel_for(intT i=0; i < nu; ++i) { update_dense[i] = false; }
-    if (type==0) PeelHash_helper(active, butterflies, update_dense, GA, use_v, max_wedges);
-    else if (type==1) PeelSort_helper(active, butterflies, update_dense, GA, use_v, max_wedges);
-    else PeelHist_helper(active, butterflies, update_dense, GA, use_v, max_wedges);
+    Peel_helper(ps, active, butterflies, update_dense, GA, use_v, max_wedges, type);
 
     auto f = [&] (size_t i) { return update_dense[i]; };
     auto f_in = make_in_imap<bool>(nu, f);
@@ -511,6 +506,7 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
 
     moved.del(); active.del();
   }
+  ps.del();
   return D;
 }
 
