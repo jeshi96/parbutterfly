@@ -746,7 +746,6 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   if (ty > 6) return;
 
-
   timer t;
   t.start();
   uintE* butterflies = Count(GA, use_v, num_wedges, max_wedges, ty);
@@ -781,25 +780,21 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   cout << "### Max core: " << mc << endl;
 
   free(butterflies);
-  
-// timer t3;
-// t3.start();
-// auto eti = edgeToIdx<symmetricVertex>(G, use_v, max_wedges);
-// uintE* ebutterflies = CountE(eti, G, use_v, num_wedges, max_wedges, ty);
-// t3.stop();
-// if(ty==2) t3.reportTotal("E Hash:");
-// else if (ty == 3) t3.reportTotal("E HashCE:");
-// else if (ty == 0) t3.reportTotal("E Sort:");
-// else if (ty==1) t3.reportTotal("E SortCE:");
-// else if (ty==4) t3.reportTotal("E Hist:");
-// else if (ty==6) t3.reportTotal("E HistCE:");
-// else if (ty==7) t3.reportTotal("E Hash2:");
-// else if (ty==8) t3.reportTotal("E HashCE2:");
-// else if (ty==9) t3.reportTotal("E Hist2:");
+/*  
+ timer t3;
+ t3.start();
+ auto eti = edgeToIdx(GA, use_v, max_wedges);
+ uintE* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty);
+ t3.stop();
+ if(ty==2) t3.reportTotal("E Hash:");
+ else if (ty == 3) t3.reportTotal("E HashCE:");
+ else if (ty == 0) t3.reportTotal("E Sort:");
+ else if (ty==1) t3.reportTotal("E SortCE:");
+ else if (ty==4) t3.reportTotal("E Hist:");
 
-// long b=0;
-// for (long i=0; i < eti.num_edges; ++i) {b += ebutterflies[i];}
-// cout << "number of edge butterflies: " << b/4 << "\n";
+ long b=0;
+ for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[i];}
+ cout << "number of edge butterflies: " << b/4 << "\n";
 
 
 // timer t2;
@@ -810,8 +805,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 // else if (tp==1) t2.reportTotal("Sort Peel:");
 // else t2.reportTotal("Hist Peel:");
 
-  //eti.del();
-  //free(ebutterflies);
+  eti.del();
+  free(ebutterflies);*/
 }
 
 int parallel_main(int argc, char* argv[]) {

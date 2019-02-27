@@ -66,7 +66,7 @@ struct seagullSum {
   uintE* active;
   seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) : offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
   inline E operator() (const E& i) const {
-    uintE u = active[i];
+    /*uintE u = active[i];
     intT u_offset = offsetsU[u];
     intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
     E ret=0;
@@ -74,9 +74,9 @@ struct seagullSum {
       uintE v = edgesU[u_offset + k];
       ret += (offsetsV[v+1] - offsetsV[v] - 1);
     }
-  return ret;
-    //long u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
-	//  return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
+  return ret;*/
+    intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
+	return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
   }
 };
 
@@ -233,6 +233,11 @@ E getAdd (E curr, tuple<K,E> v) {
 template<class E, class K>
 tuple<K,E> getAddReduce (tuple<K,E> curr, tuple<K,E> v) {
   return make_tuple(get<0>(curr),get<1>(curr) + get<1>(v));
+}
+
+template<class E, class K>
+pair<K,E> getAddReducePair (pair<K,E> curr, pair<K,E> v) {
+  return make_pair(v.first, curr.second + v.second);
 }
 
 //***********************************************************************************************
@@ -1061,34 +1066,38 @@ pair<tuple<uintE,uintE>*,long> updateBuckets_seq(uintE* update_idxs, long num_up
   return make_pair(update, idx);
 }
 
-template <class vertex>
 struct edgeToIdx { 
   long nv;
   long nu;
-  vertex* V;
-  vertex* U;
-  long num_edges;
+  uintT* offsetsV;
+  uintT* offsetsU;
+  uintE* edgesV;
+  uintE* edgesU;
+
+  long numEdges;
   long max_wedges;
   sparseAdditiveSet<uintE> edges;
 
-  edgeToIdx(bipartiteGraph<vertex> GA, bool use_v, long _max_wedges) : max_wedges(_max_wedges) {
-    nv = use_v ? GA.nv : GA.nu;
+  edgeToIdx(bipartiteCSR& GA, bool use_v, long _max_wedges) : max_wedges(_max_wedges) {
     nu = use_v ? GA.nu : GA.nv;
-    V = use_v ? GA.V : GA.U;
-    U = use_v ? GA.U : GA.V;
-  
-    if (nv < nu) num_edges = sequence::reduce<long>((long) 0, (long) nv, addF<long>(), getV<vertex, long>(V));
-    else num_edges = sequence::reduce<long>((long) 0, (long) nu, addF<long>(), getV<vertex, long>(U));
+    nv = use_v ? GA.nv : GA.nu;
+    offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+    offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+    edgesV = use_v ? GA.edgesV : GA.edgesU;
+    edgesU = use_v ? GA.edgesU : GA.edgesV;
+    numEdges = GA.numEdges;
 
-    edges = sparseAdditiveSet<uintE>(num_edges, 1, UINT_E_MAX);
+    edges = sparseAdditiveSet<uintE>(numEdges, 1, UINT_E_MAX);
     
     if (nu*nv < max_wedges) {
-// go through edges in an array
       bool* edges_bool = newA(bool, nu*nv);
       parallel_for(long i=0; i < nu*nv; ++i) {edges_bool[i] = false;}
-      parallel_for(long i=0; i < nv; ++i) {
-        for (long j = 0; j < V[i].getOutDegree(); ++j) {
-          edges_bool[nu*i + V[i].getOutNeighbor(j)] = true;
+      parallel_for(intT i=0; i < nv; ++i) {
+      	intT v_offset = offsetsV[i];
+      	intT v_deg = offsetsV[i+1] - v_offset;
+        for (intT j = 0; j < v_deg; ++j) {
+          intT u = edgesV[v_offset + j];
+          edges_bool[nu*i + u] = true;
         }
       }
       auto f = [&] (size_t i) { return edges_bool[i]; };
@@ -1104,15 +1113,19 @@ struct edgeToIdx {
       free(out.s);
     }
     else {
-// hash edges sequentially
-// TODO maybe it's faster to hash all w/val 1 or something, then retrieve entries, then rehash w/entry idx??
-      uintE idx = 0;
-      for (long i=0; i < nv; ++i) {
-        for (long j=0; j < V[i].getOutDegree(); ++j) {
-          edges.insert(make_pair(nu*i + V[i].getOutNeighbor(j), idx));
-          idx++;
+      parallel_for (intT i=0; i < nv; ++i) {
+        intT v_offset = offsetsV[i];
+        intT v_deg = offsetsV[i+1] - v_offset;
+        for (long j=0; j < v_deg; ++j) {
+          intT u = edgesV[v_offset + j];
+          edges.insert(make_pair(nu*i + u, 0));
         }
       }
+      auto edges_seq = edges.entries();
+      sequence::scan<pair<uintE,uintE>>(edges_seq.A, (long) 0, edges_seq.n, getAddReducePair<uintE,uintE>,
+        sequence::getA<pair<uintE,uintE>, long>(edges_seq.A), make_pair(0,0), false, false);
+      parallel_for(long i=0; i < edges_seq.n; ++i) { edges.insert(edges_seq.A[i]);}
+      edges_seq.del();
     }
   }
 
