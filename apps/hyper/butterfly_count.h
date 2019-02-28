@@ -33,6 +33,7 @@ void storeButterfliesSortCE_seq(uintE* butterflies, UVertexPair* wedges, uintE* 
   // first vertex
   // Take the frequency count choose 2 to receive the number of butterflies on that key
   // Store butterfly counts with each vertex in U
+  const intT eltsPerCacheLine = 64/sizeof(long);
   for (long idx = par_idxs_f[i]; idx < par_idxs_f[i+1]; ++idx) { //TODO this is without reduce -- do thresholding
       uintE num_butterflies = wedge_freqs_f[idx+1] - wedge_freqs_f[idx];
       long wedge_idx = wedge_freqs_f[idx];
@@ -40,8 +41,8 @@ void storeButterfliesSortCE_seq(uintE* butterflies, UVertexPair* wedges, uintE* 
       
       UVertexPair vs = wedges[wedge_idx];
 
-      if (use_v1) butterflies[vs.v1] += num_butterflies;
-      else butterflies[vs.v2] += num_butterflies;
+      if (use_v1) butterflies[eltsPerCacheLine*vs.v1] += num_butterflies;
+      else butterflies[eltsPerCacheLine*vs.v2] += num_butterflies;
     }
 }
 
@@ -55,6 +56,7 @@ void storeButterfliesSortCE(uintE* butterflies, long nu, UVertexPair* wedges, ui
   // Store the number of butterflies on each key by the second vertex (no parallel issues b/c distinct)
   // Take the frequency count choose 2 to receive the number of butterflies on that key
   // The sum gives the number of butterflies on the first vertex
+  const intT eltsPerCacheLine = 64/sizeof(long);
   uintE* butterflies_v = newA(uintE, nu);
   parallel_for(intT i=0; i < nu; ++i) {butterflies_v[i] = 0; }
   parallel_for (long idx = par_idxs_f[i]; idx < par_idxs_f[i+1]; ++idx) {
@@ -69,8 +71,8 @@ void storeButterfliesSortCE(uintE* butterflies, long nu, UVertexPair* wedges, ui
   }
   long sum = sequence::plusReduce(butterflies_v, nu);
   UVertexPair start_vs = wedges[wedge_freqs_f[par_idxs_f[i]]];
-  if (use_v1) butterflies[start_vs.v1] += sum;
-  else butterflies[start_vs.v2] += sum;
+  if (use_v1) butterflies[eltsPerCacheLine*start_vs.v1] += sum;
+  else butterflies[eltsPerCacheLine*start_vs.v2] += sum;
 
   free(butterflies_v);
 }
@@ -112,13 +114,14 @@ void countButterfliesSort(uintE* butterflies, UVertexPair* wedges, uintE* wedge_
   // these indices
   // Take the frequency count choose 2 to receive the number of butterflies on that key
   // Store butterfly counts with each vertex in U
+  const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for (long i = 0; i < num_wedge_freqs_f-1; ++i) {
     uintE num_butterflies = wedge_freqs_f[i+1] - wedge_freqs_f[i];
     long wedge_idx = wedge_freqs_f[i];
 
     num_butterflies = num_butterflies * (num_butterflies - 1)/2;
-    writeAdd(&butterflies[wedges[wedge_idx].v1],num_butterflies); 
-    writeAdd(&butterflies[wedges[wedge_idx].v2],num_butterflies); 
+    writeAdd(&butterflies[eltsPerCacheLine*wedges[wedge_idx].v1],num_butterflies); 
+    writeAdd(&butterflies[eltsPerCacheLine*wedges[wedge_idx].v2],num_butterflies); 
   }
 }
 
@@ -178,6 +181,7 @@ intT CountSortCE(_seq<UVertexPair>& wedges_seq, bipartiteCSR& GA, bool use_v, lo
 intT CountHash(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
+  const intT eltsPerCacheLine = 64/sizeof(long);
 
   using T = pair<uintE,uintE>;
 
@@ -194,8 +198,8 @@ intT CountHash(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v, l
     num_butterflies = num_butterflies * (num_butterflies - 1)/2;
 
     if (num_butterflies > 0){
-      writeAdd(&butterflies[v1],num_butterflies);
-      writeAdd(&butterflies[v2],num_butterflies);
+      writeAdd(&butterflies[eltsPerCacheLine*v1],num_butterflies);
+      writeAdd(&butterflies[eltsPerCacheLine*v2],num_butterflies);
     }
   }
 
@@ -206,6 +210,7 @@ intT CountHash(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v, l
 intT CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
+  const intT eltsPerCacheLine = 64/sizeof(long);
 
   using T = pair<uintE,uintE>;
 
@@ -236,7 +241,7 @@ intT CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v,
 
   parallel_for(long i=0; i < butterflies_seq.n; ++i) {
     T butterfly_pair = butterflies_seq.A[i];
-    butterflies[butterfly_pair.first] += butterfly_pair.second;
+    butterflies[eltsPerCacheLine*butterfly_pair.first] += butterfly_pair.second;
   }
   //numButterfliesHashInsertTimer.stop();  
   butterflies_seq.del();
@@ -249,6 +254,7 @@ intT CountHashCE(sparseAdditiveSet<uintE>& wedges, bipartiteCSR& GA, bool use_v,
 intT CountHist(_seq<uintE>& wedges, pbbsa::sequence<tuple<uintE, uintE>> tmp, pbbsa::sequence<tuple<uintE, uintE>> out,
   bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
+  const intT eltsPerCacheLine = 64/sizeof(long);
 
   using T = tuple<uintE,uintE>;
 
@@ -275,8 +281,8 @@ intT CountHist(_seq<uintE>& wedges, pbbsa::sequence<tuple<uintE, uintE>> tmp, pb
     num_butterflies = num_butterflies * (num_butterflies - 1)/2;
 
     if (num_butterflies > 0) {
-      writeAdd(&butterflies[v1],num_butterflies);
-      writeAdd(&butterflies[v2],num_butterflies);
+      writeAdd(&butterflies[eltsPerCacheLine*v1],num_butterflies);
+      writeAdd(&butterflies[eltsPerCacheLine*v2],num_butterflies);
     }
   }
 
@@ -288,6 +294,7 @@ intT CountHistCE(_seq<uintE>& wedges, pbbsa::sequence<tuple<uintE, uintE>>& tmp,
   bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
   const long nv = use_v ? GA.nv : GA.nu;
+  const intT eltsPerCacheLine = 64/sizeof(long);
 
   using X = tuple<uintE,uintE>;
 
@@ -320,7 +327,7 @@ intT CountHistCE(_seq<uintE>& wedges, pbbsa::sequence<tuple<uintE, uintE>>& tmp,
   size_t butterflies_n = get<0>(butterflies_tuple);
 
   parallel_for (long i=0; i < butterflies_n; ++i) {
-    butterflies[get<0>(butterflies_l[i])] += get<1>(butterflies_l[i]);
+    butterflies[eltsPerCacheLine*get<0>(butterflies_l[i])] += get<1>(butterflies_l[i]);
   }
   
   free(wedge_freqs_i);
@@ -410,9 +417,10 @@ uintE* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, lon
   const long nu = use_v ? GA.nu : GA.nv;
 
   //TODO put in thing where we don't have contention b./c of cache line
-  uintE* butterflies = newA(uintE, nu);
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  uintE* butterflies = newA(uintE, eltsPerCacheLine*nu);
   parallel_for(long i=0;i<nu;++i){
-    butterflies[i] = 0;
+    butterflies[i*eltsPerCacheLine] = 0;
   }
 
   uintE* wedge_idxs = countWedgesScan(GA, use_v, true);

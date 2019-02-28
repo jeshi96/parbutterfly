@@ -754,9 +754,10 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   else if (ty==4) t.reportTotal("Hist:");
   else if (ty==6) t.reportTotal("HistCE:");
 
+  const intT eltsPerCacheLine = 64/sizeof(long);
   long num_idxs = use_v ? GA.nu : GA.nv;
   long b = 0;
-  for (long i=0; i < num_idxs; ++i) {b += butterflies[i];}
+  for (long i=0; i < num_idxs; ++i) {b += butterflies[eltsPerCacheLine*i];}
   b = b / 2;
   cout << "number of butterflies: " << b << "\n";
   
