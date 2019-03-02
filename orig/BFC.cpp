@@ -7,7 +7,7 @@
 
 	Abstract:
 		We consider the problem of counting motifs in bipartite affiliation networks, such as author-paper, user-product, and actor-movie relations. 
-		We focus on counting the number of occurrences of a "butterfly", a complete 2×2 biclique, the simplest cohesive higher-order structure in a bipartite graph. 
+		We focus on counting the number of occurrences of a "butterfly", a complete 2ï¿½2 biclique, the simplest cohesive higher-order structure in a bipartite graph. 
 		Our main contribution is a suite of randomized algorithms that can quickly approximate the number of butterflies in a graph with a provable guarantee on accuracy. 
 		An experimental evaluation on large real-world networks shows that our algorithms return accurate estimates within a few seconds, even for networks with trillions of 
 		butterflies and hundreds of millions of edges.
@@ -247,7 +247,7 @@ void get_graph_seq() {
 cerr << "Spaces: " << spaces << "\n";
 
     words W = stringToWords(S2, n-k);
-    long m = W.m/spaces;
+    ll m = W.m/spaces;
     edges.resize(m);
     n_edges=m;
     for(long i=0; i < m; i++) {
@@ -267,6 +267,7 @@ cerr << "Spaces: " << spaces << "\n";
       }
     }
     m = offset;
+		n_edges = m;
 
     long maxV = 0;
     long maxU = 0;
@@ -281,6 +282,7 @@ cerr << "Spaces: " << spaces << "\n";
     largest_index_in_partition[0] = nv;
     largest_index_in_partition[1] = nv+nu;
     n_vertices = nu + nv;
+
     adj.resize(n_vertices, vector <int> ());
 if (nu > LONG_MAX - nv) {cerr << "err\n"; exit(0);}
 
@@ -330,6 +332,7 @@ free(degU);
     aux_array_two_neighboorhood.resize(n_vertices);
     sum_deg_neighbors.resize(n_vertices);
     butterflies.resize(n_vertices);
+		index_map.resize(n_vertices);
 
     n_wedge_in_partition[0] = 0;
   for (long i = 0; i < largest_index_in_partition[0]; i++) {
@@ -606,6 +609,7 @@ ld edge_saprsification(double prob) {
 	ld beta = exact_butterfly_counting(sampled_adj_list);
 	return (ld)beta / (prob * prob * prob * prob);
 }
+*/
 
 ld exact_BFC_per_edge(int a, int b) {
 	ld bfc_per_edge = 0;
@@ -644,6 +648,27 @@ ld fast_exact_BFC_per_edge(int a, int b) {
 	return bfc_per_edge;
 }
 
+
+ll fast_exact_BFC_edge() {
+	ll res = 0;
+	for (long i=0; i < n_edges; ++i) {
+		int a = edges[i].first;
+		int b = edges[i].second+nv;
+		res += fast_exact_BFC_per_edge(a, b);
+	}
+	return res;
+}
+
+ll exact_BFC_edge() {
+	ll res = 0;
+	for (long i=0; i < n_edges; ++i) {
+		int a = edges[i].first;
+		int b = edges[i].second+nv;
+		res += exact_BFC_per_edge(a, b);
+	}
+	return res;
+}
+/*
 random_device rd_edge;
 mt19937_64 eng_ran_bfc_per_edge (rd_edge());
 ld randomized_BFC_per_edge(int a, int b) {
@@ -1074,23 +1099,28 @@ struct timer {
   void reportNext(std::string str) {std::cout << str << " : "; reportNext();}
 };
 
-void exact_algorithm_time_tracker() {
+void exact_algorithm_time_tracker(int chosen) {
 timer tm;
 tm.start();
 	double beg_clock = clock();
-	exact_n_bf = exact_butterfly_counting(adj);
+	if (chosen == 1)
+		exact_n_bf = exact_butterfly_counting(adj);
+	else if (chosen == 2)
+		exact_n_bf = fast_exact_BFC_edge();
+	else
+		exact_n_bf = exact_BFC_edge();
 	double end_clock = clock();
 tm.stop();
 tm.reportTotal("time from timer:");
 	double elapsed_time = (end_clock - beg_clock) / CLOCKS_PER_SEC;
 cerr << "Time: " << elapsed_time << "\n";
-exact_n_bf = 0;
+ll exact_n_bf2 = 0;
 for(long i=0; i < n_vertices; ++i) {
-  exact_n_bf += butterflies[i];
+  exact_n_bf2 += butterflies[i];
 }
-exact_n_bf = exact_n_bf / 2;
+exact_n_bf2 = exact_n_bf2 / 2;
 
-cerr << "Butterflies: " << exact_n_bf  << "\n";	
+cerr << "Butterflies: " << exact_n_bf2  << "\n";	
 cout << " Exact algorithm is done in " << elapsed_time << " secs. There are " << exact_n_bf << " butterflies." << endl;
 }
 
@@ -1139,7 +1169,7 @@ void choose_algorithm() {
 		if (SZ(s) == 1 && s[0] >= '0' && s[0] <= '7') break;
 	}
 	int chosen = s[0] - '0';
-	if (chosen > 1) {
+	/*if (chosen > 1) {
 		cerr << " " << algorithm_names[chosen - 1] << " Algorithm is a randomized algorithm. To report the accuracy, we need exact number of butterflies" << endl;
 		cerr << " Insert the number of butterflies. In the case, you do not know the number of butterflies, insert \"N\".\n We will run the exact algorithm for you." << endl;
 		string comm; cerr << " >>> "; cin >> comm;
@@ -1152,14 +1182,14 @@ void choose_algorithm() {
 			exact_algorithm_time_tracker();
 		}
 	}
-	else {
+	else {*/
 		read_the_graph();
-	}
+	//}
 
 	cerr << " " << algorithm_names [chosen - 1] << " Algorithm is running ... (please wait) " << endl;
-	if	(chosen == 1) {
-		exact_algorithm_time_tracker();
-	}
+	//if	(chosen == 1) {
+		exact_algorithm_time_tracker(chosen);
+	/*}
 	else {
 		if (chosen <= 5)
 			cout << "Time(sec) #Iterations Error(%)" << endl;
@@ -1183,7 +1213,7 @@ void choose_algorithm() {
 		else if (chosen == 7) {
 //			coloful_sparsification_time_tracker();
 		}
-	}
+	}*/
 }
 
 int main() {

@@ -239,116 +239,6 @@ struct bipartiteCSR {
   }
 };
 
-bipartiteCSR KONECTToBp(char* fname) {
-    _seq<char> S = readStringFromFile(fname);
-    char* S2 = newA(char,S.n);
-    //ignore starting lines with '#' and find where to start in file 
-    long k=0;
-    while(1) {
-      if(S.A[k] == '%') {
-	while(S.A[k++] != '\n') continue;
-      }
-      if(k >= S.n || S.A[k] != '%') break; 
-    }
-    
-    parallel_for(long i=0;i<S.n-k;i++) S2[i] = S.A[k+i];
-    S.del();
-
-    long spaces = 0;
-    bool prev_space = true;
-    long t = 0;
-    while(1) {
-      if (!isSpace(S2[t]) && prev_space) {
-        prev_space = false;
-        spaces++;
-      }
-      else if(isspace(S2[t])) {
-        prev_space = true;
-      }
-      if(S2[t] == '\n') break;
-      t++;
-    }
-  
-    words W = stringToWords(S2, S.n-k);
-    long m = W.m / spaces;
-    using T = pair<uintE, uintE>;
-    T *edges = newA(T,m);
-
-    parallel_for(long i=0; i < m; i++) {
-	    edges[i] = make_pair(atol(W.Strings[spaces*i]), atol(W.Strings[spaces*i + 1]));
-    }
-
-    // Remove duplicates
-    quickSort(edges, m, uintETupleLtBoth());
-    T lastRead = make_pair(UINT_E_MAX, UINT_E_MAX);
-    long offset = 0;
-    for (long i=0; i < m; ++i) {
-      if (!(edges[i].first == lastRead.first && edges[i].second == lastRead.second)) {
-        edges[offset] = edges[i];
-        offset++;
-        lastRead = edges[i];
-      }
-    }
-    m = offset;
-
-    long maxV = 0, maxU = 0;
-    for (long i=0; i < m; i++) {
-      maxV = max<intT>(maxV, edges[i].first);
-      maxU = max<intT>(maxU, edges[i].second);
-    }
-    maxV++; maxU++;
-    long nv = maxV;
-    long nu = maxU;
-
-  uintT* offsetsV = newA(uintT,nv+1);
-  uintT* offsetsU = newA(uintT,nu+1);
-  uintE* edgesV = newA(uintE,m);
-  uintE* edgesU = newA(uintE,m);
-
-    parallel_for(long i=0; i < nv+1; ++i) {offsetsV[i] = 0;}
-    parallel_for(long i=0; i < nu+1; ++i) {offsetsU[i] = 0;}
-
-    uintE* idxV = newA(uintE, nv);
-    uintE* idxU = newA(uintE, nu);
-    parallel_for(long i=0; i < nv; ++i) {idxV[i] = 0;}
-    parallel_for(long i=0; i < nu; ++i) {idxU[i] = 0;}
-
-    for (long i=0; i < m; i++) {
-      offsetsV[edges[i].first]++;
-      offsetsU[edges[i].second]++;
-    }
-
-    sequence::plusScan(offsetsV,offsetsV,nv+1);
-    sequence::plusScan(offsetsU,offsetsU,nu+1);
-
-  for(long i=0;i<m;++i) {
-    uintE v_idx = edges[i].first;
-    uintE u_idx = edges[i].second;
-    edgesV[idxV[v_idx] + offsetsV[v_idx]] = u_idx;
-    //(v[v_idx].neighbors)[idxV[v_idx]] = u_idx;
-    idxV[v_idx]++;
-    edgesU[idxU[u_idx] + offsetsU[u_idx]] = v_idx;
-    //(u[u_idx].neighbors)[idxU[u_idx]] = v_idx;
-    idxU[u_idx]++;
-  }
-
-  {parallel_for(long i=0; i < nu; ++i) {
-  	// Sort from edgesU[offsetsU[i]] to edgesU[offsetsU[i+1]-1]
-  	quickSort(&edgesU[offsetsU[i]], offsetsU[i+1] - offsetsU[i], less<uintE>());
-  }}
-
-  {parallel_for(long i=0; i < nv; ++i) {
-  	// Sort from edgesU[offsetsU[i]] to edgesU[offsetsU[i+1]-1]
-  	quickSort(&edgesV[offsetsV[i]], offsetsV[i+1] - offsetsV[i], less<uintE>());
-  }}
-
-  free(edges);
-  free(idxV);
-  free(idxU);
-    
-  return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,m);  
-  }
-
 bipartiteCSR readBipartite(char* fname) {
   words W;
   _seq<char> S = readStringFromFile(fname);
@@ -393,12 +283,12 @@ bipartiteCSR readBipartite(char* fname) {
 
   {parallel_for(long i=0; i < nu; ++i) {
   	// Sort from edgesU[offsetsU[i]] to edgesU[offsetsU[i+1]-1]
-  	quickSort(&edgesU[offsetsU[i]], offsetsU[i+1] - offsetsU[i], less<uintE>());
+  	//quickSort(&edgesU[offsetsU[i]], offsetsU[i+1] - offsetsU[i], less<uintE>());
   }}
 
   {parallel_for(long i=0; i < nv; ++i) {
   	// Sort from edgesU[offsetsU[i]] to edgesU[offsetsU[i+1]-1]
-  	quickSort(&edgesV[offsetsV[i]], offsetsV[i+1] - offsetsV[i], less<uintE>());
+  	//quickSort(&edgesV[offsetsV[i]], offsetsV[i+1] - offsetsV[i], less<uintE>());
   }}
   //W.del(); // to deal with performance bug in malloc
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  

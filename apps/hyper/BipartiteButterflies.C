@@ -731,7 +731,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   t1.reportTotal("compute wedge counts + work prefix sum");
   
   //TODO seq code integrate w/count
-  if (ty == 7) CountOrigCompactParallel(GA,use_v);
+/*  if (ty == 7) CountOrigCompactParallel(GA,use_v);
   else if (ty == 8) {
   	long* workPrefixSum = get<2>(use_v_tuple);
   	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
@@ -763,7 +763,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[i] == butterflies2[i], "%d, %d, %d", i, butterflies[i], butterflies2[i]); }
-/*
+
   timer t2;
   t2.start();
   auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
@@ -774,10 +774,10 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   uintE mc = 0;
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;*/
+  cout << "### Max core: " << mc << endl;
 
-  free(butterflies);
-/*  
+  free(butterflies);*/
+
  timer t3;
  t3.start();
  auto eti = edgeToIdx(GA, use_v, max_wedges);
@@ -803,7 +803,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 // else t2.reportTotal("Hist Peel:");
 
   eti.del();
-  free(ebutterflies);*/
+  free(ebutterflies);
 }
 
 int parallel_main(int argc, char* argv[]) {
@@ -811,7 +811,7 @@ int parallel_main(int argc, char* argv[]) {
   char* iFile = P.getArgument(0);
   //long rounds = P.getOptionLongValue("-rounds",3);
 
-  bipartiteCSR G = KONECTToBp(iFile);//readBipartite(iFile);
+  bipartiteCSR G = readBipartite(iFile);
 
   Compute(G,P);
   // for(int r=0;r<rounds;r++) {

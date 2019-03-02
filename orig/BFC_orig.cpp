@@ -198,84 +198,6 @@ inline bool isSpace(char c) {
     return words(Str,n,SA,m);
   }
 
-/*void get_graph_seq() {
-  std::ifstream file (input_address, ios::in | ios::binary | ios::ate);
-  if (!file.is_open()) {
-      std::cerr << "Unable to open file: " << input_address << std::endl;
-      abort();
-    }
-    long end = file.tellg();
-    file.seekg (0, ios::beg);
-    long n = end - file.tellg();
-    char* bytes = newA(char,n+1);
-    file.read (bytes,n);
-    file.close();
-
-    char* S2 = newA(char,n);
-    long k=0;
-    while(1) {
-      if(bytes[k] == '%') {
-  while(bytes[k++] != '\n') continue;
-      }
-      if(k >= n || bytes[k] != '%') break; 
-    }
-    
-    for(long i=0;i<n-k;i++) S2[i] = bytes[k+i];
-    free(bytes);
-    words W = stringToWords(S2, n-k);
-    long m = W.m/2;
-    edges.resize(m);
-    n_edges=m;
-    for(long i=0; i < m; i++) {
-  edges[i] = make_pair(atol(W.Strings[2*i]), atol(W.Strings[2*i + 1]));
-      }
-    W.del();
-
-    long maxV = 0;
-    long maxU = 0;
-    for (long i=0; i < m; i++) {
-      maxV = std::max<long>(maxV, edges[i].first);
-      maxU = std::max<long>(maxU, edges[i].second);
-    }
-    maxU++; maxV++;
-    nu = maxU; // right
-    nv = maxV; //left
-
-    largest_index_in_partition[0] = nv;
-    largest_index_in_partition[1] = nv+nu;
-    n_vertices = nu + nv;
-    adj.resize(n_vertices, vector <int> ());
-    for (auto edge : edges) {
-    int A = edge.first;
-    int B = edge.second + nv;
-    adj[A].push_back(B);
-    adj[B].push_back(A);
-  }
-    hashmap_C.resize(n_vertices);
-    aux_array_two_neighboorhood.resize(n_vertices);
-    sum_deg_neighbors.resize(n_vertices);
-
-    n_wedge_in_partition[0] = 0;
-  for (int i = 0; i < largest_index_in_partition[0]; i++) {
-    n_wedge_in_partition[0] += (((ll)SZ(adj[i])) * (SZ(adj[i]) - 1)) >> 1;
-  }
-  n_wedge_in_partition[1] = 0;
-  for (int i = largest_index_in_partition[0]; i < largest_index_in_partition[1]; i++) {
-    n_wedge_in_partition[1] += ((ll)SZ(adj[i]) * (SZ(adj[i]) - 1)) >> 1;
-  }
-  for (int i = 0; i < n_vertices; i++) {
-    sum_deg_neighbors[i] = 0;
-    for (auto neighbor : adj[i]) {
-      sum_deg_neighbors[i] += SZ(adj[neighbor]);
-    }
-  }
-    cerr << "Done with graph\n";
-
-    fclose(stdin);
-
-
-}*/
-
 void get_graph() {
 clock_t begin1 = clock();
 	freopen(input_address, "r", stdin); 
@@ -529,7 +451,7 @@ ld edge_saprsification(double prob) {
 	}
 	ld beta = exact_butterfly_counting(sampled_adj_list);
 	return (ld)beta / (prob * prob * prob * prob);
-}
+}*/
 
 ld exact_BFC_per_edge(int a, int b) {
 	ld bfc_per_edge = 0;
@@ -568,6 +490,29 @@ ld fast_exact_BFC_per_edge(int a, int b) {
 	return bfc_per_edge;
 }
 
+
+ll fast_exact_BFC_edge() {
+	ll res = 0;
+	for (long i=0; i < SZ(list_of_edges); ++i) {
+		int a = list_of_edges[i].first;
+		int b = list_of_edges[i].second;
+		res += fast_exact_BFC_per_edge(a, b);
+	}
+	return res;
+}
+
+ll exact_BFC_edge() {
+	ll res = 0;
+	for (long i=0; i < SZ(list_of_edges); ++i) {
+		int a = list_of_edges[i].first;
+		int b = list_of_edges[i].second;
+		res += exact_BFC_per_edge(a, b);
+	}
+	return res;
+}
+
+
+/*
 random_device rd_edge;
 mt19937_64 eng_ran_bfc_per_edge (rd_edge());
 ld randomized_BFC_per_edge(int a, int b) {
@@ -998,11 +943,16 @@ struct timer {
   void reportNext(std::string str) {std::cout << str << " : "; reportNext();}
 };
 
-void exact_algorithm_time_tracker() {
+void exact_algorithm_time_tracker(int chosen) {
 timer tm;
 tm.start();
 	double beg_clock = clock();
-	exact_n_bf = exact_butterfly_counting(adj);
+	if (chosen == 1)
+		exact_n_bf = exact_butterfly_counting(adj);
+	else if (chosen == 2)
+		exact_n_bf = fast_exact_BFC_edge();
+	else
+		exact_n_bf = exact_BFC_edge();
 	double end_clock = clock();
 tm.stop();
 tm.reportTotal("time from timer:");
@@ -1055,7 +1005,7 @@ void choose_algorithm() {
 		if (SZ(s) == 1 && s[0] >= '0' && s[0] <= '7') break;
 	}
 	int chosen = s[0] - '0';
-	if (chosen > 1) {
+	/*if (chosen > 1) {
 		cerr << " " << algorithm_names[chosen - 1] << " Algorithm is a randomized algorithm. To report the accuracy, we need exact number of butterflies" << endl;
 		cerr << " Insert the number of butterflies. In the case, you do not know the number of butterflies, insert \"N\".\n We will run the exact algorithm for you." << endl;
 		string comm; cerr << " >>> "; cin >> comm;
@@ -1068,15 +1018,16 @@ void choose_algorithm() {
 			exact_algorithm_time_tracker();
 		}
 	}
-	else {
+	else {*/
 		read_the_graph();
-	}
+	//}
 
 	cerr << " " << algorithm_names [chosen - 1] << " Algorithm is running ... (please wait) " << endl;
-	if	(chosen == 1) {
-		exact_algorithm_time_tracker();
-	}
-	else {
+	//if	(chosen == 1) {
+		exact_algorithm_time_tracker(chosen);
+	//}
+	
+	/*else {
 		if (chosen <= 5)
 			cout << "Time(sec) #Iterations Error(%)" << endl;
 		else 
@@ -1099,7 +1050,7 @@ void choose_algorithm() {
 		else if (chosen == 7) {
 //			coloful_sparsification_time_tracker();
 		}
-	}
+	}*/
 }
 
 int main() {

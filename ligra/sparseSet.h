@@ -47,10 +47,14 @@ class sparseAdditiveSet {
   kvPair* TA;
   float loadFactor;
   bool alloc=false;
+  bool* FL;
 
   // needs to be in separate routine due to Cilk bugs
-  static void clearA(kvPair* A, long n, kvPair v) {
-    parallel_for (long i=0; i < n; i++) A[i] = v;
+  static void clearA(kvPair* A, bool* B, long n, kvPair v) {
+    parallel_for (long i=0; i < n; i++) {
+      A[i] = v;
+      B[i] = false;
+    }
   }
 
   struct notEmptyF { 
@@ -64,39 +68,42 @@ class sparseAdditiveSet {
   // Size is the maximum number of values the hash table will hold.
   // Overfilling the table could put it into an infinite loop.
  sparseAdditiveSet(long size, float _loadFactor, E zero) :
-  loadFactor(_loadFactor),
-    m((uintT) 1 << log2RoundUp((uintT)(_loadFactor*size)+100)),
-    mask(m-1),
-    TA(newA(kvPair,m)) 
-      { empty=make_pair(UINT_E_MAX,zero); clearA(TA,m,empty); alloc=true; }
+  loadFactor(_loadFactor), m((uintT) 1 << log2RoundUp((uintT)(_loadFactor*size)+100)),
+  mask(m-1), TA(newA(kvPair,m)), FL(newA(bool,m))
+      { empty=make_pair(UINT_E_MAX,zero); clearA(TA,FL,m,empty); alloc=true; }
 
   sparseAdditiveSet() {}
 
   sparseAdditiveSet(E zero) {empty=make_pair(UINT_E_MAX,zero); alloc=false; m=0;}
 
-  sparseAdditiveSet(kvPair* _TA, long size, float _loadFactor, E zero) : loadFactor(_loadFactor), m(size*_loadFactor), mask(m-1), TA(_TA) {
-    empty=make_pair(UINT_E_MAX,zero); alloc=false;
-  }
-
   // Deletes the allocated arrays
   void del() {
-    if(alloc) free(TA); 
+    if(alloc) {
+      free(TA); 
+      free(FL);
+    }
   }
 
   void resize(long size, float lf=1.0) {
     if (size * lf > m) {
-      if(alloc) free(TA);
+      del();
       loadFactor = lf;
       m = (uintT) 1 << log2RoundUp((uintT)(lf * size)+100);
       mask = m-1;
       TA = newA(kvPair, m);
-      clearA(TA, m, empty);
+      FL = newA(bool, m);
+      clear();
       alloc = true;
     }
   }
 
   void clear() {
-    clearA(TA, m, empty);
+    parallel_for (long i=0; i < m; i++) {
+      //if (FL[i]) {
+        TA[i] = empty;
+        FL[i] = false;
+      //}
+    }
   }
 
   // nondeterministic insert
@@ -109,12 +116,13 @@ class sparseAdditiveSet {
       bool swapped = 0;
       //c = TA[h];
       if(TA[h].first == UINT_E_MAX && CAS(&TA[h],empty,v)) {
-	return 1; //return true if value originally didn't exist
+        FL[h] = true;
+	      return 1; //return true if value originally didn't exist
       }
       else if (TA[h].first == vkey) {
-	//add residual values on duplicate
-	writeAdd(&(TA[h].second),v.second);
-	return 0;
+	      //add residual values on duplicate
+	      writeAdd(&(TA[h].second),v.second);
+	      return 0;
       }
     
       // move to next bucket
@@ -132,7 +140,8 @@ class sparseAdditiveSet {
       bool swapped = 0;
       //c = TA[h];
       if(TA[h].first == UINT_E_MAX && CAS(&TA[h],empty,v)) {
-	      return 0; //return true if value originally didn't exist
+        FL[h] = true;
+	      return 0; //return nothing
       }
       else if (TA[h].first == vkey) {
 	      //add residual values on duplicate
@@ -174,35 +183,25 @@ class sparseAdditiveSet {
 
   // returns all the current entries compacted into a sequence
   _seq<kvPair> entries() {
-    bool *FL = newA(bool,m);
-    parallel_for (long i=0; i < m; i++) 
-      FL[i] = (TA[i].first != UINT_E_MAX);
     _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
-    //sequence::pack(TA,(entry*)NULL,FL,m);
-    free(FL);
     return R;
   }
 
 
 // note that FL has to be init to size m; also init out to size m prob
-  _seq<kvPair> entries_no_init(bool* FL, kvPair* out) {
-    //bool *FL = newA(bool,m);
-    parallel_for (long i=0; i < m; i++) 
-      FL[i] = (TA[i].first != UINT_E_MAX);
+  _seq<kvPair> entries_no_init(kvPair* out) {
     _seq<kvPair> R = pack(out, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
-    //free(FL);
     return R;
   }
 
   // returns all the current entries satisfying predicate f compacted into a sequence
   template <class F>
   _seq<kvPair> entries(F f) {
-    bool *FL = newA(bool,m);
+    bool *FLf = newA(bool,m);
     parallel_for (long i=0; i < m; i++) 
-      FL[i] = (TA[i].first != UINT_E_MAX && f(TA[i]));
-    _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
-    //sequence::pack(TA,(entry*)NULL,FL,m);
-    free(FL);
+      FLf[i] = (TA[i].first != UINT_E_MAX && f(TA[i]));
+    _seq<kvPair> R = pack((kvPair*)NULL, FLf, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
+    free(FLf);
     return R;
   }
 
