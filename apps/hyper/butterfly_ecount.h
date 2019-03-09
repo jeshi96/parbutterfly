@@ -296,10 +296,11 @@ void CountESort_helper(edgeToIdx& eti, bipartiteCSR& GA, bool use_v, long num_we
   wedges_seq.del();
 }
 
-void CountEOrigCompactParallel(bipartiteCSR& GA, bool use_v) {
+void CountEOrigCompactParallel(edgeToIdx& eti, uintE* butterflies, bipartiteCSR& GA, bool use_v) {
   timer t1,t2;
   t1.start();
   cout << "Original Parallel" << endl;
+  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
   
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -316,71 +317,70 @@ void CountEOrigCompactParallel(bipartiteCSR& GA, bool use_v) {
   granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
   
-  long* results = newA(long,eltsPerCacheLine*stepSize); //one entry per cache line
-  granular_for(i,0,stepSize,stepSize > 10000, {results[eltsPerCacheLine*i] = 0;});
+  //long* results = newA(long,eltsPerCacheLine*stepSize); //one entry per cache line
+  //granular_for(i,0,stepSize,stepSize > 10000, {results[eltsPerCacheLine*i] = 0;});
   
-  //uintE* butterflies = newA(uintE,nu);
-  //granular_for(i,0,nu,nu > 10000, { butterflies[i] = 0; });
   t1.reportTotal("preprocess");
 
   t2.start();
 
   for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
     parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,nu); ++i){
+      intT used_idx = 0;
       intT shift = nu*(i-step*stepSize);
       intT u_offset  = offsetsU[i];
       intT u_deg = offsetsU[i+1]-u_offset;
-      for(intT l=0; l < u_deg; ++l) {
-        intT used_idx = 0;
-        // (u, v) is the edge that we consider
-        intT v = edgesU[u_offset+l];
-	      intT v_offset = offsetsV[v];
-	      intT v_deg = offsetsV[v+1]-v_offset;
-      // find all 2 hop neighbors of u
       for (intT j=0; j < u_deg; ++j ) {
-        if (j == l) continue;
-	      intT v2 = edgesU[u_offset+j];
-	      intT v2_offset = offsetsV[v2];
-	      intT v2_deg = offsetsV[v2+1]-v2_offset;
-	      for (intT k=0; k < v2_deg; ++k) { 
-	        uintE u2 = edgesV[v2_offset+k];
-	        if (u2 != i) {
-	          //butterflies[i] += wedges[u2_idx];
-	          //butterflies[u2_idx] += wedges[u2_idx];
+	      intT v = edgesU[u_offset+j];
+	      intT v_offset = offsetsV[v];
+	      intT v_deg = offsetsV[v+1]-offsetsV[v];
+	      for (intT k=0; k < v_deg; ++k) { 
+	        uintE u2_idx = edgesV[v_offset+k];
+	        if (u2_idx < i) {
 	          //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
-	          wedges[shift+u2]++;
-	        if (wedges[shift+u2] == 1) used[shift+used_idx++] = shift+u2;
+	          wedges[shift+u2_idx]++;
+	          if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
 	        }
+	        else break;
 	      }
       }
-      // find the intersect b/w 2 hop neighbors of u and neighbors of v
-      for (intT j=0; j < v_deg; ++j) {
-        intT u2 = edgesV[v_offset+j];
-        results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2];
+      for(intT j=0; j < u_deg; ++j) {
+        intT v = edgesU[u_offset+j];
+        intT v_offset = offsetsV[v];
+        intT v_deg = offsetsV[v+1] - v_offset;
+        for(intT k=0; k < v_deg; ++k) {
+          uintE u2_idx = edgesV[v_offset+k];
+          if (u2_idx < i) {
+          writeAdd(&butterflies[eti(v,i)], wedges[shift+u2_idx]-1);
+          writeAdd(&butterflies[eti(v,u2_idx)], wedges[shift+u2_idx]-1);
+          }
+          else break;
+        }
       }
+
       for(intT j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
-      }
     }
   }
   t2.reportTotal("main loop");
   
   free(wedges);
-  free(used);
+  free(used);/*
   long total = 0;
   
-  //for(long i=0;i<nu;i++) total += butterflies[i];
+  for(long i=0;i<nu;i++) total += butterflies[i];
   for(long i=0;i<stepSize;i++) total += results[i*eltsPerCacheLine];
-  //free(butterflies);
+  free(butterflies);
   free(results);
-  cout << "num: " << total/4 << "\n";
+  cout << "num: " << total << "\n";*/
 }
 
 uintE* CountE(edgeToIdx& eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long type=0) {
   const long nu = use_v ? GA.nu : GA.nv;
 
-  uintE* butterflies = newA(uintE, GA.numEdges);
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  uintE* butterflies = newA(uintE, GA.numEdges * eltsPerCacheLine);
   parallel_for(long i=0; i < GA.numEdges; ++i){
-    butterflies[i] = 0;
+    butterflies[i * eltsPerCacheLine] = 0;
   }
 
   uintE* wedge_idxs = countWedgesScan(GA, use_v, true);
@@ -391,7 +391,7 @@ uintE* CountE(edgeToIdx& eti, bipartiteCSR& GA, bool use_v, long num_wedges, lon
   if (type == 2 || type == 3) CountEHash_helper(eti, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, type);
   else if (type == 4) CountEHist_helper(eti, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, type);
   else if (type == 0 || type == 1) CountESort_helper(eti, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, type);
-  else CountEOrigCompactParallel(GA, use_v);
+  else CountEOrigCompactParallel(eti, butterflies, GA, use_v);
 
   free(wedge_idxs);
   return butterflies;

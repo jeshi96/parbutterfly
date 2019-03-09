@@ -789,8 +789,10 @@ void Compute(bipartiteCSR& GA, commandLine P) {
  else if (ty==1) t3.reportTotal("E SortCE:");
  else if (ty==4) t3.reportTotal("E Hist:");
 
+ const intT eltsPerCacheLine = 64/sizeof(long);
  long b=0;
- for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[i];}
+ 
+ for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[eltsPerCacheLine*i];}
  cout << "number of edge butterflies: " << b/4 << "\n";
 
 

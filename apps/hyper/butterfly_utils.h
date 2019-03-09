@@ -1046,6 +1046,7 @@ pair<tuple<uintE,uintE>*,long> updateBuckets_seq(uintE* update_idxs, long num_up
 }
 
 struct edgeToIdx { 
+  const intT eltsPerCacheLine = 64/sizeof(long);
   long nv;
   long nu;
   uintT* offsetsV;
@@ -1114,7 +1115,7 @@ struct edgeToIdx {
 
   // Note: always in the format (V, U)
   inline uintE operator() (const uintE& i, const uintE& j) {
-    return (edges.find((uintE) (nu*i + j))).second;
+    return eltsPerCacheLine * (edges.find((uintE) (nu*i + j))).second;
   }
 };
 
