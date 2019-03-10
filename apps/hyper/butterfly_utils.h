@@ -1102,9 +1102,9 @@ struct edgeToIdx {
         }
       }
       auto edges_seq = edges.entries();
-      sequence::scan<pair<uintE,uintE>>(edges_seq.A, (long) 0, edges_seq.n, getAddReducePair<uintE,uintE>,
-        sequence::getA<pair<uintE,uintE>, long>(edges_seq.A), make_pair(0,0), false, false);
-      parallel_for(long i=0; i < edges_seq.n; ++i) { edges.insert(edges_seq.A[i]);}
+      //sequence::scan<pair<uintE,uintE>>(edges_seq.A, (long) 0, edges_seq.n, getAddReducePair<uintE,uintE>,
+      //  sequence::getA<pair<uintE,uintE>, long>(edges_seq.A), make_pair(0,0), false, false);
+      parallel_for(long i=0; i < edges_seq.n; ++i) { edges.insert(make_pair(edges_seq.A[i].first, i));}
       edges_seq.del();
     }
   }

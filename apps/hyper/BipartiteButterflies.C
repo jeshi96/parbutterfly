@@ -730,8 +730,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long num_wedges = get<1>(use_v_tuple);
   t1.reportTotal("compute wedge counts + work prefix sum");
   
+  /*
   //TODO seq code integrate w/count
-/*  if (ty == 7) CountOrigCompactParallel(GA,use_v);
+  if (ty == 7) CountOrigCompactParallel(GA,use_v);
   else if (ty == 8) {
   	long* workPrefixSum = get<2>(use_v_tuple);
   	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);

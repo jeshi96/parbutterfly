@@ -148,7 +148,7 @@ intT CountSort(_seq<UVertexPair>& wedges_seq, bipartiteCSR& GA, bool use_v, long
 }
 
 // This is the new compute function, with cache efficient sorting
-intT CountSortCE(_seq<UVertexPair>& wedges_seq, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, intT curr_idx=0) {
+/*intT CountSortCE(_seq<UVertexPair>& wedges_seq, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
 
@@ -172,6 +172,51 @@ intT CountSortCE(_seq<UVertexPair>& wedges_seq, bipartiteCSR& GA, bool use_v, lo
 
   return wedges_pair.second;
 
+}*/
+
+intT CountSortCE(_seq<UVertexPair>& wedges_seq, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, intT curr_idx=0) {
+  pair<long, intT> wedges_pair  = getWedges<UVertexPair>(wedges_seq, GA, use_v, UVertexPairCons(), max_wedges, curr_idx, num_wedges, wedge_idxs);
+  UVertexPair* wedges = wedges_seq.A;
+  long num_wedges_f = wedges_pair.first;
+
+  // Retrieve frequency counts for all wedges with the same key
+  // We need to first collate by v1, v2
+  pair<uintE*, long> freq_pair = getFreqs(wedges, num_wedges_f, UVertexPairCmp(0), UVertexPairEq());
+  uintE* freq_arr = freq_pair.first;
+
+  using X = tuple<uintE,uintE>;
+  X* b_freqs = newA(X, 2*freq_pair.second);
+
+  // store these counts in another array so we can store in CE manner
+  parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
+    uintE num = freq_arr[i+1] - freq_arr[i];
+    num = num * (num-1) / 2;
+    //parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) {
+    long j = freq_arr[i];
+    b_freqs[2*i] = make_tuple(wedges[j].v1, num);
+    b_freqs[2*i+1] = make_tuple(wedges[j].v2, num);
+    //}
+  }
+
+  free(freq_arr);
+
+  // now, we need to collate by our indices
+  pair<uintE*, long> b_freq_pair = getFreqs(b_freqs, 2*freq_pair.second, uintETupleLt(), uintETupleEq());
+  uintE* b_freq_arr = b_freq_pair.first;
+  const intT eltsPerCacheLine = 64/sizeof(long);
+
+  parallel_for(long i=1; i < b_freq_pair.second; ++i) {
+    uintE num_freq = b_freq_arr[i] - b_freq_arr[i-1];
+    // Reduce to sum the butterflies over the necessary range
+    X reduce = sequence::reduce(&(b_freqs[b_freq_arr[i-1]]), num_freq, uintETupleAdd());
+    // These are our butterfly counts
+    butterflies[get<0>(reduce)*eltsPerCacheLine] += get<1>(reduce);
+  }
+
+  free(b_freq_arr);
+  free(b_freqs);
+
+  return wedges_pair.second;
 }
 
 //********************************************************************************************
