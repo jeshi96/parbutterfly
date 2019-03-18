@@ -100,7 +100,7 @@ long countSeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active) {
 pair<tuple<uintE,uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs) {
   using X = tuple<uintE,uintE>;
   // Sort seagulls (considering both active + non-active endpoints), and retrieve frequency counts
-  pair<uintE*, long> freq_pair = getFreqs(seagulls, num_sgs, UVertexPairCmp2(nu), UVertexPairEq());
+  pair<uintE*, long> freq_pair = getFreqs(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq());
   long num_sg_freqs = freq_pair.second - 1;
   X* sg_freqs = newA(X, num_sg_freqs);
   // When retrieving frequency counts, store the frequency choose 2 with the non-active endpoint
@@ -121,7 +121,7 @@ pair<tuple<uintE,uintE>*, long> getSeagullFreqs(const long nu, UVertexPair* seag
 }
 
 pair<tuple<uintE,uintE>*, long> getSeagullFreqs_seq(const long nu, UVertexPair* seagulls, long num_sgs) {
-  return getFreqs_seq<uintE>(seagulls, num_sgs, UVertexPairCmp2(nu), UVertexPairEq(), true,
+  return getFreqs_seq<uintE>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), true,
     UVertexPairV2(), choose2(), reflCount<UVertexPair>());
 }
 
@@ -781,7 +781,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
  timer t3;
  t3.start();
- auto eti = edgeToIdx(GA, use_v, max_wedges);
+ auto eti = edgeToIdxs(GA, use_v);
  uintE* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty);
  t3.stop();
  if(ty==2) t3.reportTotal("E Hash:");
@@ -805,7 +805,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 // else if (tp==1) t2.reportTotal("Sort Peel:");
 // else t2.reportTotal("Hist Peel:");
 
-  eti.del();
+  free(eti);
   free(ebutterflies);
 }
 

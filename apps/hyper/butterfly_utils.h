@@ -60,22 +60,15 @@ struct seagullSum {
   }
 };
 
-struct UWedgeIntCons {
-  long nu;
-  UWedgeIntCons(long _nu) : nu(_nu) {}
-  inline tuple<uintE,uintE> operator() (uintE v1, uintE v2, uintE c) {
-    return make_tuple(v1 * nu + v2, c);
-  }
-};
-
 struct UWedge {
   uintE v1;
   uintE v2;
   uintE u;
-  UWedge(uintE _v1, uintE _v2, uintE _u) : v1(_v1), v2(_v2), u(_u) {}
+  intT j; intT k;
+  UWedge(uintE _v1, uintE _v2, uintE _u, intT _j, intT _k) : v1(_v1), v2(_v2), u(_u), j(_j), k(_k) {}
 };
 
-struct UWedgeCons { inline UWedge operator() (uintE v1, uintE v2, uintE c) { return UWedge(v1, v2, c); }};
+struct UWedgeCons { inline UWedge operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UWedge(v1, v2, c, j, k); }};
 
 struct UWedgeCmp {
   inline bool operator() (UWedge vs1, UWedge vs2) {
@@ -102,8 +95,7 @@ struct UVertexPair {
 
 // Comparer for UVertexPair
 struct UVertexPairCmp2{
-  long nv;
-  UVertexPairCmp2(long _nv) : nv(_nv) {}
+  UVertexPairCmp2() {}
   inline bool operator() (UVertexPair vs1, UVertexPair vs2) {
     if (vs1.v2 == vs2.v2) return vs1.v1 < vs2.v1;
     return vs1.v2 < vs2.v2;
@@ -111,8 +103,7 @@ struct UVertexPairCmp2{
 };
 
 struct UVertexPairCmp {
-  long nv;
-  UVertexPairCmp(long _nv) : nv(_nv) {}
+  UVertexPairCmp() {}
   inline bool operator() (UVertexPair vs1, UVertexPair vs2) {
     if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
     return vs1.v1 < vs2.v1;
@@ -123,13 +114,13 @@ struct UVertexPairCmp {
 struct UVertexPairEq { inline bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 
 // Constructs a VertexPair and UVertexPair
-struct UVertexPairCons { inline UVertexPair operator() (uintE v1, uintE v2, uintE c) { return UVertexPair(v1, v2); }};
+struct UVertexPairCons { inline UVertexPair operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UVertexPair(v1, v2); }};
 
 // Constructs a uintE form of a VertexPair and UVertexPair
 struct UVertexPairIntCons {
   long nu;
   UVertexPairIntCons(long _nu) : nu(_nu) {}
-  inline uintE operator() (uintE v1, uintE v2, uintE c) {
+  inline uintE operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
     return v1 * nu + v2;
   }
 };
@@ -281,15 +272,6 @@ bipartiteCSR readBipartite(char* fname) {
       if(edgesU[i] < 0 || edgesU[i] >= nv) { cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0); }
     }}
 
-  {parallel_for(long i=0; i < nu; ++i) {
-  	// Sort from edgesU[offsetsU[i]] to edgesU[offsetsU[i+1]-1]
-  	//quickSort(&edgesU[offsetsU[i]], offsetsU[i+1] - offsetsU[i], less<uintE>());
-  }}
-
-  {parallel_for(long i=0; i < nv; ++i) {
-  	// Sort from edgesU[offsetsU[i]] to edgesU[offsetsU[i+1]-1]
-  	//quickSort(&edgesV[offsetsV[i]], offsetsV[i+1] - offsetsV[i], less<uintE>());
-  }}
   //W.del(); // to deal with performance bug in malloc
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
 }
@@ -620,7 +602,7 @@ void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipar
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = edgesV[v_offset + k];
         if (u2 != u) {
-          wedges_seq.A[idx] = cons(u, u2, v);
+          wedges_seq.A[idx] = cons(u, u2, v, j, k);
           ++idx;
         }
       }
@@ -692,7 +674,7 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartite
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = edgesV[v_offset + k];
         if (u2 != u) {
-          wedges_seq.A[sg_idx+nbhd_idx+idx] = cons(u, u2, v);
+          wedges_seq.A[sg_idx+nbhd_idx+idx] = cons(u, u2, v, j, k);
           ++idx;
         }
       }
@@ -731,7 +713,7 @@ void _getActiveWedgesHash(T& wedges, Sequence I, intT num_I, bipartiteCSR& GA, b
       // Find all seagulls with center v and endpoint u
       for (intT k=0; k < v_deg; ++k) { 
         uintE u2 = edgesV[v_offset + k];
-        if (u2 != u) wedges.insert(make_pair(cons(u,u2,v),1));
+        if (u2 != u) wedges.insert(make_pair(cons(u, u2, v, j, k),1));
 	    }
     }
   }
@@ -845,7 +827,7 @@ void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons,
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = edgesV[v_offset+k];
         if (u2 < i) {
-          wedges[idx] = cons(i, u2, v);
+          wedges[idx] = cons(i, u2, v, j, k); //TODO here: also store j, k; so we can do offsetsV[v] + k and eti[offsetsU[i] + j]
           ++idx;
         }
         else break; 
@@ -887,7 +869,7 @@ void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons
       for (intT k = 0; k < v_deg; ++k) {
         intT u2 = edgesV[v_offset+k];
         if (u2 < i) {
-          wedges_seq.A[wedge_idx+idx] = cons(i, u2, v);
+          wedges_seq.A[wedge_idx+idx] = cons(i, u2, v, j, k);
           ++idx;
         }
         else break;
@@ -918,7 +900,7 @@ void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, lon
       // Find all seagulls with center v and endpoint u
       for (long k=0; k < v_deg; ++k) { 
         uintE u2 = edgesV[v_offset+k];
-        if (u2 < i) wedges.insert(make_pair(cons(i,u2,v),1));
+        if (u2 < i) wedges.insert(make_pair(cons(i, u2, v, j, k),1));
         else break;
       }
     }
@@ -1043,6 +1025,35 @@ pair<tuple<uintE,uintE>*,long> updateBuckets_seq(uintE* update_idxs, long num_up
     }
   }
   return make_pair(update, idx);
+}
+
+// eti[u_offset + j] = v_offset + i, where i refers to u and j refers to v
+uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
+  long nu = use_v ? GA.nu : GA.nv;
+  long nv = use_v ? GA.nv : GA.nu;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  uintE* eti = newA(uintE, GA.numEdges);
+
+  parallel_for(intT i=0; i < nu; ++i) {
+    intT u_offset = offsetsU[i];
+    intT u_deg = offsetsU[i+1] - u_offset;
+    parallel_for (intT j = 0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset + j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
+      // find k such that edgesV[v_offset + k] = i
+      auto idx_map = make_in_imap<uintE>(v_deg, [&] (size_t k) { return edgesV[v_offset + k]; });
+      auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
+      size_t find_idx = pbbs::binary_search(idx_map, i, lte); 
+      eti[u_offset+j] = v_offset + find_idx;
+    }
+  }
+
+  return eti;
 }
 
 struct edgeToIdx { 

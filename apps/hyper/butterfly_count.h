@@ -81,8 +81,8 @@ void storeButterfliesSortCE(uintE* butterflies, long nu, UVertexPair* wedges, ui
 // (if use_v1; otherwise, second vertex -- in comments, we assume first vertex)
 // First, retrieve a list of indices where consecutive wedges have different keys
 pair<uintE*, long> getWedgeFreqs(long nv, long nu, UVertexPair* wedges, long num_wedges, bool use_v1) {
-    if (use_v1) return getFreqs(wedges, num_wedges, UVertexPairCmp(nu), UVertexPairEq());
-    return getFreqs(wedges, num_wedges, UVertexPairCmp2(nu), UVertexPairEq());
+    if (use_v1) return getFreqs(wedges, num_wedges, UVertexPairCmp(), UVertexPairEq());
+    return getFreqs(wedges, num_wedges, UVertexPairCmp2(), UVertexPairEq());
 }
 
 void countButterfliesSortCE(uintE* butterflies, long nv, long nu, UVertexPair* wedges, uintE* wedge_freqs_f, 
@@ -181,7 +181,7 @@ intT CountSortCE(_seq<UVertexPair>& wedges_seq, bipartiteCSR& GA, bool use_v, lo
 
   // Retrieve frequency counts for all wedges with the same key
   // We need to first collate by v1, v2
-  pair<uintE*, long> freq_pair = getFreqs(wedges, num_wedges_f, UVertexPairCmp(0), UVertexPairEq());
+  pair<uintE*, long> freq_pair = getFreqs(wedges, num_wedges_f, UVertexPairCmp(), UVertexPairEq());
   uintE* freq_arr = freq_pair.first;
 
   using X = tuple<uintE,uintE>;
