@@ -715,7 +715,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   
   //TODO seq code integrate w/count
-  /*if (ty == 7) CountOrigCompactParallel(GA,use_v);
+  if (ty == 7) CountOrigCompactParallel(GA,use_v);
   else if (ty == 8) {
   	long* workPrefixSum = get<2>(use_v_tuple);
   	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
@@ -760,7 +760,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
   cout << "### Max core: " << mc << endl;
 
-  free(butterflies);*/
+  free(butterflies);/*
 
  timer t3;
  
@@ -790,7 +790,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 // else t2.reportTotal("Hist Peel:");
 
   free(eti);
-  free(ebutterflies);
+  free(ebutterflies);*/
 }
 
 int parallel_main(int argc, char* argv[]) {
