@@ -269,9 +269,9 @@ void CountEHash_helper(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges
   if (max_wedges >= num_wedges) {
     if (type == 2) CountEHash(wedges, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
     else CountEHashCE(wedges, wedges_seq, butterflies_set, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
-getWedgesTimer.reportTotal("get wedges timer");
-rehashWedgesTimer.reportTotal("rehash wedges timer");
-retrieveCountsTimer.reportTotal("retrieve counts timer");
+//getWedgesTimer.reportTotal("get wedges timer");
+//rehashWedgesTimer.reportTotal("rehash wedges timer");
+//retrieveCountsTimer.reportTotal("retrieve counts timer");
     wedges.del();
     butterflies_set.del();
     wedges_seq.del();
@@ -284,9 +284,9 @@ retrieveCountsTimer.reportTotal("retrieve counts timer");
     wedges.clear();
     if (type != 2) butterflies_set.clear();
   }
-getWedgesTimer.reportTotal("get wedges timer");
-rehashWedgesTimer.reportTotal("rehash wedges timer");
-retrieveCountsTimer.reportTotal("retrieve counts timer");
+//getWedgesTimer.reportTotal("get wedges timer");
+//rehashWedgesTimer.reportTotal("rehash wedges timer");
+//retrieveCountsTimer.reportTotal("retrieve counts timer");
   wedges.del();
   butterflies_set.del();
   wedges_seq.del();
@@ -305,9 +305,9 @@ void CountEHist_helper(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges
     CountEHist(wedges_seq, sizes, tmp, out, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
     wedges_seq.del();
     sizes.del();
-getWedgesTimer.reportTotal("get wedges timer");
-rehashWedgesTimer.reportTotal("rehash wedges timer");
-retrieveCountsTimer.reportTotal("retrieve counts timer");
+//getWedgesTimer.reportTotal("get wedges timer");
+//rehashWedgesTimer.reportTotal("rehash wedges timer");
+//retrieveCountsTimer.reportTotal("retrieve counts timer");
     return;
   }
   intT curr_idx = 0;
@@ -317,9 +317,9 @@ retrieveCountsTimer.reportTotal("retrieve counts timer");
   }
   wedges_seq.del();
   sizes.del();
-getWedgesTimer.reportTotal("get wedges timer");
-rehashWedgesTimer.reportTotal("rehash wedges timer");
-retrieveCountsTimer.reportTotal("retrieve counts timer");
+//getWedgesTimer.reportTotal("get wedges timer");
+//rehashWedgesTimer.reportTotal("rehash wedges timer");
+//retrieveCountsTimer.reportTotal("retrieve counts timer");
 }
 
 void CountESort_helper(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, long type) {
@@ -335,9 +335,9 @@ void CountESort_helper(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges
     else CountESortCE(wedges_seq, butterflies_seq, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
     wedges_seq.del();
     butterflies_seq.del();
-getWedgesTimer.reportTotal("get wedges timer");
-rehashWedgesTimer.reportTotal("rehash wedges timer");
-retrieveCountsTimer.reportTotal("retrieve counts timer");
+//getWedgesTimer.reportTotal("get wedges timer");
+//rehashWedgesTimer.reportTotal("rehash wedges timer");
+//retrieveCountsTimer.reportTotal("retrieve counts timer");
     return;
   }
   intT curr_idx = 0;
@@ -347,9 +347,9 @@ retrieveCountsTimer.reportTotal("retrieve counts timer");
   }
   wedges_seq.del();
   butterflies_seq.del();
-getWedgesTimer.reportTotal("get wedges timer");
-rehashWedgesTimer.reportTotal("rehash wedges timer");
-retrieveCountsTimer.reportTotal("retrieve counts timer");
+//getWedgesTimer.reportTotal("get wedges timer");
+//rehashWedgesTimer.reportTotal("rehash wedges timer");
+//retrieveCountsTimer.reportTotal("retrieve counts timer");
 }
 
 void CountEOrigCompactParallel(uintE* eti, uintE* butterflies, bipartiteCSR& GA, bool use_v) {

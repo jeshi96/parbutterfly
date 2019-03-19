@@ -626,13 +626,13 @@ struct PeelSpace {
   }
 
   void clear() {
-    if (type == 0) {
+    //if (type == 0) {
       //wedges_hash.del();
       //wedges_hash = sparseAdditiveSet<uintE>(UINT_E_MAX);
       //wedges_hash->clear();
     	//free(wedges_hash);
     	//wedges_hash = new sparseAdditiveSet<uintE>(UINT_E_MAX);
-    }
+    //}
   }
 
   void del() {
