@@ -577,6 +577,75 @@ uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
   return idxs;
 }
 
+struct PeelSpace {
+  long type;
+  long nu;
+  _seq<UVertexPair> wedges_seq_uvp;
+  _seq<uintE> wedges_seq_int;
+  sparseAdditiveSet<uintE>* wedges_hash;
+  sparseAdditiveSet<uintE>** wedges_hash_list;
+  intT num_wedges_hash;
+  PeelSpace(long _type, long _nu) : type(_type), nu(_nu) {
+    if (type == 0) {
+      using T = sparseAdditiveSet<uintE>*;
+      wedges_hash = new sparseAdditiveSet<uintE>(1,1,UINT_E_MAX);
+      wedges_hash_list = newA(T, 1);
+      wedges_hash_list[0] = wedges_hash;
+      num_wedges_hash = 1;
+    }
+    else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+    else wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  }
+
+  sparseAdditiveSet<uintE>* resize(size_t size) {
+    if (type != 0) return nullptr;
+    //wedges_hash->resize(size);
+    //return wedges_hash;
+    
+    size_t find_idx = log2RoundUp(size);
+    if (find_idx < num_wedges_hash) {
+      wedges_hash = wedges_hash_list[find_idx];
+      wedges_hash->clear(); 
+      return wedges_hash_list[find_idx];
+    }
+    using T = sparseAdditiveSet<uintE>*;
+    sparseAdditiveSet<uintE>** new_wedges_hash_list = newA(T, find_idx+1);
+    parallel_for(intT i=0; i < num_wedges_hash; ++i) {
+      new_wedges_hash_list[i] = wedges_hash_list[i];
+    }
+    parallel_for(intT i=num_wedges_hash; i < find_idx+1; ++i) {
+      new_wedges_hash_list[i] = new sparseAdditiveSet<uintE>(1u << i,1,UINT_E_MAX);
+    }
+    free(wedges_hash_list);
+    wedges_hash_list = new_wedges_hash_list;
+    num_wedges_hash = find_idx+1;
+    wedges_hash = wedges_hash_list[find_idx];
+    return wedges_hash_list[find_idx];
+    // binary search wedges_hash_list for right size
+    // if none found, square top until we get to size
+  }
+
+  void clear() {
+    if (type == 0) {
+      //wedges_hash.del();
+      //wedges_hash = sparseAdditiveSet<uintE>(UINT_E_MAX);
+      //wedges_hash->clear();
+    	//free(wedges_hash);
+    	//wedges_hash = new sparseAdditiveSet<uintE>(UINT_E_MAX);
+    }
+  }
+
+  void del() {
+    if (type == 0) {
+      parallel_for(intT i=0; i < num_wedges_hash; ++i) { free(wedges_hash_list[i]); }
+      free(wedges_hash_list);
+    	//free(wedges_hash);
+    }
+    else if (type == 1) wedges_seq_uvp.del();
+    else wedges_seq_int.del();
+  }
+};
+
 
 //***************************************************************************************************
 //***************************************************************************************************
@@ -689,8 +758,8 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartite
   free(sg_idxs);
 }
 
-template<class wedgeCons, class T, class Sequence>
-void _getActiveWedgesHash(T& wedges, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, 
+template<class wedgeCons, class Sequence>
+void _getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, 
   intT curr_idx=0, intT next_idx=INT_T_MAX) {
 
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -699,7 +768,8 @@ void _getActiveWedgesHash(T& wedges, Sequence I, intT num_I, bipartiteCSR& GA, b
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   if (next_idx == INT_T_MAX) next_idx = num_I;
-  wedges.resize(num_wedges);
+
+  sparseAdditiveSet<uintE>* wedges = ps.resize(num_wedges);
 
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
@@ -713,7 +783,7 @@ void _getActiveWedgesHash(T& wedges, Sequence I, intT num_I, bipartiteCSR& GA, b
       // Find all seagulls with center v and endpoint u
       for (intT k=0; k < v_deg; ++k) { 
         uintE u2 = edgesV[v_offset + k];
-        if (u2 != u) wedges.insert(make_pair(cons(u, u2, v, j, k),1));
+        if (u2 != u) wedges->insert(make_pair(cons(u, u2, v, j, k),1));
 	    }
     }
   }
@@ -792,14 +862,14 @@ pair<long, intT> getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I
   return p;
 }
 
-template<class wedgeCons, class T, class Sequence>
-long getActiveWedgesHash(T& wedges, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges) {
+template<class wedgeCons, class Sequence>
+long getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges) {
   if (max_wedges >= num_wedges) {
-    _getActiveWedgesHash(wedges, I, num_I, GA, use_v, cons, num_wedges);
+    _getActiveWedgesHash(ps, I, num_I, GA, use_v, cons, num_wedges);
     return num_I;
   }
   pair<long, intT> p = getNextActiveWedgeIdx(I, num_I, GA, use_v, max_wedges, curr_idx);
-  _getActiveWedgesHash(wedges, I, num_I, GA, use_v, cons, p.first, curr_idx, p.second);
+  _getActiveWedgesHash(ps, I, num_I, GA, use_v, cons, p.first, curr_idx, p.second);
   return p.second;
 }
 
@@ -986,6 +1056,7 @@ pair<tuple<uintE,uintE>*,long> updateBuckets(uintE* update_idxs, long num_update
   array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
   using X = tuple<uintE,uintE>;
   X* update = newA(X,num_updates);
+  const intT eltsPerCacheLine = 64/sizeof(long);
 
     // Filter for bucket updates
   parallel_for(long i=0; i < num_updates; ++i) {
@@ -993,7 +1064,7 @@ pair<tuple<uintE,uintE>*,long> updateBuckets(uintE* update_idxs, long num_update
     uintE old_b = D.s[u_idx];
 
     if (old_b > k) {
-        uintE new_b = max(butterflies[u_idx],k);
+        uintE new_b = max(butterflies[eltsPerCacheLine*u_idx],k);
         D.s[u_idx] = new_b;
         uintE new_bkt = b.get_bucket(old_b, new_b);
         update[i] = make_tuple(u_idx, new_bkt);
@@ -1011,13 +1082,14 @@ pair<tuple<uintE,uintE>*,long> updateBuckets_seq(uintE* update_idxs, long num_up
   array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
   using X = tuple<uintE, uintE>;
   X* update = newA(X, num_updates);
+  const intT eltsPerCacheLine = 64/sizeof(long);
   long idx = 0;
   for(long i=0; i < num_updates; ++i) {
     uintE u_idx = update_idxs[i];
     uintE old_b = D.s[u_idx];
 
     if(old_b > k) {
-      uintE new_b = max(butterflies[u_idx], k);
+      uintE new_b = max(butterflies[eltsPerCacheLine*u_idx], k);
       D.s[u_idx] = new_b;
       uintE new_bkt = b.get_bucket(old_b, new_b);
       update[idx] = make_tuple(u_idx, new_bkt);
@@ -1055,80 +1127,6 @@ uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
 
   return eti;
 }
-
-struct edgeToIdx { 
-  const intT eltsPerCacheLine = 64/sizeof(long);
-  long nv;
-  long nu;
-  uintT* offsetsV;
-  uintT* offsetsU;
-  uintE* edgesV;
-  uintE* edgesU;
-
-  long numEdges;
-  long max_wedges;
-  sparseAdditiveSet<uintE> edges;
-
-  edgeToIdx(bipartiteCSR& GA, bool use_v, long _max_wedges) : max_wedges(_max_wedges) {
-    nu = use_v ? GA.nu : GA.nv;
-    nv = use_v ? GA.nv : GA.nu;
-    offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-    offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
-    edgesV = use_v ? GA.edgesV : GA.edgesU;
-    edgesU = use_v ? GA.edgesU : GA.edgesV;
-    numEdges = GA.numEdges;
-
-    edges = sparseAdditiveSet<uintE>(numEdges, 1, UINT_E_MAX);
-    
-    if (nu*nv < max_wedges) {
-      bool* edges_bool = newA(bool, nu*nv);
-      parallel_for(long i=0; i < nu*nv; ++i) {edges_bool[i] = false;}
-      parallel_for(intT i=0; i < nv; ++i) {
-      	intT v_offset = offsetsV[i];
-      	intT v_deg = offsetsV[i+1] - v_offset;
-        for (intT j = 0; j < v_deg; ++j) {
-          intT u = edgesV[v_offset + j];
-          edges_bool[nu*i + u] = true;
-        }
-      }
-      auto f = [&] (size_t i) { return edges_bool[i]; };
-      auto f_in = make_in_imap<bool>(nu*nv, f);
-      auto out = pbbs::pack_index<uintE>(f_in);
-      out.alloc = false;
-      free(edges_bool);
-
-      parallel_for(long i=0; i < out.size(); ++i) {
-        edges.insert(make_pair(out.s[i], i));
-      }
-
-      free(out.s);
-    }
-    else {
-      parallel_for (intT i=0; i < nv; ++i) {
-        intT v_offset = offsetsV[i];
-        intT v_deg = offsetsV[i+1] - v_offset;
-        for (long j=0; j < v_deg; ++j) {
-          intT u = edgesV[v_offset + j];
-          edges.insert(make_pair(nu*i + u, 0));
-        }
-      }
-      auto edges_seq = edges.entries();
-      //sequence::scan<pair<uintE,uintE>>(edges_seq.A, (long) 0, edges_seq.n, getAddReducePair<uintE,uintE>,
-      //  sequence::getA<pair<uintE,uintE>, long>(edges_seq.A), make_pair(0,0), false, false);
-      parallel_for(long i=0; i < edges_seq.n; ++i) { edges.insert(make_pair(edges_seq.A[i].first, i));}
-      edges_seq.del();
-    }
-  }
-
-  void del() {
-    edges.del();
-  }
-
-  // Note: always in the format (V, U)
-  inline uintE operator() (const uintE& i, const uintE& j) {
-    return eltsPerCacheLine * (edges.find((uintE) (nu*i + j))).second;
-  }
-};
 
 
 #endif

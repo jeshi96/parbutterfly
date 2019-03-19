@@ -82,7 +82,7 @@ retrieveCountsTimer.stop();
 //********************************************************************************************
 //********************************************************************************************
 
-intT CountESortCE(_seq<UWedge>& wedges_seq, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE* eti, intT curr_idx=0) {
+intT CountESortCE(_seq<UWedge>& wedges_seq, _seq<tuple<uintE, uintE>>& butterflies_seq, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE* eti, intT curr_idx=0) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
 getWedgesTimer.start();
@@ -92,7 +92,11 @@ getWedgesTimer.start();
 getWedgesTimer.stop();
 rehashWedgesTimer.start();
   using X = tuple<uintE,uintE>;
-  X* b_freqs = newA(X, 2*num_wedges_f);
+  if (butterflies_seq.n < 2*num_wedges_f) {
+    free(butterflies_seq.A);
+    butterflies_seq.A = newA(X, 2*num_wedges_f);
+    butterflies_seq.n = 2*num_wedges_f;
+  }
 
   // Retrieve frequency counts for all wedges with the same key
   // We need to first collate by v1, v2
@@ -103,8 +107,8 @@ rehashWedgesTimer.start();
   parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
     uintE num = freq_arr[i+1] - freq_arr[i] - 1;
     parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) {
-      b_freqs[2*j] = make_tuple(eti[offsetsU[wedges[j].v1] + wedges[j].j], num);
-      b_freqs[2*j+1] = make_tuple(offsetsV[wedges[j].u] + wedges[j].k, num);
+      butterflies_seq.A[2*j] = make_tuple(eti[offsetsU[wedges[j].v1] + wedges[j].j], num);
+      butterflies_seq.A[2*j+1] = make_tuple(offsetsV[wedges[j].u] + wedges[j].k, num);
     }
   }
 rehashWedgesTimer.stop();
@@ -113,19 +117,18 @@ retrieveCountsTimer.start();
   free(freq_arr);
 
   // now, we need to collate by our indices
-  pair<uintE*, long> b_freq_pair = getFreqs(b_freqs, 2*num_wedges_f, uintETupleLt(), uintETupleEq());
+  pair<uintE*, long> b_freq_pair = getFreqs(butterflies_seq.A, 2*num_wedges_f, uintETupleLt(), uintETupleEq());
   uintE* b_freq_arr = b_freq_pair.first;
 
   parallel_for(long i=1; i < b_freq_pair.second; ++i) {
     uintE num_freq = b_freq_arr[i] - b_freq_arr[i-1];
     // Reduce to sum the butterflies over the necessary range
-    X reduce = sequence::reduce(&(b_freqs[b_freq_arr[i-1]]), num_freq, uintETupleAdd());
+    X reduce = sequence::reduce(&(butterflies_seq.A[b_freq_arr[i-1]]), num_freq, uintETupleAdd());
     // These are our butterfly counts
     butterflies[get<0>(reduce)] += get<1>(reduce);
   }
 
   free(b_freq_arr);
-  free(b_freqs);
 retrieveCountsTimer.stop();
   return wedges_pair.second;
 }
@@ -201,7 +204,7 @@ rehashWedgesTimer.stop();
   return next_idx;
 }
 
-intT CountEHashCE(sparseAdditiveSet<uintE>& wedges, sparseAdditiveSet<uintE>& butterflies_set, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE* eti, intT curr_idx=0) {
+intT CountEHashCE(sparseAdditiveSet<uintE>& wedges, _seq<pair<uintE,uintE>>& wedges_seq, sparseAdditiveSet<uintE>& butterflies_set, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, uintE* eti, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -215,6 +218,7 @@ getWedgesTimer.start();
 getWedgesTimer.stop();
 
 rehashWedgesTimer.start();
+  butterflies_set.resize(2*wedges.count());
   parallel_for (intT i = curr_idx; i < next_idx; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
@@ -237,15 +241,13 @@ rehashWedgesTimer.start();
 rehashWedgesTimer.stop();
 
 retrieveCountsTimer.start();
-  _seq<pair<uintE,uintE>> butterflies_seq = butterflies_set.entries();
+  intT num_wedges_seq = butterflies_set.entries_no_init(wedges_seq);
 
-  parallel_for(long i=0; i < butterflies_seq.n; ++i) {
-      pair<uintE,uintE> butterflies_pair = butterflies_seq.A[i];
+  parallel_for(long i=0; i < num_wedges_seq; ++i) {
+      pair<uintE,uintE> butterflies_pair = wedges_seq.A[i];
       butterflies[butterflies_pair.first] += butterflies_pair.second;
   }
 retrieveCountsTimer.stop();
-
-  butterflies_seq.del();
   
   return next_idx;
 }
@@ -259,23 +261,26 @@ void CountEHash_helper(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges
 
   initHashTimer.start();
 
-  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(GA.numEdges,1,UINT_E_MAX);
-  sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(GA.numEdges,1,UINT_E_MAX);
+  using T = pair<uintE,uintE>;
+  sparseAdditiveSet<uintE> wedges = sparseAdditiveSet<uintE>(1,1,UINT_E_MAX);
+  sparseAdditiveSet<uintE> butterflies_set = sparseAdditiveSet<uintE>(1,1,UINT_E_MAX);
+  _seq<T> wedges_seq = _seq<T>(newA(T, 1), 1);
 
   if (max_wedges >= num_wedges) {
     if (type == 2) CountEHash(wedges, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
-    else CountEHashCE(wedges, butterflies_set, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+    else CountEHashCE(wedges, wedges_seq, butterflies_set, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
 getWedgesTimer.reportTotal("get wedges timer");
 rehashWedgesTimer.reportTotal("rehash wedges timer");
 retrieveCountsTimer.reportTotal("retrieve counts timer");
     wedges.del();
     butterflies_set.del();
+    wedges_seq.del();
     return;
   }
   intT curr_idx = 0;
   while(curr_idx < nu) {
     if (type ==2) curr_idx = CountEHash(wedges, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
-    else curr_idx = CountEHashCE(wedges, butterflies_set, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+    else curr_idx = CountEHashCE(wedges, wedges_seq, butterflies_set, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
     wedges.clear();
     if (type != 2) butterflies_set.clear();
   }
@@ -284,6 +289,7 @@ rehashWedgesTimer.reportTotal("rehash wedges timer");
 retrieveCountsTimer.reportTotal("retrieve counts timer");
   wedges.del();
   butterflies_set.del();
+  wedges_seq.del();
 }
 
 void CountEHist_helper(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, long type) {
@@ -320,12 +326,15 @@ void CountESort_helper(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
 
+  using T = tuple<uintE, uintE>;
   _seq<UWedge> wedges_seq = _seq<UWedge>(newA(UWedge, nu), nu);
+  _seq<T> butterflies_seq = _seq<T>(newA(T, 1), 1);
 
   if (max_wedges >= num_wedges) {
     if (type == 0) CountESort(wedges_seq, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
-    else CountESortCE(wedges_seq, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+    else CountESortCE(wedges_seq, butterflies_seq, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
     wedges_seq.del();
+    butterflies_seq.del();
 getWedgesTimer.reportTotal("get wedges timer");
 rehashWedgesTimer.reportTotal("rehash wedges timer");
 retrieveCountsTimer.reportTotal("retrieve counts timer");
@@ -334,9 +343,10 @@ retrieveCountsTimer.reportTotal("retrieve counts timer");
   intT curr_idx = 0;
   while(curr_idx < nu) {
     if (type == 0) curr_idx = CountESort(wedges_seq, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
-    else curr_idx = CountESortCE(wedges_seq, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+    else curr_idx = CountESortCE(wedges_seq, butterflies_seq, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
   }
   wedges_seq.del();
+  butterflies_seq.del();
 getWedgesTimer.reportTotal("get wedges timer");
 rehashWedgesTimer.reportTotal("rehash wedges timer");
 retrieveCountsTimer.reportTotal("retrieve counts timer");

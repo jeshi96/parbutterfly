@@ -189,9 +189,14 @@ class sparseAdditiveSet {
 
 
 // note that FL has to be init to size m; also init out to size m prob
-  _seq<kvPair> entries_no_init(kvPair* out) {
-    _seq<kvPair> R = pack(out, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
-    return R;
+  intT entries_no_init(_seq<kvPair>& out) {
+    intT num = count();
+    if (out.n < num) {
+      free(out.A);
+      out.A = newA(kvPair, num);
+      out.n = num;
+    }
+    return pack(out.A, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA)).n;
   }
 
   // returns all the current entries satisfying predicate f compacted into a sequence
@@ -206,6 +211,7 @@ class sparseAdditiveSet {
   }
 
   // returns the number of entries
+  // TODO use FL to make better? idk how though cause reduce doesn't like me
   intT count() {
     return sequence::mapReduce<intT>(TA,m,addF<intT>(),notEmptyF(empty));
   }
