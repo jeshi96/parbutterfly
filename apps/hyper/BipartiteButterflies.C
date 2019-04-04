@@ -474,12 +474,13 @@ void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* butterflies, b
 	  //else break;
 	}
       }
-      for(intT j=0; j < used_idx; ++j) { 
+      granular_for(j,0,used_idx,used_idx > 10000, { wedges[used[shift+j]] = 0; });
+//      for(intT j=0; j < used_idx; ++j) { 
       	/*uintE num = wedges[used[shift+j]];
       	num = num * (num-1) / 2;
       	writeAdd(&butterflies[eltsPerCacheLine*(used[shift+j]-shift)], -1*num);*/
-      	wedges[used[shift+j]] = 0; 
-      }
+//  	wedges[used[shift+j]] = 0; 
+//      }
     }
   }
 }
