@@ -418,10 +418,73 @@ intT PeelHash(PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* upd
   return next_idx;
 }
 
+void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  long stepSize = active.size() < 1000 ? active.size() : 1000; //tunable parameter
+
+  auto wedges_seq = ps.wedges_seq_int;
+  auto used_seq = ps.used_seq_int;
+  /*if (wedges_seq.n < nu*stepSize) {
+    free(wedges_seq.A);
+    wedges_seq.A = newA(uintE, nu*stepSize);
+    wedges_seq.n = nu*stepSize;
+  }
+  if (used_seq.n < nu*stepSize) {
+    free(used_seq.A);
+    used_seq.A = newA(uintE, nu*stepSize);
+    used_seq.n = nu*stepSize;
+  }*/
+
+  uintE* wedges = wedges_seq.A;
+  uintE* used = used_seq.A;
+  granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
+  const intT eltsPerCacheLine = 64/sizeof(long);
+
+  for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
+    for(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){//parallel_for_1
+      intT used_idx = 0;
+      intT shift = nu*(i-step*stepSize);
+      intT u_idx = active.vtx(i);
+      intT u_offset  = offsetsU[u_idx];
+      intT u_deg = offsetsU[u_idx+1]-u_offset;
+      for (intT j=0; j < u_deg; ++j ) {
+	intT v = edgesU[u_offset+j];
+	intT v_offset = offsetsV[v];
+	intT v_deg = offsetsV[v+1]-offsetsV[v];
+	for (intT k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = edgesV[v_offset+k];
+	  if (u2_idx != u_idx) {
+	  //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
+	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], -1*wedges[shift+u2_idx]);
+	    // alternatively, at end before clear do this
+	    wedges[shift+u2_idx]++;
+	    if (wedges[shift+u2_idx] == 1) {used[shift+used_idx++] = shift+u2_idx; CAS(&update_dense[u2_idx],false,true);}//update_dense[u2_idx]=true;}
+	  }
+	  //else break;
+	}
+      }
+      for(intT j=0; j < used_idx; ++j) { 
+      	/*uintE num = wedges[used[shift+j]];
+      	num = num * (num-1) / 2;
+      	writeAdd(&butterflies[eltsPerCacheLine*(used[shift+j]-shift)], -1*num);*/
+      	wedges[used[shift+j]] = 0; 
+      }
+    }
+  }
+}
+
 //***************************************************************************************************
 //***************************************************************************************************
 
 void Peel_helper (PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v, long max_wedges, long type) {
+  if (type == 3) return PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v);
+
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
   long num_wedges = countSeagulls(GA, use_v, active);
@@ -748,19 +811,20 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
 
-  timer t2;
+  /*timer t2;
   t2.start();
   auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
   t2.stop();
   if (tp ==0) t2.reportTotal("Hash Peel:");
   else if (tp==1) t2.reportTotal("Sort Peel:");
-  else t2.reportTotal("Hist Peel:");
+  else if (tp==2) t2.reportTotal("Hist Peel:");
+  else t2.reportTotal("Par Peel: ");
 
   uintE mc = 0;
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
   cout << "### Max core: " << mc << endl;
 
-  free(butterflies);/*
+  free(butterflies);*//*
 
  timer t3;
  

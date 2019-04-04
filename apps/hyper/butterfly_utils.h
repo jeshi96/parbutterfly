@@ -582,6 +582,7 @@ struct PeelSpace {
   long nu;
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<uintE> wedges_seq_int;
+  _seq<uintE> used_seq_int;
   sparseAdditiveSet<uintE>* wedges_hash;
   sparseAdditiveSet<uintE>** wedges_hash_list;
   intT num_wedges_hash;
@@ -594,7 +595,8 @@ struct PeelSpace {
       num_wedges_hash = 1;
     }
     else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-    else wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+    else if (type == 2) wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+    else {wedges_seq_int = _seq<uintE>(newA(uintE, nu*1000), nu*1000); used_seq_int = _seq<uintE>(newA(uintE, nu*1000), nu*1000);}
   }
 
   sparseAdditiveSet<uintE>* resize(size_t size) {
@@ -642,7 +644,8 @@ struct PeelSpace {
     	//free(wedges_hash);
     }
     else if (type == 1) wedges_seq_uvp.del();
-    else wedges_seq_int.del();
+    else if (type == 2) wedges_seq_int.del();
+    else {wedges_seq_int.del(); used_seq_int.del();}
   }
 };
 
