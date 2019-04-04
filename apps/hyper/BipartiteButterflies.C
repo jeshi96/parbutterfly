@@ -418,6 +418,8 @@ intT PeelHash(PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* upd
   return next_idx;
 }
 
+#define MAX_STEP_SIZE 1000
+
 void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -426,7 +428,7 @@ void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* butterflies, b
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  long stepSize = active.size() < 1000 ? active.size() : 1000; //tunable parameter
+  long stepSize = active.size() < MAX_STEP_SIZE ? active.size() : MAX_STEP_SIZE; //tunable parameter
 
   auto wedges_seq = ps.wedges_seq_int;
   auto used_seq = ps.used_seq_int;
@@ -443,11 +445,14 @@ void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* butterflies, b
 
   uintE* wedges = wedges_seq.A;
   uintE* used = used_seq.A;
-  granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
+
+  //granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
+
+  
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
-    for(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){//parallel_for_1
+    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){//parallel_for_1
       intT used_idx = 0;
       intT shift = nu*(i-step*stepSize);
       intT u_idx = active.vtx(i);
@@ -464,7 +469,7 @@ void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* butterflies, b
 	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], -1*wedges[shift+u2_idx]);
 	    // alternatively, at end before clear do this
 	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) {used[shift+used_idx++] = shift+u2_idx; CAS(&update_dense[u2_idx],false,true);}//update_dense[u2_idx]=true;}
+	    if (wedges[shift+u2_idx] == 1) {used[shift+used_idx++] = shift+u2_idx; if(!update_dense[u2_idx]) CAS(&update_dense[u2_idx],false,true);}//update_dense[u2_idx]=true;}
 	  }
 	  //else break;
 	}
@@ -521,9 +526,11 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
   auto b = make_buckets(nu, D, increasing, num_buckets);
 
   bool* update_dense = newA(bool, nu);
-  PeelSpace ps = PeelSpace(type, nu);
+  PeelSpace ps = PeelSpace(type, nu, MAX_STEP_SIZE);
 
   size_t finished = 0;
+  long nonZeroRounds = 0;
+  long totalRounds = 0;
   while (finished != nu) {
   //cout <<"get1, ";fflush(stdout);
     auto bkt = b.next_bucket();
@@ -531,6 +538,8 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
     auto active = bkt.identifiers;
     uintE k = bkt.id;
     finished += active.size();
+    totalRounds++;
+    if(active.size() > 0) {nonZeroRounds++; }
     bool is_seq = (active.size() < 1000);
 
     parallel_for(intT i=0; i < nu; ++i) { update_dense[i] = false; }
@@ -553,6 +562,9 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
     moved.del(); active.del();
   }
   ps.del();
+  cout << "totalRounds = " << totalRounds << endl;
+  cout << "nonZeroRounds = " << nonZeroRounds << endl;
+  
   return D;
 }
 
@@ -811,7 +823,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 2);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
 
-  /*timer t2;
+  timer t2;
   t2.start();
   auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
   t2.stop();
@@ -824,8 +836,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
   cout << "### Max core: " << mc << endl;
 
-  free(butterflies);*//*
-
+  free(butterflies);
+  /*
  timer t3;
  
  auto eti = edgeToIdxs(GA, use_v);
@@ -854,7 +866,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 // else t2.reportTotal("Hist Peel:");
 
   free(eti);
-  free(ebutterflies);*/
+  free(ebutterflies);
+*/
 }
 
 int parallel_main(int argc, char* argv[]) {

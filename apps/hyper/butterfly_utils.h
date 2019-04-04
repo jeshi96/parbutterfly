@@ -580,25 +580,32 @@ uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
 struct PeelSpace {
   long type;
   long nu;
+  long stepSize;
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<uintE> wedges_seq_int;
   _seq<uintE> used_seq_int;
   sparseAdditiveSet<uintE>* wedges_hash;
   sparseAdditiveSet<uintE>** wedges_hash_list;
   intT num_wedges_hash;
-  PeelSpace(long _type, long _nu) : type(_type), nu(_nu) {
-    if (type == 0) {
-      using T = sparseAdditiveSet<uintE>*;
-      wedges_hash = new sparseAdditiveSet<uintE>(1,1,UINT_E_MAX);
-      wedges_hash_list = newA(T, 1);
-      wedges_hash_list[0] = wedges_hash;
-      num_wedges_hash = 1;
-    }
-    else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-    else if (type == 2) wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
-    else {wedges_seq_int = _seq<uintE>(newA(uintE, nu*1000), nu*1000); used_seq_int = _seq<uintE>(newA(uintE, nu*1000), nu*1000);}
+PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
+  if (type == 0) {
+    using T = sparseAdditiveSet<uintE>*;
+    wedges_hash = new sparseAdditiveSet<uintE>(1,1,UINT_E_MAX);
+    wedges_hash_list = newA(T, 1);
+    wedges_hash_list[0] = wedges_hash;
+    num_wedges_hash = 1;
   }
-
+  else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+  else if (type == 2) wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  else {
+    timer t1;
+    wedges_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
+    t1.start();
+    granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
+    t1.reportTotal("time for init wedges");
+    used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);}
+}
+  
   sparseAdditiveSet<uintE>* resize(size_t size) {
     if (type != 0) return nullptr;
     //wedges_hash->resize(size);
