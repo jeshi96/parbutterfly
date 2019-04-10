@@ -275,9 +275,9 @@ long getUpdatesHist(tuple<uintE,uintE>* sg_freqs, long num_sg_freqs, const long 
 /*
  *  Precisely getSeagullFreqs, but using hash tables instead of sorting.
  */
-sparseAdditiveSet<uintE> getSeagullFreqsHash(sparseAdditiveSet<uintE>* seagulls, const long nu) {
-  sparseAdditiveSet<uintE> update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
-  _seq<pair<uintE,uintE>> sg_freqs = seagulls->entries();
+void getSeagullFreqsHash(PeelSpace& ps, const long nu) {
+  //sparseAdditiveSet<uintE> update_hash = ps.update_hash;
+  _seq<pair<uintE,uintE>> sg_freqs = (ps.wedges_hash)->entries();
 
   using T = pair<uintE,uintE>;
 
@@ -285,10 +285,9 @@ sparseAdditiveSet<uintE> getSeagullFreqsHash(sparseAdditiveSet<uintE>* seagulls,
   granular_for ( j, 0, sg_freqs.n, (sg_freqs.n > 1000), {
     T sg_freq_pair = sg_freqs.A[j];
     uintE num = sg_freq_pair.second;
-    if (num > 1) {update_hash.insert(T(sg_freq_pair.first % nu, num * (num - 1)/2));}
+    if (num > 1) {ps.update_hash.insert(T(sg_freq_pair.first % nu, num * (num - 1)/2));}
   });
   sg_freqs.del();
-  return update_hash;
 }
 
 /*
@@ -308,7 +307,6 @@ long getUpdatesHash(sparseAdditiveSet<uintE>& update_hash, uintE* butterflies, b
     T update_pair = update_seq.A[i];
     uintE u_idx = update_pair.first;
     butterflies[eltsPerCacheLine*u_idx] -= update_pair.second;
-    //update[i] = u_idx;
     update_dense[eltsPerCacheLine*u_idx] = true;
   });
 
@@ -409,12 +407,11 @@ intT PeelHash(PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* upd
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   intT next_idx = getActiveWedgesHash(ps, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
 
-  sparseAdditiveSet<uintE> update_hash = getSeagullFreqsHash(ps.wedges_hash, nu);
+  getSeagullFreqsHash(ps, nu);
 
   // Compute updated butterfly counts]
-  getUpdatesHash(update_hash, butterflies, update_dense);
+  //getUpdatesHash(ps.update_hash, butterflies, update_dense);
 
-  update_hash.del();
   return next_idx;
 }
 
@@ -526,7 +523,8 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
 
   auto b = make_buckets(nu, D, increasing, num_buckets);
 
-  bool* update_dense = newA(bool, eltsPerCacheLine*nu);
+  //bool* update_dense = newA(bool, eltsPerCacheLine*nu);
+  bool* update_dense = newA(bool, 1);
   PeelSpace ps = PeelSpace(type, nu, MAX_STEP_SIZE);
 
   size_t finished = 0;
@@ -543,24 +541,28 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
     if(active.size() > 0) {nonZeroRounds++; }
     bool is_seq = (active.size() < 1000);
 
-    parallel_for(intT i=0; i < nu; ++i) { update_dense[eltsPerCacheLine*i] = false; }
+    //parallel_for(intT i=0; i < nu; ++i) { update_dense[eltsPerCacheLine*i] = false; }
     Peel_helper(ps, active, butterflies, update_dense, GA, use_v, max_wedges, type);
 
-    auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
-    auto f_in = make_in_imap<bool>(nu, f);
-    auto out = pbbs::pack_index<uintE>(f_in);
-    out.alloc = false;
+    //auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
+    //auto f_in = make_in_imap<bool>(nu, f);
+    //auto out = pbbs::pack_index<uintE>(f_in);
+    //out.alloc = false;
 
     pair<tuple<uintE,uintE>*,long> bucket_pair;
-    if (is_seq) bucket_pair = updateBuckets_seq(out.s, out.size(), butterflies, D, b, k);
-    else bucket_pair = updateBuckets(out.s, out.size(), butterflies, D, b, k);
+    //if (is_seq) bucket_pair = updateBuckets_seq(out.s, out.size(), butterflies, D, b, k);
+    //else bucket_pair = updateBuckets(out.s, out.size(), butterflies, D, b, k);
+    //if (is_seq) bucket_pair = updateBuckets_seq(ps, butterflies, D, b, k);
+    //else
+    bucket_pair = updateBuckets(ps, butterflies, D, b, k);
 
-    free(out.s);
+    //free(out.s);
 
     vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(nu, bucket_pair.second, bucket_pair.first);
     b.update_buckets(moved.get_fn_repr(), moved.size());
 
     moved.del(); active.del();
+    ps.clear();
   }
   ps.del();
   //cout << "totalRounds = " << totalRounds << endl;

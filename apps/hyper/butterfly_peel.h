@@ -125,7 +125,7 @@ array_imap<uintE> PeelE(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterfli
 
   size_t finished = 0;
   while (finished != nu*(nv-1)+nu-1) {
-    auto bkt = b.next_bucket();
+    /*auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
     uintE k = bkt.id;
     finished += active.size();
@@ -155,7 +155,7 @@ array_imap<uintE> PeelE(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterfli
     vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(nu, bucket_pair.second, bucket_pair.first);
     b.update_buckets(moved.get_fn_repr(), moved.size());
 
-    moved.del(); active.del();
+    moved.del(); active.del();*/
   }
   return D;
 }
