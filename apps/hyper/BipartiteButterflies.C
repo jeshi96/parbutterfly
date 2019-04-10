@@ -138,7 +138,7 @@ long getUpdates_seq(tuple<uintE,uintE>* sg_freqs, long num_sg_freqs, uintE* butt
   for(long i=0; i<num_updates; ++i) {
     uintE u_idx = get<0>(b_updates[i]);
     butterflies[eltsPerCacheLine*u_idx] -= get<1>(b_updates[i]);
-    update_dense[u_idx] = get<1>(b_updates[i]) > 0 ? true : false; //this is b/c seq doesn't filter
+    update_dense[eltsPerCacheLine*u_idx] = get<1>(b_updates[i]) > 0 ? true : false; //this is b/c seq doesn't filter
   }
   free(b_updates);
   return num_updates;
@@ -176,7 +176,7 @@ long getUpdates(tuple<uintE,uintE>* sg_freqs, long num_sg_freqs, uintE* butterfl
     // Remove these butterflies from our array of butterfly counts
     butterflies[eltsPerCacheLine*u_idx] -= get<1>(reduce);
     // Add the updated index to an update array, to be returned
-    update_dense[u_idx] = get<1>(reduce) > 0 ? true : false;
+    update_dense[eltsPerCacheLine*u_idx] = get<1>(reduce) > 0 ? true : false;
   }
   free(b_freq_pair.first);
 
@@ -239,7 +239,7 @@ long getUpdatesHist_seq(tuple<uintE,uintE>* sg_freqs, long num_sg_freqs, const l
   for(long i=0; i < num_updates; ++i) {
     uintE u_idx = get<0>(b_freqs[i]);
     butterflies[eltsPerCacheLine*u_idx] -=get<1>(b_freqs[i]);
-    update_dense[u_idx] = true;
+    update_dense[eltsPerCacheLine*u_idx] = true;
   }
   free(b_freqs);
   return (long)num_updates;
@@ -264,7 +264,7 @@ long getUpdatesHist(tuple<uintE,uintE>* sg_freqs, long num_sg_freqs, const long 
   parallel_for(long i=0; i < num_updates; ++i) {
     uintE u_idx = get<0>(b_freqs[i]);
     butterflies[eltsPerCacheLine*u_idx] -=get<1>(b_freqs[i]);
-    update_dense[u_idx] = true;
+    update_dense[eltsPerCacheLine*u_idx] = true;
   }
   free(b_freqs);
 
@@ -309,7 +309,7 @@ long getUpdatesHash(sparseAdditiveSet<uintE>& update_hash, uintE* butterflies, b
     uintE u_idx = update_pair.first;
     butterflies[eltsPerCacheLine*u_idx] -= update_pair.second;
     //update[i] = u_idx;
-    update_dense[u_idx] = true;
+    update_dense[eltsPerCacheLine*u_idx] = true;
   });
 
   update_seq.del();
@@ -469,7 +469,7 @@ void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* butterflies, b
 	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], -1*wedges[shift+u2_idx]);
 	    // alternatively, at end before clear do this
 	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) {used[shift+used_idx++] = shift+u2_idx; if(!update_dense[u2_idx]) CAS(&update_dense[u2_idx],false,true);}//update_dense[u2_idx]=true;}
+	    if (wedges[shift+u2_idx] == 1) {used[shift+used_idx++] = shift+u2_idx; if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);}//update_dense[u2_idx]=true;}
 	  }
 	  //else break;
 	}
@@ -526,7 +526,7 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
 
   auto b = make_buckets(nu, D, increasing, num_buckets);
 
-  bool* update_dense = newA(bool, nu);
+  bool* update_dense = newA(bool, eltsPerCacheLine*nu);
   PeelSpace ps = PeelSpace(type, nu, MAX_STEP_SIZE);
 
   size_t finished = 0;
@@ -543,10 +543,10 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
     if(active.size() > 0) {nonZeroRounds++; }
     bool is_seq = (active.size() < 1000);
 
-    parallel_for(intT i=0; i < nu; ++i) { update_dense[i] = false; }
+    parallel_for(intT i=0; i < nu; ++i) { update_dense[eltsPerCacheLine*i] = false; }
     Peel_helper(ps, active, butterflies, update_dense, GA, use_v, max_wedges, type);
 
-    auto f = [&] (size_t i) { return update_dense[i]; };
+    auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
     auto f_in = make_in_imap<bool>(nu, f);
     auto out = pbbs::pack_index<uintE>(f_in);
     out.alloc = false;
@@ -563,8 +563,8 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
     moved.del(); active.del();
   }
   ps.del();
-  cout << "totalRounds = " << totalRounds << endl;
-  cout << "nonZeroRounds = " << nonZeroRounds << endl;
+  //cout << "totalRounds = " << totalRounds << endl;
+  //cout << "nonZeroRounds = " << nonZeroRounds << endl;
   
   return D;
 }
