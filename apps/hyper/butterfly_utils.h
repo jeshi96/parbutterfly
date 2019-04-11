@@ -584,11 +584,13 @@ struct PeelSpace {
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<uintE> wedges_seq_int;
   _seq<uintE> used_seq_int;
+  _seq<uintE> update_seq_int;
   sparseAdditiveSet<uintE> update_hash;
   sparseAdditiveSet<uintE>* wedges_hash;
   sparseAdditiveSet<uintE>** wedges_hash_list;
   intT num_wedges_hash;
 PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
+  update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
   if (type == 0) {
     using T = sparseAdditiveSet<uintE>*;
     wedges_hash = new sparseAdditiveSet<uintE>(1,1,UINT_E_MAX);
@@ -605,8 +607,16 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     t1.start();
     granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
     t1.reportTotal("time for init wedges");
-    used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);}
+    used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
+  }
 }
+  void resize_update(size_t size) {
+  	if (update_seq_int.n < size) {
+      free(update_seq_int.A);
+      update_seq_int.A = newA(uintE, size);
+      update_seq_int.n = size;
+    }
+  }
   
   sparseAdditiveSet<uintE>* resize(size_t size) {
     if (type != 0) return nullptr;
@@ -637,16 +647,17 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
   }
 
   void clear() {
-    if (type == 0) {
+    if (type == 0) update_hash.clear();
       //wedges_hash.del();
       //wedges_hash = sparseAdditiveSet<uintE>(UINT_E_MAX);
-      update_hash.clear();
+      //wedges_hash->clear();
     	//free(wedges_hash);
     	//wedges_hash = new sparseAdditiveSet<uintE>(UINT_E_MAX);
-    }
+    //}
   }
 
   void del() {
+  	update_seq_int.del();
     if (type == 0) {
       parallel_for(intT i=0; i < num_wedges_hash; ++i) { free(wedges_hash_list[i]); }
       free(wedges_hash_list);
@@ -1065,21 +1076,15 @@ intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long
 //***************************************************************************************************
 //***************************************************************************************************
 
-pair<tuple<uintE,uintE>*,long> updateBuckets(PeelSpace& ps, uintE* butterflies, 
+pair<tuple<uintE,uintE>*,long> updateBuckets(uintE* update_idxs, long num_updates, uintE* butterflies, 
   array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
   using X = tuple<uintE,uintE>;
-
-  _seq<pair<uintE,uintE>> update_seq = ps.update_hash.entries();
-  long num_updates = update_seq.n;
-
   X* update = newA(X,num_updates);
   const intT eltsPerCacheLine = 64/sizeof(long);
 
     // Filter for bucket updates
   parallel_for(long i=0; i < num_updates; ++i) {
-    //const uintE u_idx = update_idxs[i];
-    const uintE u_idx = update_seq.A[i].first;
-    butterflies[eltsPerCacheLine*u_idx] -= update_seq.A[i].second;
+    const uintE u_idx = update_idxs[i];
     uintE old_b = D.s[u_idx];
 
     if (old_b > k) {
@@ -1094,7 +1099,6 @@ pair<tuple<uintE,uintE>*,long> updateBuckets(PeelSpace& ps, uintE* butterflies,
   X* update_filter = newA(X, num_updates);
   long num_updates_filter = sequence::filter(update,update_filter,num_updates, nonMaxTupleF());
   free(update);
-  update_seq.del();
   return make_pair(update_filter,  num_updates_filter);
 }
 
