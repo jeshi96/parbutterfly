@@ -23,139 +23,109 @@
 
 #include "butterfly_utils.h"
 
-/*
-sparseAdditiveSet<uintE> getSeagullFreqsHash(sparseAdditiveSet<uintE>& seagulls, const long nu) {
-  sparseAdditiveSet<uintE> update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
-  _seq<pair<uintE,uintE>> sg_freqs = seagulls.entries();
-
-  using T = pair<uintE,uintE>;
-
-  //parallel_for (long j=0; j < sg_freqs.n; ++j) {
-  granular_for ( j, 0, sg_freqs.n, (sg_freqs.n > 1000), {
-    T sg_freq_pair = sg_freqs.A[j];
-    uintE num = sg_freq_pair.second;
-    if (num > 1) {update_hash.insert(T(sg_freq_pair.first % nu, num * (num - 1)/2));}
-  });
-  sg_freqs.del();
-  return update_hash;
-}
-
-pair<uintE*, long> getUpdatesHash(sparseAdditiveSet<uintE>& update_hash, uintE* butterflies) {
-  _seq<pair<uintE,uintE>> update_seq = update_hash.entries();
+long PeelEHash(uintE* eti, uintE* ite, PeelSpace& ps, bool* used, vertexSubset& active, uintE* butterflies, bipartiteCSR& GA, bool use_v) {
+  // Retrieve all seagulls
+  auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
+  getIntersectWedgesHash(eti, ite, ps, used, active_map, active.size(), GA, use_v);
+ 
+  _seq<pair<uintE,uintE>> update_seq = ps.update_hash.entries();
   long num_updates = update_seq.n;
-  uintE* update = newA(uintE, num_updates);
+  ps.resize_update(num_updates);
+  uintE* update = ps.update_seq_int.A;
 
   using T = pair<uintE,uintE>;
-
-  //parallel_for (long i=0; i < num_updates; ++i) {
+  const intT eltsPerCacheLine = 64/sizeof(long);
   granular_for(i, 0, num_updates, (num_updates>1000), {
     T update_pair = update_seq.A[i];
-    uintE u_idx = update_pair.first;
-    butterflies[u_idx] -= update_pair.second;
-    update[i] = u_idx;
+    uintE idx = update_pair.first;
+    butterflies[eltsPerCacheLine*idx] -= update_pair.second;
+    update[i] = idx;
   });
 
   update_seq.del();
-  return make_pair(update, num_updates);
-}*/
 
-template<class vertex>
-pair<uintE*, long> PeelEHash(vertexSubset active, uintE* butterflies, vertex* V, vertex* U, const long nu, const long nv) {
-  sparseAdditiveSet<uintE> update_hash = sparseAdditiveSet<uintE>(nv*nu+nv, (float) 1, UINT_E_MAX); //TODO find num updates lol
-  parallel_for(long i=0; i < active.size(); ++i){
-    // Set up for each active vertex
-    uintE u_idx = active.vtx(i) % nu;
-    uintE v_idx = active.vtx(i) / nu;
-    //cout << active.vtx(i) << ", " << v_idx << ", " << u_idx << "\n";
-    //fflush(stdout);
-    vertex u = U[u_idx];
-    vertex v = V[v_idx];
-    uintE* v_neighbors = v.getOutNeighbors();
-
-    parallel_for(long j=0; j < u.getOutDegree(); ++j) {
-      uintE v_prime_idx = u.getOutNeighbor(j);
-      if (v_prime_idx != v_idx) {
-      vertex v_prime = V[v_prime_idx];
-      uintE* v_prime_neighbors = v_prime.getOutNeighbors();
-      tuple<long, uintE*> inter = intersect(v_neighbors, v_prime_neighbors, v.getOutDegree(), v_prime.getOutDegree());
-      uintE num_butterflies = get<0>(inter) - 1;
-
-      parallel_for(long k=0; k < get<0>(inter); ++k) {
-        if (get<1>(inter)[k] == u_idx) {
-        update_hash.insert(make_pair(get<1>(inter)[k] * nv + v_idx, num_butterflies));
-        update_hash.insert(make_pair(get<1>(inter)[k] * nv + v_prime_idx, num_butterflies));
-        }
-      }
-      free(get<1>(inter));
-      }
-    }
-  }
-  _seq<pair<uintE,uintE>> update_seq = update_hash.entries();
-  long num_updates = update_seq.n;
-  uintE* update = newA(uintE, num_updates);
-
-  using T = pair<uintE,uintE>;
-
-  parallel_for (long i=0; i < num_updates; ++i) {
-    T update_pair = update_seq.A[i];
-    uintE u_idx = update_pair.first;
-    butterflies[u_idx] -= update_pair.second;
-    update[i] = u_idx;
-  }
-
-  update_seq.del();
-  update_hash.del();
-
-  return make_pair(update, num_updates);
+  return num_updates;
 }
 
-template <class vertex>
-array_imap<uintE> PeelE(bipartiteGraph<vertex>& GA, bool use_v, uintE* butterflies, long type=0, size_t num_buckets=128) {
-  // Butterflies are assumed to be stored on U
-  const long nv = use_v ? GA.nv : GA.nu;
+void PeelE_helper (uintE* eti, uintE* ite, PeelSpace& ps, bool* used, vertexSubset& active, uintE* butterflies,
+  bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<uintE>& D, buckets<array_imap<uintE>>& b, uintE k) {
   const long nu = use_v ? GA.nu : GA.nv;
-  vertex* V = use_v ? GA.V : GA.U;
-  vertex* U = use_v ? GA.U : GA.V;
+  bool is_seq = (active.size() < 1000);
+  /*if (type == 3) {
+  	auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v);
+  	updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
+  	free(ret.first);
+  	return;
+  }*/
+  if (type == 0) {
+    auto num_updates = PeelEHash(eti, ite, ps, used, active, butterflies, GA, use_v);
+    updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ps.update_seq_int.A, num_updates);
+    ps.clear();
+    return;
+  }
+/*
+  long num_wedges = countSeagulls(GA, use_v, active);
+  pair<intT, long> ret;
+//TODO remove update dense from all of these
+  if (max_wedges >= num_wedges) {
+    //else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
+    else if (type == 1) ret = PeelESort(eti, ite, ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
+    //else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
+    else ret = PeelEHist(eti, ite, ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
+    updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ps.update_seq_int.A, ret.second);
+    ps.clear();
+    return;
+  }
+  intT curr_idx = 0;
+  while(curr_idx < active.size()) {
+    //else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else if (type == 1) ret = PeelESort(eti, ite, ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+  	//else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else ret = PeelEHist(eti, ite, ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+    curr_idx = ret.first;
+    updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ps.update_seq_int.A, ret.second);
+    ps.clear();
+  }*/
+}
+
+array_imap<uintE> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, uintE* butterflies, long max_wedges, long type=0, size_t num_buckets=128) {
+  // Butterflies are assumed to be stored on U
+  const long nu = use_v ? GA.nu : GA.nv;
+
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
   
   using X = tuple<uintE,uintE>;
+  const intT eltsPerCacheLine = 64/sizeof(long);
 
-  auto D = array_imap<uintE>(nu*(nv-1)+nu-1, [&] (size_t i) { return butterflies[i]; });
+  auto D = array_imap<uintE>(GA.numEdges, [&] (size_t i) { return butterflies[eltsPerCacheLine*i]; });
 
-  auto b = make_buckets(nu*(nv-1)+nu-1, D, increasing, num_buckets);
+  auto b = make_buckets(GA.numEdges, D, increasing, num_buckets);
+
+  //bool* update_dense = newA(bool, eltsPerCacheLine*GA.numEdges);
+  PeelSpace ps = PeelSpace(type, GA.numEdges, MAX_STEP_SIZE);
+
+  bool* used = newA(bool, GA.numEdges);
+  parallel_for(size_t i=0; i < GA.numEdges; ++i) { used[i] = false; }
 
   size_t finished = 0;
-  while (finished != nu*(nv-1)+nu-1) {
+  while (finished != GA.numEdges) {
+
     auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
     uintE k = bkt.id;
     finished += active.size();
-
     bool is_seq = (active.size() < 1000);
 
-    // Obtain butterfly updates based on desired method
-    pair<uintE*, long> update_pair;
-    if (type == 0) {
-      update_pair = PeelEHash(active, butterflies, V, U, nu, nv);
-    }
-    //else if(type == 1){
-    //  if (is_seq) update_pair = PeelSort_seq(active, butterflies, V, U, nu);
-    //  else update_pair = PeelSort(active, butterflies, V, U, nu);
-    //}
-    //else {
-    //  if (is_seq) update_pair = PeelHist_seq(active, butterflies, V, U, nu);
-    //  else update_pair = PeelHist(active, butterflies, V, U, nu);
-    //}
+    //parallel_for(intT i=0; i < nu; ++i) { update_dense[eltsPerCacheLine*i] = false; }
+    PeelE_helper(eti, ite, ps, used, active, butterflies, GA, use_v, max_wedges, type, D, b, k);
 
-    pair<tuple<uintE,uintE>*,long> bucket_pair;
-    if (is_seq) bucket_pair = updateBuckets_seq(update_pair.first, update_pair.second, butterflies, D, b, k);
-    else bucket_pair = updateBuckets(update_pair.first, update_pair.second, butterflies, D, b, k);
-
-    free(update_pair.first);
-
-    vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(nu, bucket_pair.second, bucket_pair.first);
-    b.update_buckets(moved.get_fn_repr(), moved.size());
-
-    moved.del(); active.del();
+    active.del();
   }
+  ps.del();
+  free(used);
+  
   return D;
 }

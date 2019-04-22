@@ -433,8 +433,6 @@ pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, uintE* butterflie
   return make_pair(next_idx, ret);
 }
 
-#define MAX_STEP_SIZE 1000
-
 pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -499,27 +497,13 @@ pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, uintE* 
 //***************************************************************************************************
 //***************************************************************************************************
 
-void Peel_update(array_imap<uintE>& D, buckets<array_imap<uintE>>& b, uintE k, uintE* butterflies, bool is_seq, long nu,
-  uintE* update_idxs, long num_updates) {
-  pair<tuple<uintE,uintE>*,long> bucket_pair;
-  if (is_seq) bucket_pair = updateBuckets_seq(update_idxs, num_updates, butterflies, D, b, k);
-  else bucket_pair = updateBuckets(update_idxs, num_updates, butterflies, D, b, k);
-
-    //free(out.s);
-
-  vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(nu, bucket_pair.second, bucket_pair.first);
-  b.update_buckets(moved.get_fn_repr(), moved.size());
-
-  moved.del();
-}
-
 void Peel_helper (PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool* update_dense,
   bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<uintE>& D, buckets<array_imap<uintE>>& b, uintE k) {
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
   if (type == 3) {
   	auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v);
-  	Peel_update(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
+  	updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
   	free(ret.first);
   	return;
   }
@@ -527,14 +511,14 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool*
   
   long num_wedges = countSeagulls(GA, use_v, active);
   pair<intT, long> ret;
-
+//TODO remove update dense from all of these
   if (max_wedges >= num_wedges) {
     if (type == 0) ret = PeelHash(ps, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
     else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
     else if (type == 1) ret = PeelSort(ps, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
     else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
     else ret = PeelHist(ps, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges);
-    Peel_update(D, b, k, butterflies, is_seq, nu, ps.update_seq_int.A, ret.second);
+    updateBuckets(D, b, k, butterflies, is_seq, nu, ps.update_seq_int.A, ret.second);
     ps.clear();
     return;
   }
@@ -546,7 +530,7 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, uintE* butterflies, bool*
   	else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
     else ret = PeelHist(ps, active, butterflies, update_dense, GA, use_v, num_wedges, max_wedges, curr_idx);
     curr_idx = ret.first;
-    Peel_update(D, b, k, butterflies, is_seq, nu, ps.update_seq_int.A, ret.second);
+    updateBuckets(D, b, k, butterflies, is_seq, nu, ps.update_seq_int.A, ret.second);
     ps.clear();
   }
 }
@@ -562,7 +546,8 @@ array_imap<uintE> Peel(bipartiteCSR& GA, bool use_v, uintE* butterflies, long ma
 
   auto b = make_buckets(nu, D, increasing, num_buckets);
 
-  bool* update_dense = newA(bool, eltsPerCacheLine*nu);
+  bool* update_dense = nullptr;
+  if (type == 3) update_dense = newA(bool, eltsPerCacheLine*nu);
   PeelSpace ps = PeelSpace(type, nu, MAX_STEP_SIZE);
 
   size_t finished = 0;
@@ -818,7 +803,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   
   //TODO seq code integrate w/count
-  if (ty == 7) CountOrigCompactParallel(GA,use_v);
+  /*if (ty == 7) CountOrigCompactParallel(GA,use_v);
   else if (ty == 8) {
   	long* workPrefixSum = get<2>(use_v_tuple);
   	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
@@ -864,11 +849,12 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
   cout << "### Max core: " << mc << endl;
 
-  free(butterflies);
-  /*
+  free(butterflies);*/
+  
  timer t3;
  
  auto eti = edgeToIdxs(GA, use_v);
+ auto ite = idxsToEdge(GA, use_v);
  t3.start();
  uintE* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty);
  t3.stop();
@@ -885,17 +871,18 @@ void Compute(bipartiteCSR& GA, commandLine P) {
  cout << "number of edge butterflies: " << b/4 << "\n";
 
 
-// timer t2;
-// t2.start();
-// auto cores = PeelE(G, use_v, ebutterflies, tp);
-// t2.stop();
-// if (tp ==0) t2.reportTotal("Hash Peel:");
+timer t2;
+t2.start();
+auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, 0);//tp);
+t2.stop();
+//if (tp ==0)
+t2.reportTotal("Hash Peel:");
 // else if (tp==1) t2.reportTotal("Sort Peel:");
 // else t2.reportTotal("Hist Peel:");
 
   free(eti);
+  free(ite);
   free(ebutterflies);
-*/
 }
 
 int parallel_main(int argc, char* argv[]) {

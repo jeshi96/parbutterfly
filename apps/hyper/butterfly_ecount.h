@@ -55,6 +55,7 @@ rehashWedgesTimer.start();
 rehashWedgesTimer.stop();
 retrieveCountsTimer.start();
 
+const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for (intT i = curr_idx; i < next_idx; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
@@ -68,8 +69,8 @@ retrieveCountsTimer.start();
         uintE u2 = edgesV[v_offset+k];
         if (u2 < i) {
           uintE num_butterflies = sizes.find(i*nu + u2).second - 1;
-          writeAdd(&butterflies[eti[u_offset + j]],num_butterflies); 
-          writeAdd(&butterflies[v_offset + k],num_butterflies); 
+          writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + j]],num_butterflies); 
+          writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)],num_butterflies); 
         }
         else break;
       }
@@ -119,13 +120,13 @@ retrieveCountsTimer.start();
   // now, we need to collate by our indices
   pair<uintE*, long> b_freq_pair = getFreqs(butterflies_seq.A, 2*num_wedges_f, uintETupleLt(), uintETupleEq());
   uintE* b_freq_arr = b_freq_pair.first;
-
+const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=1; i < b_freq_pair.second; ++i) {
     uintE num_freq = b_freq_arr[i] - b_freq_arr[i-1];
     // Reduce to sum the butterflies over the necessary range
     X reduce = sequence::reduce(&(butterflies_seq.A[b_freq_arr[i-1]]), num_freq, uintETupleAdd());
     // These are our butterfly counts
-    butterflies[get<0>(reduce)] += get<1>(reduce);
+    butterflies[eltsPerCacheLine*get<0>(reduce)] += get<1>(reduce);
   }
 
   free(b_freq_arr);
@@ -149,11 +150,12 @@ getWedgesTimer.start();
 getWedgesTimer.stop();
 
 rehashWedgesTimer.start();
+const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
     uintE num = freq_arr[i+1] - freq_arr[i] - 1;
     parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) {
-      writeAdd(&butterflies[eti[offsetsU[wedges[j].v1] + wedges[j].j]], num);
-      writeAdd(&butterflies[offsetsV[wedges[j].u] + wedges[j].k], num);
+      writeAdd(&butterflies[eltsPerCacheLine*eti[offsetsU[wedges[j].v1] + wedges[j].j]], num);
+      writeAdd(&butterflies[eltsPerCacheLine*(offsetsV[wedges[j].u] + wedges[j].k)], num);
     }
   }
 rehashWedgesTimer.stop();
@@ -178,6 +180,7 @@ getWedgesTimer.start();
 getWedgesTimer.stop();
 
 rehashWedgesTimer.start();
+const intT eltsPerCacheLine = 64/sizeof(long);
   // TODO modularize w/hashce
   parallel_for (intT i = curr_idx; i < next_idx; ++i) {
     intT u_offset = offsetsU[i];
@@ -192,8 +195,8 @@ rehashWedgesTimer.start();
         uintE u2 = edgesV[v_offset + k];
         if (u2 < i) {
           uintE num_butterflies = wedges.find(i*nu + u2).second - 1;
-          writeAdd(&butterflies[eti[u_offset + j]],num_butterflies); 
-          writeAdd(&butterflies[v_offset + k],num_butterflies); 
+          writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + j]],num_butterflies); 
+          writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)],num_butterflies); 
         }
         else break;
       }
@@ -242,10 +245,10 @@ rehashWedgesTimer.stop();
 
 retrieveCountsTimer.start();
   intT num_wedges_seq = butterflies_set.entries_no_init(wedges_seq);
-
+const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
       pair<uintE,uintE> butterflies_pair = wedges_seq.A[i];
-      butterflies[butterflies_pair.first] += butterflies_pair.second;
+      butterflies[eltsPerCacheLine*butterflies_pair.first] += butterflies_pair.second;
   }
 retrieveCountsTimer.stop();
   
@@ -407,8 +410,8 @@ void CountEOrigCompactParallel(uintE* eti, uintE* butterflies, bipartiteCSR& GA,
         for(intT k=0; k < v_deg; ++k) {
           uintE u2_idx = edgesV[v_offset+k];
           if (u2_idx < i) {
-          writeAdd(&butterflies[eti[u_offset + j]], wedges[shift+u2_idx]-1);
-          writeAdd(&butterflies[v_offset + k], wedges[shift+u2_idx]-1);
+          writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + j]], wedges[shift+u2_idx]-1);
+          writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)], wedges[shift+u2_idx]-1);
           }
           else break;
         }
@@ -434,9 +437,9 @@ uintE* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long ma
   const long nu = use_v ? GA.nu : GA.nv;
 
   const intT eltsPerCacheLine = 64/sizeof(long);
-  uintE* butterflies = newA(uintE, GA.numEdges * eltsPerCacheLine);
+  uintE* butterflies = newA(uintE, eltsPerCacheLine*GA.numEdges);
   parallel_for(long i=0; i < GA.numEdges; ++i){
-    butterflies[i * eltsPerCacheLine] = 0;
+    butterflies[eltsPerCacheLine*i] = 0;
   }
 
   uintE* wedge_idxs = countWedgesScan(GA, use_v, true);
