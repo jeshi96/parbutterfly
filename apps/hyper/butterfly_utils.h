@@ -796,6 +796,48 @@ long getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& GA
 
 //***************************************************************************************************
 //***************************************************************************************************
+
+struct PeelESpace {
+  long type;
+  long nu;
+  long stepSize;
+  _seq<uintE> wedges_seq_int;
+  _seq<uintE> used_seq_int;
+  _seq<uintE> update_seq_int;
+  sparseAdditiveSet<uintE> update_hash;
+PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
+  update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  if (type == 0) update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
+  else if (type == 1 || type == 2) wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  else {
+    timer t1;
+    wedges_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
+    t1.start();
+    granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
+    t1.reportTotal("time for init wedges");
+    used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
+  }
+}
+  void resize_update(size_t size) {
+  	if (update_seq_int.n < size) {
+      free(update_seq_int.A);
+      update_seq_int.A = newA(uintE, size);
+      update_seq_int.n = size;
+    }
+  }
+
+  void clear() {
+    if (type == 0) update_hash.clear();
+  }
+
+  void del() {
+  	update_seq_int.del();
+    if (type == 0) update_hash.del();
+    else if (type == 1 || type == 2) wedges_seq_int.del();
+    else {wedges_seq_int.del(); used_seq_int.del();}
+  }
+};
+
 /*
 template<class wedge, class wedgeCons, class Sequence>
 void _getIntersectWedges_seq(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
@@ -1024,21 +1066,18 @@ void intersect_hash(uintE* eti, uintE* ite, PeelSpace& ps, bool* used, bool* cur
 }
 
 template<class Sequence>
-void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelSpace& ps, bool* used, Sequence I, intT num_I, bipartiteCSR& GA,
+void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelSpace& ps, bool* used, bool* current, Sequence I, intT num_I, bipartiteCSR& GA,
   bool use_v) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  bool* current = newA(bool, GA.numEdges);
-  parallel_for(intT i=0; i < GA.numEdges; ++i) { current[i] = false; }
+  
   parallel_for(intT i=0; i < num_I; ++i){ current[I[i]] = true; }
   auto wedges = ps.update_hash;
   parallel_for(intT i=0; i < num_I; ++i){
     // Set up for each active vertex
     uintE idx = I[i];
-    used[idx] = true;
     uintE u = edgesV[idx];
     uintE v = edgesU[ite[idx]];
     intT v_offset = offsetsV[v];
@@ -1056,7 +1095,7 @@ void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelSpace& ps, bool* used, S
       }
 	  }
   }
-  free(current);
+  parallel_for(intT i=0; i < num_I; ++i){ used[I[i]] = true; current[I[i]] = false; }
 }
 
 //***************************************************************************************************
