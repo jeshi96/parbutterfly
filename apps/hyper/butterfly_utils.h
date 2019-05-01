@@ -25,42 +25,6 @@
 
 using namespace std;
 
-template <class E>
-struct seagullSumHelper { 
-  uintE u;
-  uintT* offsetsU;
-  uintT* offsetsV;
-  uintE* edgesU;
-  seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) : u(_u), offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU) {}
-  inline E operator() (const E& i) const {
-    intT u_offset = offsetsU[u];
-    uintE v = edgesU[u_offset + i];
-	  return (E) (offsetsV[v+1] - offsetsV[v] - 1);
-  }
-};
-
-template <class E>
-struct seagullSum { 
-  uintT* offsetsU;
-  uintT* offsetsV;
-  uintE* edgesU;
-  uintE* active;
-  seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) : offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
-  inline E operator() (const E& i) const {
-    /*uintE u = active[i];
-    intT u_offset = offsetsU[u];
-    intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
-    E ret=0;
-    for (long k=0; k < u_deg; ++k) {
-      uintE v = edgesU[u_offset + k];
-      ret += (offsetsV[v+1] - offsetsV[v] - 1);
-    }
-  return ret;*/
-    intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
-	return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
-  }
-};
-
 struct UWedge {
   uintE v1;
   uintE v2;
@@ -805,7 +769,7 @@ struct PeelESpace {
   _seq<uintE> used_seq_int;
   _seq<uintE> update_seq_int;
   sparseAdditiveSet<uintE> update_hash;
-PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
+PeelESpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
   update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
   if (type == 0) update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
   else if (type == 1 || type == 2) wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
@@ -1029,7 +993,7 @@ struct oneMaxF {
   }
 };
 
-void intersect_hash(uintE* eti, uintE* ite, PeelSpace& ps, bool* used, bool* current, bipartiteCSR& GA, bool use_v,
+void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* current, bipartiteCSR& GA, bool use_v,
   uintE u, uintE v, uintE u2, uintE idx_vu, uintE idx_vu2) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -1066,7 +1030,7 @@ void intersect_hash(uintE* eti, uintE* ite, PeelSpace& ps, bool* used, bool* cur
 }
 
 template<class Sequence>
-void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelSpace& ps, bool* used, bool* current, Sequence I, intT num_I, bipartiteCSR& GA,
+void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* current, Sequence I, intT num_I, bipartiteCSR& GA,
   bool use_v) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;

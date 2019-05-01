@@ -31,7 +31,7 @@ struct seagullESum {
   uintE* active;
   seagullESum(uintE* _ite, uintT* _offsetsV, uintE* _edgesU, uintE* _active) : ite(_ite), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
   inline E operator() (const E& i) const {
-    uintE v = edgesU[ite[active.vtx(i)]];
+    uintE v = edgesU[ite[active[i]]];
     return (offsetsV[v+1] - offsetsV[v]);
   }
 };
@@ -94,7 +94,7 @@ void PeelE_helper (uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* cur
     ps.clear();
     return;
   }
-  long num_wedges = countESeagulls(GA, use_v, active, ite);
+  //long num_wedges = countESeagulls(GA, use_v, active, ite);
 /*
   pair<intT, long> ret;
 //TODO remove update dense from all of these
