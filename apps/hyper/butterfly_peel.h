@@ -54,10 +54,10 @@ long countESeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active, uintE* it
   return sequence::reduce<long>((long) 0, (long) active.size(), addF<long>(), seagullESum<long>(ite, offsetsV, edgesU, active.s));
 }
 
-long PeelEHash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* current, vertexSubset& active, uintE* butterflies, bipartiteCSR& GA, bool use_v) {
+long PeelEHash(uintE* eti, uintE* ite, PeelESpace& ps, vertexSubset& active, uintE* butterflies, bipartiteCSR& GA, bool use_v) {
   // Retrieve all seagulls
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  getIntersectWedgesHash(eti, ite, ps, used, current, active_map, active.size(), GA, use_v);
+  getIntersectWedgesHash(eti, ite, ps, active_map, active.size(), GA, use_v);
  
   _seq<pair<uintE,uintE>> update_seq = ps.update_hash.entries();
   long num_updates = update_seq.n;
@@ -78,7 +78,7 @@ long PeelEHash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* current
   return num_updates;
 }
 
-void PeelE_helper (uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* current, vertexSubset& active, uintE* butterflies,
+void PeelE_helper (uintE* eti, uintE* ite, PeelESpace& ps, vertexSubset& active, uintE* butterflies,
   bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<uintE>& D, buckets<array_imap<uintE>>& b, uintE k) {
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
@@ -89,7 +89,7 @@ void PeelE_helper (uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* cur
   	return;
   }*/
   if (type == 0) {
-    auto num_updates = PeelEHash(eti, ite, ps, used, current, active, butterflies, GA, use_v);
+    auto num_updates = PeelEHash(eti, ite, ps, active, butterflies, GA, use_v);
     updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ps.update_seq_int.A, num_updates);
     ps.clear();
     return;
@@ -138,10 +138,6 @@ array_imap<uintE> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, ui
   //bool* update_dense = newA(bool, eltsPerCacheLine*GA.numEdges);
   PeelESpace ps = PeelESpace(type, GA.numEdges, MAX_STEP_SIZE);
 
-  bool* used = newA(bool, GA.numEdges);
-  bool* current = newA(bool, GA.numEdges);
-  parallel_for(size_t i=0; i < GA.numEdges; ++i) { used[i] = false; current[i] = false; }
-
   size_t finished = 0;
   while (finished != GA.numEdges) {
 
@@ -152,13 +148,11 @@ array_imap<uintE> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, ui
     bool is_seq = (active.size() < 1000);
 
     //parallel_for(intT i=0; i < nu; ++i) { update_dense[eltsPerCacheLine*i] = false; }
-    PeelE_helper(eti, ite, ps, used, current, active, butterflies, GA, use_v, max_wedges, type, D, b, k);
+    PeelE_helper(eti, ite, ps, active, butterflies, GA, use_v, max_wedges, type, D, b, k);
 
     active.del();
   }
   ps.del();
-  free(used);
-  free(current);
   
   return D;
 }

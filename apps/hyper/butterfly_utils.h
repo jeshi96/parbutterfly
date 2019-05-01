@@ -993,7 +993,7 @@ struct oneMaxF {
   }
 };
 
-void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* current, bipartiteCSR& GA, bool use_v,
+void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bipartiteCSR& GA, bool use_v,
   uintE u, uintE v, uintE u2, uintE idx_vu, uintE idx_vu2) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -1011,12 +1011,11 @@ void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* cu
   parallel_for(intT j = 0; j < u2_deg; ++j) {
     uintE v2 = edgesU[u2_offset + j];
     uintE idx_v2u2 = eti[u2_offset + j];
-    if (used[idx_v2u2] || v2 == v) same[j]=0;//same[j] = UINT_E_MAX;
-    else if (current[idx_v2u2] && idx_v2u2 < idx_vu) same[j] = 0;
+    if (v2 == UINT_E_MAX || v2 == v) same[j]=0;//same[j] = UINT_E_MAX;
+    else if (v2 == UINT_E_MAX - 1 && idx_v2u2 < idx_vu) same[j] = 0;
     else {
     intT find_idx = pbbs::binary_search(u_map, v2, lt);
-    if (find_idx < u_deg && edgesU[u_offset + find_idx] == v2 && !used[eti[u_offset + find_idx]] &&
-      (!current[eti[u_offset + find_idx]] || idx_vu < eti[u_offset + find_idx])) {
+    if (find_idx < u_deg && (edgesU[u_offset + find_idx] == v2 || idx_vu < eti[u_offset + find_idx])) {
       same[j] = 1;//edgesU[u2_offset + j];
       ps.update_hash.insert(make_pair(eti[u2_offset + j],1));
       ps.update_hash.insert(make_pair(eti[u_offset + find_idx],1));
@@ -1030,14 +1029,14 @@ void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* cu
 }
 
 template<class Sequence>
-void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, bool* current, Sequence I, intT num_I, bipartiteCSR& GA,
+void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelESpace& ps, Sequence I, intT num_I, bipartiteCSR& GA,
   bool use_v) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
   
-  parallel_for(intT i=0; i < num_I; ++i){ current[I[i]] = true; }
+  parallel_for(intT i=0; i < num_I; ++i){ edgesV[I[i]] = UINT_E_MAX-1; edgesU[ite[I[i]]] = UINT_E_MAX-1; }
   auto wedges = ps.update_hash;
   parallel_for(intT i=0; i < num_I; ++i){
     // Set up for each active vertex
@@ -1052,14 +1051,16 @@ void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelESpace& ps, bool* used, 
   // intersection of N(u) and N(u2) - 1 is the num butterflies to subtract from v, u2
     parallel_for (intT k=0; k < v_deg; ++k) { 
       uintE u2 = edgesV[v_offset + k];
-      if (u2 != u && !used[v_offset + k] && (!current[v_offset + k] || idx < v_offset + k)) {
-        intersect_hash(eti, ite, ps, used, current, GA, use_v, u, v, u2, idx, v_offset+k);
+      if (u2 != u && u2 != UINT_E_MAX && (u2 != UINT_E_MAX - 1 || idx < v_offset + k)) {
+        intersect_hash(eti, ite, ps, GA, use_v, u, v, u2, idx, v_offset+k);
         //uintE tmp = intersect(&edgesU[u_offset], &edgesU[u2_offset], u_deg, u2_deg) - 1;
         //if (tmp > 0) {wedges.insert(make_pair(v_offset+k, tmp)); cout << "(" << u << ", " << v  <<", " << u2<< "), "; fflush(stdout);}
       }
 	  }
   }
-  parallel_for(intT i=0; i < num_I; ++i){ used[I[i]] = true; current[I[i]] = false; }
+  parallel_for(intT i=0; i < num_I; ++i){
+    edgesV[I[i]] = UINT_E_MAX; edgesU[ite[I[i]]] = UINT_E_MAX;
+  }
 }
 
 //***************************************************************************************************
