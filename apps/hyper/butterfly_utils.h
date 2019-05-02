@@ -993,8 +993,43 @@ struct oneMaxF {
   }
 };
 
+  constexpr const size_t _binary_search_base = 16;
+
+  size_t binary_search_mod(uintE* I, intT offset, intT len, uintE v) {
+    for (size_t i = 0; i < len; i++) {
+      if (!(I[offset+i] < v) && I[offset+i] < UINT_E_MAX-1) return i;
+    }
+    return len;
+  }
+
+  // return index to first key greater or equal to v
+  /*template <typename Sequence, typename F>
+  size_t binary_search_mod(Sequence I, typename Sequence::T v, const F& less) {
+    size_t start = 0;
+    size_t end = I.size();
+    while (end-start > _binary_search_base) {
+      size_t mid = (end+start)/2;
+      intT prev_mid = mid;
+      while (prev_mid >= (intT) start) { 
+        if(I[prev_mid] >= UINT_E_MAX - 1) {
+          prev_mid--;
+        }
+        else {
+          break;
+        }
+      }
+      if (prev_mid < (intT) start) start = mid + 1;
+      else if (!less(I[prev_mid],v)) end = prev_mid;
+      else start = mid + 1;
+
+      if (end < start) return I.size();
+    }
+    return start + linear_search_mod(I.slice(start,end),v,less);
+  }*/
+
 void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bipartiteCSR& GA, bool use_v,
   uintE u, uintE v, uintE u2, uintE idx_vu, uintE idx_vu2) {
+
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
@@ -1006,15 +1041,15 @@ void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bipartiteCSR& GA, bo
   intT u_offset = offsetsU[u];
   intT u_deg = offsetsU[u+1] - u_offset;
   bool* same = newA(bool, u2_deg);
-  auto u_map = make_in_imap<uintT>(u_deg, [&] (size_t i) { return edgesU[u_offset + i]; });
-  auto lt = [] (const uintE& l, const uintE& r) { return l < r; };
+  //auto u_map = make_in_imap<uintT>(u_deg, [&] (size_t i) { return edgesU[u_offset + i]; });
+  //auto lt = [] (const uintE& l, const uintE& r) { return l < r; };
   parallel_for(intT j = 0; j < u2_deg; ++j) {
     uintE v2 = edgesU[u2_offset + j];
     uintE idx_v2u2 = eti[u2_offset + j];
     if (v2 == UINT_E_MAX || v2 == v) same[j]=0;//same[j] = UINT_E_MAX;
     else if (v2 == UINT_E_MAX - 1 && idx_v2u2 < idx_vu) same[j] = 0;
     else {
-    intT find_idx = pbbs::binary_search(u_map, v2, lt);
+    intT find_idx = binary_search_mod(edgesU, u_offset, u_deg, v2);
     if (find_idx < u_deg && (edgesU[u_offset + find_idx] == v2 || idx_vu < eti[u_offset + find_idx])) {
       same[j] = 1;//edgesU[u2_offset + j];
       ps.update_hash.insert(make_pair(eti[u2_offset + j],1));
