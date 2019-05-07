@@ -1009,7 +1009,7 @@ struct oneMaxF {
 
   constexpr const size_t _binary_search_base = 16;
 
-  size_t binary_search_mod(uintE* I, intT offset, intT len, uintE v) {
+  size_t linear_search_mod(uintE* I, intT offset, intT len, uintE v) {
     for (size_t i = 0; i < len; i++) {
       if (!(I[offset+i] < v) && I[offset+i] < UINT_E_MAX-1) return i;
     }
@@ -1057,20 +1057,31 @@ void intersect_hash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, bipar
   bool* same = newA(bool, u2_deg);
   //auto u_map = make_in_imap<uintT>(u_deg, [&] (size_t i) { return edgesU[u_offset + i]; });
   //auto lt = [] (const uintE& l, const uintE& r) { return l < r; };
-  parallel_for(intT j = 0; j < u2_deg; ++j) {
+  //parallel_
+  intT int_offset = 0;
+  parallel_for(intT j = 0; j < u2_deg; ++j) { same[j] = 0; }
+  for(intT j = 0; j < u2_deg; ++j) {
     uintE v2 = edgesU[u2_offset + j];
     uintE idx_v2u2 = eti[u2_offset + j];
-    if (v2 == UINT_E_MAX || v2 == v) same[j]=0;//same[j] = UINT_E_MAX;
-    else if (current[idx_v2u2] && idx_v2u2 < idx_vu) same[j] = 0; //v2 == UINT_E_MAX - 1
-    else {
-    intT find_idx = binary_search_mod(edgesU, u_offset, u_deg, v2);
+    //if (v2 == UINT_E_MAX || v2 == v) same[j]=0;//same[j] = UINT_E_MAX;
+    //else if (current[idx_v2u2] && idx_v2u2 < idx_vu) same[j] = 0; //v2 == UINT_E_MAX - 1
+    //else {
+    if(v2 != UINT_E_MAX && v2 != v && (!current[idx_v2u2] || idx_v2u2 >= idx_vu)) {
+      while(int_offset < u_deg && (edgesU[u_offset + int_offset] == UINT_E_MAX || edgesU[u_offset + int_offset] < v2)) { int_offset++; }
+      if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 && (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
+        same[j] = 1;//edgesU[u2_offset + j];
+        ps.update_hash.insert(make_pair(eti[u2_offset + j],1));
+        ps.update_hash.insert(make_pair(eti[u_offset + int_offset],1));
+      }
+      else if(int_offset >= u_deg) break;
+    /*intT find_idx = binary_search_mod(edgesU, u_offset, u_deg, v2);
     if (find_idx < u_deg && edgesU[u_offset + find_idx] == v2 &&
       (!current[eti[u_offset + find_idx]] || idx_vu < eti[u_offset + find_idx])) {
       same[j] = 1;//edgesU[u2_offset + j];
       ps.update_hash.insert(make_pair(eti[u2_offset + j],1));
       ps.update_hash.insert(make_pair(eti[u_offset + find_idx],1));
     }
-    else same[j] = 0;//UINT_E_MAX;
+    else same[j] = 0;//UINT_E_MAX;*/
     }
   }
   long num_same = sequence::sum(same, u2_deg);//sequence::reduce<long>((long) 0, u2_deg, addF<long>(), oneMaxF<long>(same));
