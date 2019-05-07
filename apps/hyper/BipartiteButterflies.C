@@ -910,12 +910,11 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
 timer t2;
 t2.start();
-auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, 0);//tp);
+auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
 t2.stop();
-//if (tp ==0)
-t2.reportTotal("Hash Peel:");
+if (tp ==0) t2.reportTotal("Hash Peel:");
 // else if (tp==1) t2.reportTotal("Sort Peel:");
-// else t2.reportTotal("Hist Peel:");
+else t2.reportTotal("Hist Peel:");
 
   free(eti);
   free(ite);
