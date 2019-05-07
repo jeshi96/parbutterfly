@@ -911,65 +911,8 @@ void _getIntersectWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipart
   free(sg_idxs);
 }
 
-template<class Sequence>
-pair<long,intT> getNextIntersectWedgeIdx_seq(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  long num_wedges = 0;
-  for(intT i=curr_idx; i < num_I; ++i) {
-    uintE u = I[i];
-    intT u_offset = offsetsU[u];
-    intT u_deg = offsetsU[u+1] - u_offset;
-    long num = 0;
-    for(intT j=0; j < u_deg; ++j) {
-      uintE v = edgesU[u_offset + j];
-      intT v_deg = offsetsV[v+1] - offsetsV[v];
-      num += (v_deg - 1);
-      if (num_wedges + num > max_wedges) {
-        if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
-        return make_pair(num_wedges, i);
-      }
-    }
-    num_wedges += num;
-  }
-  return make_pair(num_wedges, num_I);
-}
-
 // TODO based on half can also optimize this stuff? but will be hard to parallelize later so maybe not
 //JS: there looks to be some inefficiency here. we should have gotten the prefix sum of wedges for all vertices at the beginning, so we don't need to recompute it here. binary search can use a doubling search instead, starting at the last index until getting the right range, then binary search inside.
-template<class Sequence>
-pair<long, intT> getNextIntersectWedgeIdx(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  if (num_I - curr_idx < 10000) return getNextActiveWedgeIdx_seq(I, num_I, GA, use_v, max_wedges, curr_idx);
-  long* idxs = newA(long, num_I - curr_idx + 1);
-  idxs[num_I-curr_idx] = 0;
-  parallel_for(intT i=curr_idx; i < num_I; ++i) {
-    idxs[i-curr_idx] = 0;
-    uintE u = I[i];
-    intT u_offset = offsetsU[u];
-    intT u_deg = offsetsU[u+1] - u_offset;
-    for(intT j=0; j < u_deg; ++j) {
-      uintE v = edgesU[u_offset + j];
-      intT v_deg = offsetsV[v+1] - offsetsV[v];
-      idxs[i-curr_idx] += (v_deg - 1);
-    }
-  }
-  sequence::plusScan(idxs, idxs, num_I - curr_idx + 1);
-
-  auto idx_map = make_in_imap<long>(num_I - curr_idx, [&] (size_t i) { return idxs[i+1]; });
-  auto lte = [] (const long& l, const long& r) { return l <= r; };
-  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
-  long num = idxs[find_idx - curr_idx];
-  free(idxs);
-  if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
-
-  return make_pair(num, find_idx); //TODO make sure right
-}
 
 template<class wedge, class wedgeCons, class Sequence>
 pair<long, intT> getIntersectWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
@@ -983,6 +926,77 @@ pair<long, intT> getIntersectWedges(_seq<wedge>& wedges_seq, Sequence I, intT nu
   _getActiveWedges<wedge>(wedges_seq, I, num_I, GA, use_v, cons, p.first, curr_idx, p.second);
   return p;
 }*/
+
+template<class Sequence>
+pair<long,intT> getNextIntersectWedgeIdx_seq(uintE* eti, uintE* ite, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  long num_wedges = 0;
+  long prev_num_wedges = 0;
+  for(intT i=curr_idx; i < num_I; ++i){
+    // Set up for each active vertex
+    prev_num_wedges = num_wedges;
+    uintE idx = I[i];
+    uintE u = edgesV[idx];
+    uintE v = edgesU[ite[idx]];
+    intT v_offset = offsetsV[v];
+    intT v_deg = offsetsV[v+1] - v_offset;
+    intT u_deg = offsetsU[u+1] - offsetsU[u];
+    for (intT k=0; k < v_deg; ++k) {
+      uintE u2 = edgesV[v_offset + k];
+      if (u2 != u && u2 != UINT_E_MAX && (u2 != UINT_E_MAX - 1 || idx < v_offset + k)) {
+        intT u2_deg = offsetsU[u2+1] - offsetsU[u2];
+        num_wedges += min(u_deg, u2_deg);
+      }
+    }
+    if (num_wedges > max_wedges) {
+      if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one edge\n"; exit(0);}
+      return make_pair(prev_num_wedges, i);
+    }
+  }
+  return make_pair(num_wedges, num_I);
+}
+
+template<class Sequence>
+pair<long, intT> getNextIntersectWedgeIdx(uintE* eti, uintE* ite, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  if (num_I - curr_idx < 10000) return getNextIntersectWedgeIdx_seq(eti, ite, I, num_I, GA, use_v, max_wedges, curr_idx);
+  long* idxs = newA(long, num_I - curr_idx + 1);
+  idxs[num_I-curr_idx] = 0;
+  parallel_for(intT i=curr_idx; i < num_I; ++i) {
+    idxs[i-curr_idx] = 0;
+    uintE idx = I[i];
+    uintE u = edgesV[idx];
+    uintE v = edgesU[ite[idx]];
+    intT v_offset = offsetsV[v];
+    intT v_deg = offsetsV[v+1] - v_offset;
+    intT u_deg = offsetsU[u+1] - offsetsU[u];
+    for (intT k=0; k < v_deg; ++k) { 
+      uintE u2 = edgesV[v_offset + k];
+      if (u2 != u && u2 != UINT_E_MAX && (u2 != UINT_E_MAX - 1 || idx < v_offset + k)) {
+        intT u2_deg = offsetsU[u2+1] - offsetsU[u2];
+        idxs[i-curr_idx] += min(u_deg, u2_deg);
+      }
+    }
+  }
+  sequence::plusScan(idxs, idxs, num_I - curr_idx + 1);
+
+  auto idx_map = make_in_imap<long>(num_I - curr_idx, [&] (size_t i) { return idxs[i+1]; });
+  auto lte = [] (const long& l, const long& r) { return l <= r; };
+  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
+  long num = idxs[find_idx - curr_idx];
+  free(idxs);
+  if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
+
+  return make_pair(num, find_idx); //TODO make sure right
+}
 
 template <class E>
 struct oneMaxF { 
@@ -1027,7 +1041,7 @@ struct oneMaxF {
     return start + linear_search_mod(I.slice(start,end),v,less);
   }*/
 
-void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bipartiteCSR& GA, bool use_v,
+void intersect_hash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, bipartiteCSR& GA, bool use_v,
   uintE u, uintE v, uintE u2, uintE idx_vu, uintE idx_vu2) {
 
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -1047,10 +1061,11 @@ void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bipartiteCSR& GA, bo
     uintE v2 = edgesU[u2_offset + j];
     uintE idx_v2u2 = eti[u2_offset + j];
     if (v2 == UINT_E_MAX || v2 == v) same[j]=0;//same[j] = UINT_E_MAX;
-    else if (v2 == UINT_E_MAX - 1 && idx_v2u2 < idx_vu) same[j] = 0;
+    else if (current[idx_v2u2] && idx_v2u2 < idx_vu) same[j] = 0; //v2 == UINT_E_MAX - 1
     else {
     intT find_idx = binary_search_mod(edgesU, u_offset, u_deg, v2);
-    if (find_idx < u_deg && (edgesU[u_offset + find_idx] == v2 || idx_vu < eti[u_offset + find_idx])) {
+    if (find_idx < u_deg && edgesU[u_offset + find_idx] == v2 &&
+      (!current[eti[u_offset + find_idx]] || idx_vu < eti[u_offset + find_idx])) {
       same[j] = 1;//edgesU[u2_offset + j];
       ps.update_hash.insert(make_pair(eti[u2_offset + j],1));
       ps.update_hash.insert(make_pair(eti[u_offset + find_idx],1));
@@ -1063,15 +1078,21 @@ void intersect_hash(uintE* eti, uintE* ite, PeelESpace& ps, bipartiteCSR& GA, bo
   free(same);
 }
 
+//TODO revert uint e max - 1 stuff -- we do need a current after all
 template<class Sequence>
-void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelESpace& ps, Sequence I, intT num_I, bipartiteCSR& GA,
-  bool use_v) {
+void getIntersectWedgesHash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, Sequence I, intT num_I, bipartiteCSR& GA,
+  bool use_v) { //, long max_wedges, intT curr_idx
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
   
-  parallel_for(intT i=0; i < num_I; ++i){ edgesV[I[i]] = UINT_E_MAX-1; edgesU[ite[I[i]]] = UINT_E_MAX-1; }
+  //TODO fix
+  //if (curr_idx == 0) 
+  //{parallel_for(intT i=0; i < num_I; ++i){ edgesV[I[i]] = UINT_E_MAX-1; edgesU[ite[I[i]]] = UINT_E_MAX-1; } }
+  {parallel_for(intT i=0; i < num_I; ++i){ current[I[i]] = 1; } }
+
+  //pair<long, intT> ret = getNextIntersectWedgeIdx(eti, ite, I, num_I, GA, use_v, max_wedges, curr_idx);
   auto wedges = ps.update_hash;
   parallel_for(intT i=0; i < num_I; ++i){
     // Set up for each active vertex
@@ -1086,16 +1107,19 @@ void getIntersectWedgesHash(uintE* eti, uintE* ite, PeelESpace& ps, Sequence I, 
   // intersection of N(u) and N(u2) - 1 is the num butterflies to subtract from v, u2
     parallel_for (intT k=0; k < v_deg; ++k) { 
       uintE u2 = edgesV[v_offset + k];
-      if (u2 != u && u2 != UINT_E_MAX && (u2 != UINT_E_MAX - 1 || idx < v_offset + k)) {
-        intersect_hash(eti, ite, ps, GA, use_v, u, v, u2, idx, v_offset+k);
+      if (u2 != u && u2 != UINT_E_MAX && (!current[v_offset+k] || idx < v_offset + k)) {//u2 != UINT_E_MAX - 1
+        intersect_hash(eti, ite, current, ps, GA, use_v, u, v, u2, idx, v_offset+k);
         //uintE tmp = intersect(&edgesU[u_offset], &edgesU[u2_offset], u_deg, u2_deg) - 1;
         //if (tmp > 0) {wedges.insert(make_pair(v_offset+k, tmp)); cout << "(" << u << ", " << v  <<", " << u2<< "), "; fflush(stdout);}
       }
 	  }
   }
+  //if (ret.second == num_I) {
   parallel_for(intT i=0; i < num_I; ++i){
     edgesV[I[i]] = UINT_E_MAX; edgesU[ite[I[i]]] = UINT_E_MAX;
-  }
+    current[I[i]] = 0;
+  } //}
+  //return ret.second;
 }
 
 //***************************************************************************************************
