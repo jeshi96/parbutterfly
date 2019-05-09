@@ -204,7 +204,7 @@ struct bipartiteCSR {
   }
 };
 
-tuple<tuple<uintE,uintE>*, uintE*, uintE*> rankBipartite(bipartiteCSR& G) {
+tuple<uintE*, uintE*, uintE*, long> rankBipartite(bipartiteCSR& G) {
   // We need a u/v to rank array
   // Store everything in graph by u/v idx as normal, but check ranks for wedges
   uintE* rankV = newA(uintE, G.nv);
@@ -212,6 +212,8 @@ tuple<tuple<uintE,uintE>*, uintE*, uintE*> rankBipartite(bipartiteCSR& G) {
   // To get ranks, make a degree array and sort
   using X = tuple<uintE,uintE>;
   X* ranks = newA(X, G.nv + G.nu);
+  uintE* ranks_f = newA(uintE, G.nv + G.nu);
+  uintE* ranks_ff = newA(uintE, G.nv + G.nu);
   parallel_for(long v=0; v < G.nv; ++v) { ranks[v] = make_tuple(v,G.offsetsV[v+1] - G.offsetsV[v]); }
   parallel_for(long u=0; u < G.nu; ++u) { ranks[G.nv + u] = make_tuple(G.nv + u, G.offsetsU[u+1] - G.offsetsU[u]); }
   sampleSort(ranks, G.nv + G.nu, uintETupleGt());
@@ -238,8 +240,27 @@ tuple<tuple<uintE,uintE>*, uintE*, uintE*> rankBipartite(bipartiteCSR& G) {
     //intSort::iSort(&(G.edgesV[v_offset]), v_deg, G.nu + G.nv, NestedUIECmp(rankU));
     sampleSort(&G.edgesV[v_offset], v_deg, cmp_u);
   }
+  // Now do filtering
+  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
+    bool use_v = (get<0>(ranks[i]) < G.nv);
+auto use_rankV = use_v ? rankV : rankU;
+auto use_rankU = use_v ? rankU : rankV;
+auto use_offsetsV = use_v ? G.offsetsV : G.offsetsU;
+auto use_offsetsU = use_v ? G.offsetsU : G.offsetsV;
+auto use_edgesV = use_v ? G.edgesV : G.edgesU;
+auto use_edgesU = use_v ? G.edgesU : G.edgesV;
+    intT idx = use_v ? get<0>(ranks[i]) : get<0>(ranks[i]) - G.nv;
+    intT u_offset  = use_offsetsV[idx];
+    intT u_deg = use_offsetsV[idx+1]-u_offset;
+    ranks_f[i] = UINT_E_MAX;
+    if (u_deg >= 2 && use_rankU[use_edgesV[u_offset+1]] < use_rankV[idx]) ranks_f[i] = get<0>(ranks[i]);
+  }
+  //TODO inefficient fix
+  long num_ranks = sequence::filter(ranks_f, ranks_ff, G.nv + G.nu, nonMaxF());
+  free(ranks);
+  free(ranks_f);
   // Everything is now sorted in rank order
-  return make_tuple(ranks, rankV, rankU);
+  return make_tuple(ranks_ff, rankV, rankU, num_ranks);
 }
 
 bipartiteCSR readBipartite(char* fname) {
