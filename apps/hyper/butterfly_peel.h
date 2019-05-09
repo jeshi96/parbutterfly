@@ -23,35 +23,33 @@
 
 #include "butterfly_utils.h"
 
-template <class E>
-struct seagullESum { 
-  uintE* ite;
-  uintT* offsetsV;
-  uintE* edgesU;
-  uintE* active;
-  seagullESum(uintE* _ite, uintT* _offsetsV, uintE* _edgesU, uintE* _active) : ite(_ite), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
-  inline E operator() (const E& i) const {
-    uintE v = edgesU[ite[active[i]]];
-    return (offsetsV[v+1] - offsetsV[v]);
-  }
-};
+pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies, bipartiteCSR& GA, 
+  bool use_v, long max_wedges, intT curr_idx=0) {
+  using X = tuple<uintE,uintE>;
+  const intT eltsPerCacheLine = 64/sizeof(long);
 
-long countESeagulls_seq(bipartiteCSR& GA, bool use_v, vertexSubset active, uintE* ite) {
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-  long num_sg = 0;
-  for (uintT i=0; i < active.size(); ++i) {
-    uintE v = edgesU[ite[active.vtx(i)]];
-    num_sg += (offsetsV[v+1] - offsetsV[v]);
-  }
-  return num_sg;
-}
+  auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
+  auto ret = getIntersectWedges(eti, ite, current, ps, active_map, active.size(), GA, use_v, max_wedges, curr_idx);
+  //ps.wedges_seq_tup_fil contains edge idx, val pairs; ret.first is size of this, ret.second is next idx
+  // just need to hist up, update butterflies, return num updates
 
-long countESeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active, uintE* ite) {
-  if (active.size() < 1000) return countESeagulls_seq(GA, use_v, active, ite);
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-  return sequence::reduce<long>((long) 0, (long) active.size(), addF<long>(), seagullESum<long>(ite, offsetsV, edgesU, active.s));
+  pair<uintE*, long> b_freq_pair = getFreqs(ps.wedges_seq_tup_fil.A, ret.first, uintETupleLt(), uintETupleEq());
+  uintE* b_freq_arr = b_freq_pair.first;
+  ps.resize_update(b_freq_pair.second-1);
+  uintE* update = ps.update_seq_int.A;
+
+  parallel_for(long i=1; i < b_freq_pair.second; ++i) {
+    uintE num_freq = b_freq_arr[i] - b_freq_arr[i-1];
+    // Reduce to sum the butterflies over the necessary range
+    X reduce = sequence::reduce(&(ps.wedges_seq_tup_fil.A[b_freq_arr[i-1]]), num_freq, uintETupleAdd());
+    // These are our butterfly counts
+    butterflies[get<0>(reduce)*eltsPerCacheLine] -= get<1>(reduce);
+    update[i-1] = get<0>(reduce);
+  }
+
+  free(b_freq_arr);
+
+  return make_pair(ret.second, b_freq_pair.second-1);
 }
 
 pair<intT, long> PeelEHist(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies, bipartiteCSR& GA, 
@@ -124,25 +122,11 @@ void PeelE_helper (uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertex
     return;
   }
 
-  //long num_wedges = countESeagulls(GA, use_v, active, ite);
-
   pair<intT, long> ret;
-//TODO remove update dense from all of these
-  /*if (max_wedges >= num_wedges) {
-    if (type == 0) ret = PeelEHash(eti, ite, ps, active, butterflies, GA, use_v, max_wedges);
-    //else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
-    //else if (type == 1) ret = PeelESort(eti, ite, ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
-    //else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
-    //else ret = PeelEHist(eti, ite, ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
-    updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ps.update_seq_int.A, ret.second);
-    ps.clear();
-    return;
-  }*/
   intT curr_idx = 0;
   while(curr_idx < active.size()) {
-    //else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
-    //else if (type == 1) ret = PeelESort(eti, ite, ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
-  	if (type == 2) ret = PeelEHist(eti, ite, current, ps, active, butterflies, GA, use_v, max_wedges, curr_idx);
+    if (type == 1) ret = PeelESort(eti, ite, current, ps, active, butterflies, GA, use_v, max_wedges, curr_idx);
+  	else if (type == 2) ret = PeelEHist(eti, ite, current, ps, active, butterflies, GA, use_v, max_wedges, curr_idx);
     curr_idx = ret.first;
     updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ps.update_seq_int.A, ret.second);
     //ps.clear();

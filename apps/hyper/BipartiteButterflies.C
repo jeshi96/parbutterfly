@@ -821,11 +821,96 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* wed
   cout << "num: " << total << "\n";
 }
 
+void CountWorkEfficientParallel(bipartiteCSR& GA, tuple<uintE,uintE>* ranks, uintE* rankV, uintE* rankU) {
+  timer t1,t2;
+  t1.start();
+
+  long stepSize = 1000; //tunable parameter
+  //long maxn = max(GA.nu, GA.nv);
+  uintE* wedges = newA(uintE, (GA.nu+GA.nv)*stepSize);
+  uintE* used = newA(uintE, (GA.nu+GA.nv)*stepSize);
+
+  granular_for(i,0,(GA.nu+GA.nv)*stepSize,(GA.nu+GA.nv)*stepSize > 10000, { wedges[i] = 0; });
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  
+  //long* results = newA(long,eltsPerCacheLine*stepSize); //one entry per cache line
+  //granular_for(i,0,stepSize,stepSize > 10000, {results[eltsPerCacheLine*i] = 0;});
+  
+  uintE* butterflies = newA(uintE,eltsPerCacheLine*(GA.nu + GA.nv));
+  granular_for(i,0,GA.nu + GA.nv,GA.nu + GA.nv > 10000, { butterflies[eltsPerCacheLine*i] = 0; });
+  t1.reportTotal("preprocess");
+
+  t2.start();
+
+  for(intT step = 0; step < (GA.nu + GA.nv+stepSize-1)/stepSize; step++) {
+    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,GA.nu + GA.nv); ++i){
+      intT used_idx = 0;
+      intT shift = (GA.nu + GA.nv)*(i-step*stepSize);
+      bool use_v = (get<0>(ranks[i]) < GA.nv);
+auto use_rankV = use_v ? rankV : rankU;
+auto use_rankU = use_v ? rankU : rankV;
+      intT idx = use_v ? get<0>(ranks[i]) : get<0>(ranks[i]) - GA.nv;
+      intT u_offset  = use_v ? GA.offsetsV[idx] : GA.offsetsU[idx];
+      intT u_deg = use_v ? GA.offsetsV[idx+1]-u_offset : GA.offsetsU[idx+1]-u_offset;
+      for (intT j=0; j < u_deg; ++j ) {
+	intT v = use_v ? GA.edgesV[u_offset+j] : GA.edgesU[u_offset+j];
+	intT v_offset = use_v ? GA.offsetsU[v] : GA.offsetsV[v];
+	intT v_deg = use_v ? GA.offsetsU[v+1]-GA.offsetsU[v] : GA.offsetsV[v+1]-GA.offsetsV[v];
+  if (use_rankU[v] >= use_rankV[idx]) break;
+	for (intT k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = use_v ? GA.edgesU[v_offset+k] : GA.edgesV[v_offset+k];
+	  if (use_rankV[u2_idx] < use_rankV[idx]) {
+	    //butterflies[i*eltsPerCacheLine] += wedges[shift+u2_idx];
+	    //butterflies[u2_idx*eltsPerCacheLine] += wedges[shift+u2_idx];
+	    //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
+      writeAdd(&butterflies[(use_v ? idx : idx+GA.nv)*eltsPerCacheLine],  wedges[shift+u2_idx]); //must fix storage
+      writeAdd(&butterflies[(use_v ? u2_idx : u2_idx+GA.nv)*eltsPerCacheLine], wedges[shift+u2_idx]);
+	    wedges[shift+u2_idx]++;
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
+	  }
+	  else break;
+	}
+      }
+
+      for(intT j=0; j < u_deg; ++j) {
+	intT v = use_v ? GA.edgesV[u_offset+j] : GA.edgesU[u_offset+j];
+	intT v_offset = use_v ? GA.offsetsU[v] : GA.offsetsV[v];
+	intT v_deg = use_v ? GA.offsetsU[v+1]-GA.offsetsU[v] : GA.offsetsV[v+1]-GA.offsetsV[v];
+  if (use_rankU[v] >= use_rankV[idx]) break;
+        for(intT k=0; k < v_deg; ++k) {
+          uintE u2_idx = use_v ? GA.edgesU[v_offset+k] : GA.edgesV[v_offset+k];
+          if (use_rankV[u2_idx] < use_rankV[idx]) {
+            if (wedges[shift+u2_idx] > 1) {
+              writeAdd(&butterflies[eltsPerCacheLine*(use_v ? v + GA.nv : v)], wedges[shift+u2_idx]-1);
+              
+            }
+          }
+          else break;
+        }
+      }
+
+      for(intT j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
+    }
+  }
+  t2.reportTotal("main loop");
+  
+  free(wedges);
+  free(used);
+  long total = 0;
+  
+  for(long i=0;i<GA.nu + GA.nv;i++) total += butterflies[eltsPerCacheLine*i];
+  //for(long i=0;i<stepSize;i++) total += results[i*eltsPerCacheLine];
+  free(butterflies);
+  //free(results);
+  cout << "num: " << total/4 << "\n";
+}
+
 // Note: must be invoked with symmetricVertex
 void Compute(bipartiteCSR& GA, commandLine P) {
   // Method type for counting + peeling
   long ty = P.getOptionLongValue("-t",0);
   long tp = P.getOptionLongValue("-tp",0);
+  long te = P.getOptionLongValue("-e",0);
 
   // # of max wedges
   long max_wedges = P.getOptionLongValue("-m",2577500000);
@@ -840,14 +925,18 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   
   //TODO seq code integrate w/count
-  /*if (ty == 7) CountOrigCompactParallel(GA,use_v);
+if (te == 0) {
+  if (ty == 7) CountOrigCompactParallel(GA,use_v);
   else if (ty == 8) {
   	long* workPrefixSum = get<2>(use_v_tuple);
   	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
   	free(workPrefixSum);
-  	return;
   }
   else if (ty == 9) CountOrigCompact(GA,use_v);
+  else if (ty == 10) {
+    auto ret = rankBipartite(GA);
+    CountWorkEfficientParallel(GA, get<0>(ret), get<1>(ret), get<2>(ret));
+  }
 
   if (ty > 6) return;
 
@@ -886,7 +975,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
   cout << "### Max core: " << mc << endl;
 
-  free(butterflies);*/
+  free(butterflies);
+}
+else {
   
  timer t3;
  
@@ -913,12 +1004,13 @@ t2.start();
 auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
 t2.stop();
 if (tp ==0) t2.reportTotal("Hash Peel:");
-// else if (tp==1) t2.reportTotal("Sort Peel:");
+else if (tp==1) t2.reportTotal("Sort Peel:");
 else t2.reportTotal("Hist Peel:");
 
   free(eti);
   free(ite);
   free(ebutterflies);
+}
 }
 
 int parallel_main(int argc, char* argv[]) {

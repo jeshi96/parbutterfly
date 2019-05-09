@@ -110,6 +110,14 @@ struct NestedUVPEq {
   }
 };
 
+struct NestedUIECmp{
+  uintE* nest;
+  NestedUIECmp(uintE* _nest) : nest(_nest) {}
+  inline bool operator() (uintE idx1, uintE idx2) { //
+    return nest[idx1] < nest[idx2];
+  }
+};
+
 struct nonZeroF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}};
 struct nonZeroPairF{inline bool operator() (pair<uintE,uintE> &a) {return (a.second != 0);}};
 struct greaterOneF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) > 1);}};
@@ -123,6 +131,7 @@ struct nonMaxTupleF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<
 struct uintELt {inline bool operator () (uintE a, uintE b) {return a < b;};};
 struct uintEEq {inline bool operator() (uintE a, uintE b) {return a == b;};};
 struct uintETupleLt {inline bool operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) {return get<0>(a) < get<0>(b);} };
+struct uintETupleGt {inline bool operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) {return get<1>(a) > get<1>(b);} };
 struct uintETupleEq {inline bool operator() (tuple<uintE,uintE> a,tuple<uintE,uintE> b) {return get<0>(a) == get<0>(b); }};
 struct uintETupleAdd {
   inline tuple<uintE,uintE> operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) const {
@@ -194,6 +203,44 @@ struct bipartiteCSR {
     free(offsetsV); free(offsetsU); free(edgesV); free(edgesU);
   }
 };
+
+tuple<tuple<uintE,uintE>*, uintE*, uintE*> rankBipartite(bipartiteCSR& G) {
+  // We need a u/v to rank array
+  // Store everything in graph by u/v idx as normal, but check ranks for wedges
+  uintE* rankV = newA(uintE, G.nv);
+  uintE* rankU = newA(uintE, G.nu);
+  // To get ranks, make a degree array and sort
+  using X = tuple<uintE,uintE>;
+  X* ranks = newA(X, G.nv + G.nu);
+  parallel_for(long v=0; v < G.nv; ++v) { ranks[v] = make_tuple(v,G.offsetsV[v+1] - G.offsetsV[v]); }
+  parallel_for(long u=0; u < G.nu; ++u) { ranks[G.nv + u] = make_tuple(G.nv + u, G.offsetsU[u+1] - G.offsetsU[u]); }
+  sampleSort(ranks, G.nv + G.nu, uintETupleGt());
+  // Store ranks in rankV, rankU -- u/v to rank arrays
+  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
+    if (get<0>(ranks[i]) >= G.nv) rankU[get<0>(ranks[i]) - G.nv] = i;
+    else rankV[get<0>(ranks[i])] = i;
+  }
+  // Now we have to reformat the graph (reorder neighbors so that they're in order of rank)
+  auto cmp_u = NestedUIECmp(rankU);
+  auto cmp_v = NestedUIECmp(rankV);
+  //intSort::iSort(G.edgesU, G.offsetsU, G.numEdges, G.nu, identityF<uintE>());
+  parallel_for(intT i=0; i < G.nu; ++i) {
+    intT u_offset = G.offsetsU[i];
+    intT u_deg = G.offsetsU[i+1] - u_offset;
+
+    //intSort::iSort(&(G.edgesU[u_offset]), u_deg, G.nu + G.nv, NestedUIECmp(rankV));
+    //if (u_deg > 1) {assert(rankV[G.edgesU[u_offset+1]] > rankV[G.edgesU[u_offset]]);}
+    sampleSort(&G.edgesU[u_offset], u_deg, cmp_v);
+  }
+  parallel_for(intT i=0; i < G.nv; ++i) {
+    intT v_offset = G.offsetsV[i];
+    intT v_deg = G.offsetsV[i+1] - v_offset;
+    //intSort::iSort(&(G.edgesV[v_offset]), v_deg, G.nu + G.nv, NestedUIECmp(rankU));
+    sampleSort(&G.edgesV[v_offset], v_deg, cmp_u);
+  }
+  // Everything is now sorted in rank order
+  return make_tuple(ranks, rankV, rankU);
+}
 
 bipartiteCSR readBipartite(char* fname) {
   words W;
