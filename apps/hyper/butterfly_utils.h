@@ -204,6 +204,58 @@ struct bipartiteCSR {
   }
 };
 
+struct graphCSR {
+  uintT *offsets;
+  uintE *edges;
+  long n, numEdges;
+
+  graphCSR(uintT* _offsets, uintE* _edges, long _n, long _ne) :
+    offsets(_offsets), edges(_edges), n(_n), numEdges(_ne)
+  {}
+
+  void del() {
+    free(offsets); free(edges);
+  }
+};
+
+graphCSR rankGraph(bipartiteCSR& G) {
+  using X = tuple<uintE,uintE>;
+  X* ranks = newA(X, G.nv + G.nu);
+  uintE* rankV = newA(uintE, G.nv);
+  uintE* rankU = newA(uintE, G.nu);
+
+  parallel_for(long v=0; v < G.nv; ++v) { ranks[v] = make_tuple(v,G.offsetsV[v+1] - G.offsetsV[v]); }
+  parallel_for(long u=0; u < G.nu; ++u) { ranks[G.nv + u] = make_tuple(G.nv + u, G.offsetsU[u+1] - G.offsetsU[u]); }
+  sampleSort(ranks, G.nv + G.nu, uintETupleGt());
+
+  uintT* offsets = newA(uintT,G.nv+G.nu+1);
+  offsets[G.nv+G.nu] = 0;
+
+  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
+    if (get<0>(ranks[i]) >= G.nv) rankU[get<0>(ranks[i]) - G.nv] = i;
+    else rankV[get<0>(ranks[i])] = i;
+    offsets[i] = get<1>(ranks[i]);
+  }
+  // Now we have to reformat the graph
+  sequence::plusScan(offsets,offsets,G.nv+G.nu+1);
+  uintE* edges = newA(uintE,offsets[G.nv+G.nu]);
+  auto lt = [] (const uintE& l, const uintE& r) { return l > r; };
+  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
+    // need to fill in offsets[i] to offests[i+1] in edges array
+    bool use_v = (get<0>(ranks[i]) < G.nv);
+  	intT idx = use_v ? get<0>(ranks[i]) : get<0>(ranks[i]) - G.nv;
+  	intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
+    intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
+    parallel_for(intT j=0; j < deg; ++j) {
+      intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
+      edges[offsets[i]+j] = use_v ? rankU[nbhr] : rankV[nbhr];
+    }
+    sampleSort(&edges[offsets[i]], deg, lt);
+  }
+  free(ranks); free(rankV); free(rankU);
+  return graphCSR(offsets,edges,G.nv+G.nu,G.numEdges);
+}
+
 tuple<uintE*, uintE*, uintE*, long> rankBipartite(bipartiteCSR& G) {
   // We need a u/v to rank array
   // Store everything in graph by u/v idx as normal, but check ranks for wedges
