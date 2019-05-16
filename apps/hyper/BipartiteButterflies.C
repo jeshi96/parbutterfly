@@ -5,8 +5,8 @@
 #include <assert.h>
 
 #define HYPER 1
-#define LONG 1
-#define EDGELONG 1
+//#define LONG 1
+//#define EDGELONG 1
 #define MCX16 1
 
 #include "hypergraphIO.h"
@@ -825,9 +825,9 @@ void CountWorkEfficientParallel2(graphCSR& GA) {
   timer t1,t2;
   t1.start();
 
-  long stepSize = 100; //tunable parameter
-  long* wedges = newA(long, GA.n*stepSize);
-  long* used = newA(long, GA.n*stepSize);
+  long stepSize = 1000; //tunable parameter
+  uintE* wedges = newA(uintE, GA.n*stepSize);
+  uintE* used = newA(uintE, GA.n*stepSize);
 
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
@@ -856,7 +856,7 @@ void CountWorkEfficientParallel2(graphCSR& GA) {
 	    //butterflies[u2_idx*eltsPerCacheLine] += wedges[shift+u2_idx];
 	    //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
 	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx; //why do we need to add shift here?
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = u2_idx; //why do we need to add shift here?
 	  }
 	  else break;
 	}
@@ -877,10 +877,10 @@ void CountWorkEfficientParallel2(graphCSR& GA) {
       }
 
       for(long j=0; j < used_idx; ++j) {
-        long u2_idx = used[shift+j]-shift;
-        writeAdd(&butterflies[i*eltsPerCacheLine],  (long)(wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-        writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long)(wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-        wedges[used[shift+j]] = 0;
+        long u2_idx = used[shift+j];
+        writeAdd(&butterflies[i*eltsPerCacheLine],  ((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+        writeAdd(&butterflies[u2_idx*eltsPerCacheLine], ((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+        wedges[shift+u2_idx] = 0;
       }
     }
   }
