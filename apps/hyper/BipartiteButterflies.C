@@ -71,7 +71,7 @@ struct seagullSum {
       ret += (offsetsV[v+1] - offsetsV[v] - 1);
     }
   return ret;*/
-    intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
+    E u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
 	return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
   }
 };
@@ -825,30 +825,30 @@ void CountWorkEfficientParallel2(graphCSR& GA) {
   timer t1,t2;
   t1.start();
 
-  long stepSize = 1000; //tunable parameter
-  uintE* wedges = newA(uintE, GA.n*stepSize);
-  uintE* used = newA(uintE, GA.n*stepSize);
+  long stepSize = 100; //tunable parameter
+  long* wedges = newA(long, GA.n*stepSize);
+  long* used = newA(long, GA.n*stepSize);
 
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
   
-  uintE* butterflies = newA(uintE,eltsPerCacheLine*GA.n);
+  long* butterflies = newA(long,eltsPerCacheLine*GA.n);
   granular_for(i,0,GA.n,GA.n > 10000, { butterflies[eltsPerCacheLine*i] = 0; });
   t1.reportTotal("preprocess");
 
   t2.start();
 
-  for(intT step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
-    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,GA.n); ++i){
+  for(long step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
+    parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,GA.n); ++i){
       intT used_idx = 0;
-      intT shift = GA.n*(i-step*stepSize);
+      long shift = GA.n*(i-step*stepSize);
       intT u_offset  = GA.offsets[i];
       intT u_deg = GA.offsets[i+1]-u_offset;
       for (intT j=0; j < u_deg; ++j ) {
 	intT v = GA.edges[u_offset+j];
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
-  if (v <= i) break;
+	if (v <= i) break;
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k];
 	  if (u2_idx > i) { //TODO combine into one graph
@@ -856,30 +856,30 @@ void CountWorkEfficientParallel2(graphCSR& GA) {
 	    //butterflies[u2_idx*eltsPerCacheLine] += wedges[shift+u2_idx];
 	    //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
 	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx; //why do we need to add shift here?
 	  }
 	  else break;
 	}
       }
 
-  for (intT j=0; j < u_deg; ++j ) {
+      for (long j=0; j < u_deg; ++j ) {
 	intT v = GA.edges[u_offset+j];
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
-  if (v <= i) break;
-	for (intT k=0; k < v_deg; ++k) { 
+	if (v <= i) break;
+	for (long k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k];
 	  if (u2_idx > i) { //TODO combine into one graph
-if (wedges[shift+u2_idx] > 1) writeAdd(&butterflies[eltsPerCacheLine*v], wedges[shift+u2_idx]-1);
+	    if (wedges[shift+u2_idx] > 1) writeAdd(&butterflies[eltsPerCacheLine*v], (long)(wedges[shift+u2_idx]-1));
 	  }
 	  else break;
 	}
       }
 
-      for(intT j=0; j < used_idx; ++j) {
-        uintE u2_idx = used[shift+j]-shift;
-        writeAdd(&butterflies[i*eltsPerCacheLine],  wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2);
-        writeAdd(&butterflies[u2_idx*eltsPerCacheLine], wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2);
+      for(long j=0; j < used_idx; ++j) {
+        long u2_idx = used[shift+j]-shift;
+        writeAdd(&butterflies[i*eltsPerCacheLine],  (long)(wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+        writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long)(wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
         wedges[used[shift+j]] = 0;
       }
     }
@@ -891,6 +891,7 @@ if (wedges[shift+u2_idx] > 1) writeAdd(&butterflies[eltsPerCacheLine*v], wedges[
   long total = 0;
   
   for(long i=0;i<GA.n;i++) total += butterflies[eltsPerCacheLine*i];
+
   //for(long i=0;i<stepSize;i++) total += results[i*eltsPerCacheLine];
   free(butterflies);
   //free(results);
