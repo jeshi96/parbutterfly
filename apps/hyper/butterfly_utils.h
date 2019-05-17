@@ -229,7 +229,7 @@ graphCSR rankGraph(bipartiteCSR& G) {
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     uintE deg_a = (a >= G.nv) ? G.offsetsU[a-G.nv+1]-G.offsetsU[a-G.nv] : G.offsetsV[a+1]-G.offsetsV[a];
     uintE deg_b = (b >= G.nv) ? G.offsetsU[b-G.nv+1]-G.offsetsU[b-G.nv] : G.offsetsV[b+1]-G.offsetsV[b];
-    return deg_a < deg_b;
+    return deg_a > deg_b;
   };
 
   sampleSort(ranks,G.nv+G.nu, samplesort_f); 
