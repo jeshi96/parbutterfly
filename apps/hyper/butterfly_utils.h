@@ -220,43 +220,51 @@ struct graphCSR {
 
 graphCSR rankGraph(bipartiteCSR& G) {
   using X = tuple<uintE,uintE>;
-  X* ranks = newA(X, G.nv + G.nu);
+  uintE* ranks = newA(uintE, G.nv + G.nu);
   uintE* rankV = newA(uintE, G.nv);
   uintE* rankU = newA(uintE, G.nu);
-
-  parallel_for(long v=0; v < G.nv; ++v) { ranks[v] = make_tuple(v,G.offsetsV[v+1] - G.offsetsV[v]); }
-  parallel_for(long u=0; u < G.nu; ++u) { ranks[G.nv + u] = make_tuple(G.nv + u, G.offsetsU[u+1] - G.offsetsU[u]); }
-  //sampleSort(ranks, G.nv + G.nu, uintETupleGt());
-
-  auto second_f = [&] (const X p) -> const uintE {
-    return get<1>(p);
-  };
   
-  intSort::iSort(ranks,G.nv+G.nu, max(G.nv,G.nu), second_f); 
+  parallel_for(long v=0; v < G.nv+G.nu; ++v) { ranks[v] = v; }
 
+  auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
+    uintE deg_a = (a >= G.nv) ? G.offsetsU[a-G.nv+1]-G.offsetsU[a-G.nv] : G.offsetsV[a+1]-G.offsetsV[a];
+    uintE deg_b = (b >= G.nv) ? G.offsetsU[b-G.nv+1]-G.offsetsU[b-G.nv] : G.offsetsV[b+1]-G.offsetsV[b];
+    return deg_a < deg_b;
+  };
+
+  sampleSort(ranks,G.nv+G.nu, samplesort_f); 
   
   uintT* offsets = newA(uintT,G.nv+G.nu+1);
   offsets[G.nv+G.nu] = 0;
 
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
-    if (get<0>(ranks[i]) >= G.nv) rankU[get<0>(ranks[i]) - G.nv] = i;
-    else rankV[get<0>(ranks[i])] = i;
-    offsets[i] = get<1>(ranks[i]);
+    //ranksInverse[get<0>(ranks[i])] = i
+    if (ranks[i] >= G.nv) {
+      rankU[ranks[i] - G.nv] = i;
+      offsets[i] = G.offsetsU[ranks[i]-G.nv+1]-G.offsetsU[ranks[i]-G.nv];
+    }
+    else {
+      rankV[ranks[i]] = i;
+      offsets[i] = G.offsetsV[ranks[i]+1]-G.offsetsV[ranks[i]];
+    }
   }
+
   // Now we have to reformat the graph
   sequence::plusScan(offsets,offsets,G.nv+G.nu+1);
+
   uintE* edges = newA(uintE,offsets[G.nv+G.nu]);
+
   auto lt = [] (const uintE& l, const uintE& r) { return l > r; };
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
-    // need to fill in offsets[i] to offests[i+1] in edges array
-    bool use_v = (get<0>(ranks[i]) < G.nv);
-  	intT idx = use_v ? get<0>(ranks[i]) : get<0>(ranks[i]) - G.nv;
+    // need to fill in offsets[i] to offsets[i+1] in edges array
+    bool use_v = (ranks[i] < G.nv);
+  	intT idx = use_v ? ranks[i] : ranks[i] - G.nv;
   	intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
     intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
-    parallel_for(intT j=0; j < deg; ++j) {
+    granular_for(j,0,deg,deg > 10000, { 
       intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
       edges[offsets[i]+j] = use_v ? rankU[nbhr] : rankV[nbhr];
-    }
+      });
     sampleSort(&edges[offsets[i]], deg, lt);
   }
   free(ranks); free(rankV); free(rankU);
