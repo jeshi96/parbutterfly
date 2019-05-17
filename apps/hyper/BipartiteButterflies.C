@@ -721,7 +721,7 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v) {
 	    //butterflies[u2_idx] += wedges[u2_idx];
 	    results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
 	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) used[used_idx++] = shift+u2_idx;
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
 	  }
 	  else break;
 	}
@@ -739,7 +739,7 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v) {
   for(long i=0;i<stepSize;i++) total += results[i*eltsPerCacheLine];
   free(butterflies);
   //free(results);
-  cout << "num: " << total/2 << "\n";
+  cout << "num: " << total << "\n";
 }
 
 void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* wedgesPrefixSum) {
