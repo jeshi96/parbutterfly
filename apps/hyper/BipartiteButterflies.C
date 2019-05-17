@@ -1018,11 +1018,17 @@ if (te == 0) {
   }
   else if (ty == 9) CountOrigCompact(GA,use_v);
   else if (ty == 10) {
+    timer t_rank;
+    t_rank.start();
     auto ret = rankBipartite(GA);
+    t_rank.reportTotal("ranking");
     CountWorkEfficientParallel(GA, get<0>(ret), get<1>(ret), get<2>(ret), get<3>(ret));
   }
   else if (ty == 11) {
+    timer t_rank;
+    t_rank.start();
     auto g = rankGraph(GA);
+    t_rank.reportTotal("ranking");
     CountWorkEfficientParallel2(g);
   }
 

@@ -226,8 +226,15 @@ graphCSR rankGraph(bipartiteCSR& G) {
 
   parallel_for(long v=0; v < G.nv; ++v) { ranks[v] = make_tuple(v,G.offsetsV[v+1] - G.offsetsV[v]); }
   parallel_for(long u=0; u < G.nu; ++u) { ranks[G.nv + u] = make_tuple(G.nv + u, G.offsetsU[u+1] - G.offsetsU[u]); }
-  sampleSort(ranks, G.nv + G.nu, uintETupleGt());
+  //sampleSort(ranks, G.nv + G.nu, uintETupleGt());
 
+  auto second_f = [&] (const X p) -> const uintE {
+    return get<1>(p);
+  };
+  
+  intSort::iSort(ranks,G.nv+G.nu, max(G.nv,G.nu), second_f); 
+
+  
   uintT* offsets = newA(uintT,G.nv+G.nu+1);
   offsets[G.nv+G.nu] = 0;
 
