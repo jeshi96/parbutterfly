@@ -1093,6 +1093,9 @@ if (te == 0) {
     t_rank.start();
     auto g = rankGraph(GA);
     t_rank.reportTotal("ranking");
+    long num_rwedges = sequence::reduce<long>((long) 0, g.n, addF<long>(), rankWedgeF<long>(g.offsets,g.edges));
+    cout << "Rank wedges: " << num_rwedges << "\n";
+    cout << "Side wedges: " << num_wedges << "\n";
     CountWorkEfficientParallel2(g);
   }
   else if (ty == 12) {

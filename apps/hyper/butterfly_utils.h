@@ -376,6 +376,24 @@ bipartiteCSR readBipartite(char* fname) {
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
 }
 
+template <class E>
+struct rankWedgeF { 
+  uintT* offsets;
+  uintE* edges;
+  rankWedgeF(uintT* _offsets, uintE* _edges) : offsets(_offsets), edges(_edges) {}
+  inline E operator() (const uintT& i) const {
+    intT v_offset = offsets[i];
+    intT v_deg = offsets[i+1]-v_offset;
+    intT in_deg = 0; intT out_deg = 0;
+    for(intT j=0; j < v_deg; ++j) {
+      intT u = edges[v_offset+j];
+      if (u < i) in_deg++;
+      else out_deg++;
+    }
+    return (E) ( in_deg * out_deg + ((in_deg * (in_deg-1)) / 2)); 
+  }
+};
+
 // Takes the elements of a vertex array, and returns the out degree choose 2
 template <class E>
 struct wedgeF { 
