@@ -218,8 +218,11 @@ struct graphCSR {
   }
 };
 
-graphCSR rankGraph(bipartiteCSR& G) {
+graphCSR rankGraph(bipartiteCSR& G, bool use_vb) {
   using X = tuple<uintE,uintE>;
+  // we put a 1 if nu and use_vb; 0 otherwise
+  const long nu = use_vb ? G.nu : G.nv; // store if 1, don't store if 0 (store if nu and use_v or if nv and not use_v)
+
   uintE* ranks = newA(uintE, G.nv + G.nu);
   uintE* rankV = newA(uintE, G.nv);
   uintE* rankU = newA(uintE, G.nu);
@@ -263,71 +266,15 @@ graphCSR rankGraph(bipartiteCSR& G) {
     intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
     granular_for(j,0,deg,deg > 10000, { 
       intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
-      edges[offsets[i]+j] = use_v ? rankU[nbhr] : rankV[nbhr];
+      uintE r; 
+      if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
+      else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
+      edges[offsets[i]+j] = r;
       });
     sampleSort(&edges[offsets[i]], deg, lt);
   }
   free(ranks); free(rankV); free(rankU);
   return graphCSR(offsets,edges,G.nv+G.nu,G.numEdges);
-}
-
-tuple<uintE*, uintE*, uintE*, long> rankBipartite(bipartiteCSR& G) {
-  // We need a u/v to rank array
-  // Store everything in graph by u/v idx as normal, but check ranks for wedges
-  uintE* rankV = newA(uintE, G.nv);
-  uintE* rankU = newA(uintE, G.nu);
-  // To get ranks, make a degree array and sort
-  using X = tuple<uintE,uintE>;
-  X* ranks = newA(X, G.nv + G.nu);
-  uintE* ranks_f = newA(uintE, G.nv + G.nu);
-  uintE* ranks_ff = newA(uintE, G.nv + G.nu);
-  parallel_for(long v=0; v < G.nv; ++v) { ranks[v] = make_tuple(v,G.offsetsV[v+1] - G.offsetsV[v]); }
-  parallel_for(long u=0; u < G.nu; ++u) { ranks[G.nv + u] = make_tuple(G.nv + u, G.offsetsU[u+1] - G.offsetsU[u]); }
-  sampleSort(ranks, G.nv + G.nu, uintETupleGt());
-  // Store ranks in rankV, rankU -- u/v to rank arrays
-  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
-    if (get<0>(ranks[i]) >= G.nv) rankU[get<0>(ranks[i]) - G.nv] = i;
-    else rankV[get<0>(ranks[i])] = i;
-  }
-  // Now we have to reformat the graph (reorder neighbors so that they're in order of rank)
-  auto cmp_u = NestedUIECmp(rankU);
-  auto cmp_v = NestedUIECmp(rankV);
-  //intSort::iSort(G.edgesU, G.offsetsU, G.numEdges, G.nu, identityF<uintE>());
-  parallel_for(intT i=0; i < G.nu; ++i) {
-    intT u_offset = G.offsetsU[i];
-    intT u_deg = G.offsetsU[i+1] - u_offset;
-
-    //intSort::iSort(&(G.edgesU[u_offset]), u_deg, G.nu + G.nv, NestedUIECmp(rankV));
-    //if (u_deg > 1) {assert(rankV[G.edgesU[u_offset+1]] > rankV[G.edgesU[u_offset]]);}
-    sampleSort(&G.edgesU[u_offset], u_deg, cmp_v);
-  }
-  parallel_for(intT i=0; i < G.nv; ++i) {
-    intT v_offset = G.offsetsV[i];
-    intT v_deg = G.offsetsV[i+1] - v_offset;
-    //intSort::iSort(&(G.edgesV[v_offset]), v_deg, G.nu + G.nv, NestedUIECmp(rankU));
-    sampleSort(&G.edgesV[v_offset], v_deg, cmp_u);
-  }
-  // Now do filtering
-  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
-    bool use_v = (get<0>(ranks[i]) < G.nv);
-auto use_rankV = use_v ? rankV : rankU;
-auto use_rankU = use_v ? rankU : rankV;
-auto use_offsetsV = use_v ? G.offsetsV : G.offsetsU;
-auto use_offsetsU = use_v ? G.offsetsU : G.offsetsV;
-auto use_edgesV = use_v ? G.edgesV : G.edgesU;
-auto use_edgesU = use_v ? G.edgesU : G.edgesV;
-    intT idx = use_v ? get<0>(ranks[i]) : get<0>(ranks[i]) - G.nv;
-    intT u_offset  = use_offsetsV[idx];
-    intT u_deg = use_offsetsV[idx+1]-u_offset;
-    ranks_f[i] = UINT_E_MAX;
-    if (u_deg >= 2 && use_rankU[use_edgesV[u_offset+1]] < use_rankV[idx]) ranks_f[i] = get<0>(ranks[i]);
-  }
-  //TODO inefficient fix
-  long num_ranks = sequence::filter(ranks_f, ranks_ff, G.nv + G.nu, nonMaxF());
-  free(ranks);
-  free(ranks_f);
-  // Everything is now sorted in rank order
-  return make_tuple(ranks_ff, rankV, rankU, num_ranks);
 }
 
 bipartiteCSR readBipartite(char* fname) {
