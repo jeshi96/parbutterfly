@@ -674,74 +674,6 @@ void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
   cout << "num: " << results/2 << "\n";
 }
 
-void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v) {
-  timer t1,t2;
-  t1.start();
-  cout << "Original Parallel" << endl;
-  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
-  
-  const long nv = use_v ? GA.nv : GA.nu;
-  const long nu = use_v ? GA.nu : GA.nv;
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
-  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  long stepSize = 1000; //tunable parameter
-
-  long* wedges = newA(long, nu*stepSize);
-  long* used = newA(long, nu*stepSize);
-
-  granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
-  const intT eltsPerCacheLine = 64/sizeof(long);
-  
-  long* results = newA(long,eltsPerCacheLine*stepSize); //one entry per cache line
-  granular_for(i,0,stepSize,stepSize > 10000, {results[eltsPerCacheLine*i] = 0;});
-  
-  long* butterflies = newA(long,nu);
-  granular_for(i,0,nu,nu > 10000, { butterflies[i] = 0; });
-  t1.reportTotal("preprocess");
-
-  t2.start();
-
-  for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
-    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,nu); ++i){
-      intT used_idx = 0;
-      intT shift = nu*(i-step*stepSize);
-      intT u_offset  = offsetsU[i];
-      intT u_deg = offsetsU[i+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) {
-	intT v = edgesU[u_offset+j];
-	intT v_offset = offsetsV[v];
-	intT v_deg = offsetsV[v+1]-offsetsV[v];
-	for (intT k=0; k < v_deg; ++k) { 
-	  uintE u2_idx = edgesV[v_offset+k];
-	  if (u2_idx < i) {
-	    //butterflies[i] += wedges[u2_idx];
-	    //butterflies[u2_idx] += wedges[u2_idx];
-	    results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
-	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
-	  }
-	  else break;
-	}
-      }
-      for(intT j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
-    }
-  }
-  t2.reportTotal("main loop");
-  
-  free(wedges);
-  free(used);
-  long total = 0;
-  
-  for(long i=0;i<nu;i++) total += butterflies[i];
-  for(long i=0;i<stepSize;i++) total += results[i*eltsPerCacheLine];
-  free(butterflies);
-  //free(results);
-  cout << "num: " << total << "\n";
-}
-
 void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* wedgesPrefixSum) {
   timer t1,t2;
   t1.start();
@@ -888,87 +820,6 @@ void CountWorkEfficientSerial(graphCSR& GA) {
   cout << "num: " << total/2 << "\n";
 }
 
-
-void CountWorkEfficientParallel2(graphCSR& GA) {
-  timer t1,t2;
-  t1.start();
-
-  long stepSize = getWorkers() * 15; //tunable parameter
-  uintE* wedges = newA(uintE, GA.n*stepSize);
-  uintE* used = newA(uintE, GA.n*stepSize);
-
-  granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
-  const intT eltsPerCacheLine = 64/sizeof(long);
-  
-  long* butterflies = newA(long,eltsPerCacheLine*GA.n);
-  granular_for(i,0,GA.n,GA.n > 10000, { butterflies[eltsPerCacheLine*i] = 0; });
-  t1.reportTotal("preprocess");
-
-  t2.start();
-
-  for(long step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
-    parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,GA.n); ++i){
-      intT used_idx = 0;
-      long shift = GA.n*(i-step*stepSize);
-      intT u_offset  = GA.offsets[i];
-      intT u_deg = GA.offsets[i+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) {
-	intT v = GA.edges[u_offset+j] >> 1;
-	intT v_offset = GA.offsets[v];
-	intT v_deg = GA.offsets[v+1]-v_offset;
-	if (v <= i) break;
-	for (intT k=0; k < v_deg; ++k) { 
-	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
-	  if (u2_idx > i) { //TODO combine into one graph
-	    //butterflies[i*eltsPerCacheLine] += wedges[shift+u2_idx];
-	    //butterflies[u2_idx*eltsPerCacheLine] += wedges[shift+u2_idx];
-	    //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
-	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = GA.edges[v_offset+k];
-	  }
-	  else break;
-	}
-      }
-
-      for (long j=0; j < u_deg; ++j ) {
-	intT v = GA.edges[u_offset+j] >> 1;
-	intT v_offset = GA.offsets[v];
-	intT v_deg = GA.offsets[v+1]-v_offset;
-	if (v <= i) break;
-  if (!(GA.edges[u_offset+j] & 0b1)) continue;
-	for (long k=0; k < v_deg; ++k) { 
-	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
-	  if (u2_idx > i) { //TODO combine into one graph
-	    if (wedges[shift+u2_idx] > 1) writeAdd(&butterflies[eltsPerCacheLine*v], (long)(wedges[shift+u2_idx]-1));
-	  }
-	  else break;
-	}
-      }
-
-      for(long j=0; j < used_idx; ++j) {
-        long u2_idx = used[shift+j] >> 1;
-        if(used[shift+j] & 0b1) {
-        writeAdd(&butterflies[i*eltsPerCacheLine],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-        writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-        }
-        wedges[shift+u2_idx] = 0;
-      }
-    }
-  }
-  t2.reportTotal("main loop");
-  
-  free(wedges);
-  free(used);
-  long total = 0;
-  
-  for(long i=0;i<GA.n;i++) total += butterflies[eltsPerCacheLine*i];
-
-  //for(long i=0;i<stepSize;i++) total += results[i*eltsPerCacheLine];
-  free(butterflies);
-  //free(results);
-  cout << "num: " << total/2 << "\n";
-}
-
 // Note: must be invoked with symmetricVertex
 void Compute(bipartiteCSR& GA, commandLine P) {
   // Method type for counting + peeling
@@ -990,32 +841,24 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   //TODO seq code integrate w/count
 if (te == 0) {
-  if (ty == 7) CountOrigCompactParallel(GA,use_v);
-  else if (ty == 8) {
+  
+  if (ty == 8) {
   	long* workPrefixSum = get<2>(use_v_tuple);
   	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
   	free(workPrefixSum);
   }
   else if (ty == 9) CountOrigCompact(GA,use_v);
-  else if (ty == 11) {
-    timer t_rank;
-    t_rank.start();
-    auto g = rankGraph(GA, use_v);
-    t_rank.reportTotal("ranking");
-    long num_rwedges = sequence::reduce<long>((long) 0, g.n, addF<long>(), rankWedgeF<long>(g.offsets,g.edges));
-    cout << "Rank wedges: " << num_rwedges << "\n";
-    cout << "Side wedges: " << num_wedges << "\n";
-    CountWorkEfficientParallel2(g);
-  }
   else if (ty == 12) {
     timer t_rank;
     t_rank.start();
-    auto g = rankGraph(GA, use_v);
+    auto rank_tup = getDegRanks(GA);
+    auto g = rankGraph(GA, use_v, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+    free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
     t_rank.reportTotal("ranking");
     CountWorkEfficientSerial(g);
   }
 
-  if (ty > 6) return;
+  if (ty == 8 || ty == 9 || ty == 12) return;
 
   timer t;
   t.start();

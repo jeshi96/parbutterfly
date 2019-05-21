@@ -218,38 +218,136 @@ struct graphCSR {
   }
 };
 
-graphCSR rankGraph(bipartiteCSR& G, bool use_vb) {
-  using X = tuple<uintE,uintE>;
-  // we put a 1 if nu and use_vb; 0 otherwise
-  const long nu = use_vb ? G.nu : G.nv; // store if 1, don't store if 0 (store if nu and use_v or if nv and not use_v)
+template <class E>
+struct rankWedgeF { 
+  uintT* offsets;
+  uintE* edges;
+  uintE* rank;
+  uintE* orank;
+  rankWedgeF(uintT* _offsets, uintE* _edges, uintE* _rank, uintE* _orank) :
+    offsets(_offsets), edges(_edges), rank(_rank), orank(_orank) {}
+  inline E operator() (const uintT& i) const {
+    intT v_offset = offsets[i];
+    intT v_deg = offsets[i+1]-v_offset;
+    intT in_deg = 0; intT out_deg = 0;
+    for(intT j=0; j < v_deg; ++j) {
+      intT u = edges[v_offset+j];
+      if (orank[u] < rank[i]) in_deg++;
+      else out_deg++;
+    }
+    return (E) ( in_deg * out_deg + ((in_deg * (in_deg-1)) / 2)); 
+  }
+};
 
+template<class F>
+tuple<uintE*, uintE*, uintE*> getRanks(bipartiteCSR& G, F samplesort_f) {
   uintE* ranks = newA(uintE, G.nv + G.nu);
   uintE* rankV = newA(uintE, G.nv);
   uintE* rankU = newA(uintE, G.nu);
   
   parallel_for(long v=0; v < G.nv+G.nu; ++v) { ranks[v] = v; }
 
+  sampleSort(ranks,G.nv+G.nu, samplesort_f); 
+
+  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
+    if (ranks[i] >= G.nv) rankU[ranks[i] - G.nv] = i;
+    else rankV[ranks[i]] = i;
+  }
+
+  return make_tuple(ranks, rankV, rankU);
+}
+
+tuple<uintE*, uintE*, uintE*> getDegRanks(bipartiteCSR& G) {
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     uintE deg_a = (a >= G.nv) ? G.offsetsU[a-G.nv+1]-G.offsetsU[a-G.nv] : G.offsetsV[a+1]-G.offsetsV[a];
     uintE deg_b = (b >= G.nv) ? G.offsetsU[b-G.nv+1]-G.offsetsU[b-G.nv] : G.offsetsV[b+1]-G.offsetsV[b];
     return deg_a > deg_b;
   };
+  return getRanks(G, samplesort_f);
+}
 
-  sampleSort(ranks,G.nv+G.nu, samplesort_f); 
+tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=128) {
+  using X = tuple<uintE, uintE>;
+  const size_t n = G.nv + G.nu; const size_t m = G.numEdges;
+  auto D = array_imap<uintE>(n, [&] (size_t i) {
+    if(i >= G.nv) return G.offsetsU[i-G.nv+1] - G.offsetsU[i-G.nv];
+    return G.offsetsV[i+1] - G.offsetsV[i];
+  });
+
+  //auto em = EdgeMap<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)G.numEdges/5);
+  auto b = make_buckets(n, D, increasing, num_buckets);
+  //intT* update = newA(intT, G.nu + G.nv);
+  //parallel_for(long v=0; v < G.nv+G.nu; ++v) { update[v] = 0; }
+  sparseAdditiveSet<intT> update_hash = sparseAdditiveSet<intT>(G.nv+G.nu,1,UINT_E_MAX);
+
+  size_t finished = 0;
+  while (finished != n) {
+    auto bkt = b.next_bucket();
+    auto active = bkt.identifiers;
+    uintE k = bkt.id;
+    finished += active.size();
+
+    parallel_for(intT i=0; i < active.size(); ++i) {
+      bool use_v = active.vtx(i) < G.nv;
+      intT idx = use_v ? active.vtx(i) : active.vtx(i) - G.nv;
+  	  intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
+      intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1]) - offset;
+      granular_for(j,0,deg,deg > 10000, { 
+      intT nbhr = use_v ? G.edgesV[offset+j] + G.nv : G.edgesU[offset+j];
+      // must decrement D.s[nbhr]
+      //writeAdd(&update[nbhr], 1);
+      update_hash.insert(make_pair(nbhr,1));
+      });
+    }
+
+    auto update = update_hash.entries();
+    X* update_b = newA(X, update.n);
+    parallel_for(long i=0; i < update.n; ++i) { 
+      intT v = update.A[i].first;
+      uintE deg = D.s[v];
+      if (deg > k) {
+        uintE new_deg = max(deg - update.A[i].second, k);
+        D.s[v] = new_deg;
+        uintE bkt = b.get_bucket(deg, new_deg);
+        update_b[i] = make_tuple(v, bkt);
+      }
+      else update_b[i] = make_tuple(UINT_E_MAX, UINT_E_MAX);
+    }
+    update_hash.clear();
+    update.del();
+
+    X* update_filter = newA(X, update.n);
+    long num_updates_filter = sequence::filter(update_b ,update_filter, update.n, nonMaxTupleF());
+    free(update_b);
+
+    //vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(active, apply_f);
+    // second should be array of tuple<uintE,uintE> of idx, new bucket pairs; first is length of this array
+    vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(G.nu+G.nv, num_updates_filter, update_filter);
+    b.update_buckets(moved.get_fn_repr(), moved.size());
+    moved.del(); 
+    active.del();
+  }
+  update_hash.del();
+
+  auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
+    return D[a] > D[b];
+  };
+  
+  return getRanks(G, samplesort_f);
+}
+
+
+graphCSR rankGraph(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uintE* rankU) {
+  using X = tuple<uintE,uintE>;
+  // we put a 1 if nu and use_vb; 0 otherwise
+  // store if 1, don't store if 0 (store if nu and use_v or if nv and not use_v)
   
   uintT* offsets = newA(uintT,G.nv+G.nu+1);
   offsets[G.nv+G.nu] = 0;
 
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
-    //ranksInverse[get<0>(ranks[i])] = i
-    if (ranks[i] >= G.nv) {
-      rankU[ranks[i] - G.nv] = i;
-      offsets[i] = G.offsetsU[ranks[i]-G.nv+1]-G.offsetsU[ranks[i]-G.nv];
-    }
-    else {
-      rankV[ranks[i]] = i;
-      offsets[i] = G.offsetsV[ranks[i]+1]-G.offsetsV[ranks[i]];
-    }
+    if (ranks[i] >= G.nv) offsets[i] = G.offsetsU[ranks[i]-G.nv+1]-G.offsetsU[ranks[i]-G.nv];
+    else offsets[i] = G.offsetsV[ranks[i]+1]-G.offsetsV[ranks[i]];
   }
 
   // Now we have to reformat the graph
@@ -273,7 +371,6 @@ graphCSR rankGraph(bipartiteCSR& G, bool use_vb) {
       });
     sampleSort(&edges[offsets[i]], deg, lt);
   }
-  free(ranks); free(rankV); free(rankU);
   return graphCSR(offsets,edges,G.nv+G.nu,G.numEdges);
 }
 
@@ -322,24 +419,6 @@ bipartiteCSR readBipartite(char* fname) {
   //W.del(); // to deal with performance bug in malloc
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
 }
-
-template <class E>
-struct rankWedgeF { 
-  uintT* offsets;
-  uintE* edges;
-  rankWedgeF(uintT* _offsets, uintE* _edges) : offsets(_offsets), edges(_edges) {}
-  inline E operator() (const uintT& i) const {
-    intT v_offset = offsets[i];
-    intT v_deg = offsets[i+1]-v_offset;
-    intT in_deg = 0; intT out_deg = 0;
-    for(intT j=0; j < v_deg; ++j) {
-      intT u = edges[v_offset+j];
-      if (u < i) in_deg++;
-      else out_deg++;
-    }
-    return (E) ( in_deg * out_deg + ((in_deg * (in_deg-1)) / 2)); 
-  }
-};
 
 // Takes the elements of a vertex array, and returns the out degree choose 2
 template <class E>
