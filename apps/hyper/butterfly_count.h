@@ -604,6 +604,7 @@ uintE* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, lon
     t_rank.start();
     auto rank_tup = getDegRanks(GA);
     auto rank_tup2 = getCoreRanks(GA);
+    auto rank_tup3 = getCoCoreRanks(GA);
     t_rank.reportTotal("ranking");
 
     long num_rwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
@@ -616,9 +617,15 @@ uintE* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, lon
     num_cwedges += sequence::reduce<long>((long) 0, GA.nv, addF<long>(),
       rankWedgeF<long>(GA.offsetsV, GA.edgesV, get<1>(rank_tup2), get<2>(rank_tup2)));
 
+    long num_ccwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
+      rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup3), get<1>(rank_tup3)));
+    num_ccwedges += sequence::reduce<long>((long) 0, GA.nv, addF<long>(),
+      rankWedgeF<long>(GA.offsetsV, GA.edgesV, get<1>(rank_tup3), get<2>(rank_tup3)));
+
     cout << "Rank wedges: " << num_rwedges << "\n";
     cout << "Side wedges: " << num_wedges << "\n";
     cout << "Core wedges: " << num_cwedges << "\n";
+    cout << "Co Core wedges: " << num_ccwedges << "\n";
     
     if (num_rwedges < num_wedges + 1000) {
       auto g = rankGraph(GA, use_v, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
