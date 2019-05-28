@@ -68,6 +68,7 @@ const intT eltsPerCacheLine = 64/sizeof(long);
       for (intT k=0; k < v_deg; ++k) {
         uintE u2 = edgesV[v_offset+k];
         if (u2 < i) {
+          // TODO should take out -1, put in if to store only if > 0
           uintE num_butterflies = sizes.find(i*nu + u2).second - 1;
           writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + j]],num_butterflies); 
           writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)],num_butterflies); 
