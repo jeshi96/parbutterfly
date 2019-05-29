@@ -277,6 +277,22 @@ tuple<uintE*, uintE*, uintE*> getDegRanks(bipartiteCSR& G) {
   return getRanks(G, samplesort_f);
 }
 
+template <class E>
+struct degF { 
+  uintT* offsetsV;
+  uintT* offsetsU;
+  vertexSubset active;
+  long nv;
+  degF(long _nv, uintT* _offsetsV, uintT* _offsetsU, vertexSubset& _active) : nv(_nv), offsetsV(_offsetsV), offsetsU(_offsetsU), active(_active) {}
+  inline E operator() (const uintT& i) const {
+    bool use_v = active.vtx(i) < nv;
+    intT idx = use_v ? active.vtx(i) : active.vtx(i) - nv;
+    intT deg = (use_v ? offsetsV[idx+1] - offsetsV[idx] : offsetsU[idx+1] - offsetsU[idx]);
+    return (E) (deg); 
+  }
+};
+
+/*
 tuple<uintE*, uintE*, uintE*> getCoCoreRanks(bipartiteCSR& G, size_t num_buckets=128) {
   using X = tuple<uintE, uintE>;
   const size_t n = G.nv + G.nu; const size_t m = G.numEdges;
@@ -289,7 +305,6 @@ tuple<uintE*, uintE*, uintE*> getCoCoreRanks(bipartiteCSR& G, size_t num_buckets
   auto b = make_buckets(n, D, decreasing, num_buckets);
   //intT* update = newA(intT, G.nu + G.nv);
   //parallel_for(long v=0; v < G.nv+G.nu; ++v) { update[v] = 0; }
-  sparseAdditiveSet<intT> update_hash = sparseAdditiveSet<intT>(G.nv+G.nu,1,INT_T_MAX);
 
   size_t finished = 0;
   while (finished != n) {
@@ -297,6 +312,9 @@ tuple<uintE*, uintE*, uintE*> getCoCoreRanks(bipartiteCSR& G, size_t num_buckets
     auto active = bkt.identifiers;
     uintE k = bkt.id;
     finished += active.size();
+
+    long num_hash = sequence::reduce<long>((long) 0, active.size(), addF<long>(), degF<long>(G.nv, G.offsetsV, G.offsetsU, active));
+    sparseAdditiveSet<intT> update_hash = sparseAdditiveSet<intT>(num_hash, 1, INT_T_MAX);
 
     parallel_for(intT i=0; i < active.size(); ++i) {
       bool use_v = active.vtx(i) < G.nv;
@@ -324,7 +342,7 @@ tuple<uintE*, uintE*, uintE*> getCoCoreRanks(bipartiteCSR& G, size_t num_buckets
       }
       else update_b[i] = make_tuple(UINT_E_MAX, UINT_E_MAX);
     }
-    update_hash.clear();
+    update_hash.del();
     update.del();
 
     X* update_filter = newA(X, update.n);
@@ -338,13 +356,171 @@ tuple<uintE*, uintE*, uintE*> getCoCoreRanks(bipartiteCSR& G, size_t num_buckets
     moved.del(); 
     active.del();
   }
-  update_hash.del();
 
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
   };
   
   return getRanks(G, samplesort_f);
+}*/
+
+
+
+////////////////////////////////////////////////////////////////////////
+
+template <class E, class VS>
+  vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
+  long nTo = GA.nv + GA.nu;
+  uintT m = V.size();
+  V.toSparse();
+  auto degrees = array_imap<uintT>(m);
+  granular_for(i, 0, m, (m > 2000), {
+    bool use_v = V.vtx(i) < GA.nv;
+    intT idx = use_v ? V.vtx(i) : V.vtx(i) - GA.nv;
+    intT deg = (use_v ? GA.offsetsV[idx+1] - GA.offsetsV[idx] : GA.offsetsU[idx+1] - GA.offsetsU[idx]);
+    degrees[i] = deg;
+  });
+  long outEdgeCount = pbbs::scan_add(degrees, degrees);
+  if (outEdgeCount == 0) {
+    return vertexSubsetData<E>(nTo);
+  }
+  typedef tuple<uintE, E> VE;
+  VE* outEdges = pbbs::new_array_no_init<VE>(outEdgeCount);
+
+  parallel_for (size_t i = 0; i < m; i++) {
+    uintT o = degrees[i];
+    bool use_v = V.vtx(i) < GA.nv;
+    intT idx = use_v ? V.vtx(i) : V.vtx(i) - GA.nv;
+  	intT offset  = use_v ? GA.offsetsV[idx] : GA.offsetsU[idx];
+    intT deg = (use_v ? GA.offsetsV[idx+1] : GA.offsetsU[idx+1]) - offset;
+    granular_for(j,0,deg,deg > 10000, {
+      intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
+      // must decrement D.s[nbhr]
+      outEdges[o+j] = make_tuple(nbhr, 1);
+    });
+  }
+  auto vs = vertexSubsetData<E>(nTo, outEdgeCount, outEdges);
+  return vs;
+}
+
+template <class Val>
+  struct BipartiteProp {
+    using K = uintE; // keys are always uintE's (vertex-identifiers)
+    using KV = tuple<K, Val>;
+    bipartiteCSR GA;
+    pbbs::hist_table<K, Val> ht;
+
+  BipartiteProp(bipartiteCSR& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
+    if (ht_size == numeric_limits<size_t>::max()) {
+      ht_size = 1L << pbbs::log2_up(GA.numEdges/20);
+    } else { ht_size = 1L << pbbs::log2_up(ht_size); }
+    ht = pbbs::hist_table<K, Val>(_empty, ht_size);
+  }
+
+    // map_f: (uintE v, uintE ngh) -> E
+    // reduce_f: (E, tuple(uintE ngh, E ngh_val)) -> E
+    // apply_f: (uintE ngh, E reduced_val) -> O
+    template <class O, class M, class Reduce, class Apply, class VS>
+      inline vertexSubsetData<O> edgeMapReduce(VS& vs, Reduce& reduce_f, Apply& apply_f) {
+      size_t m = vs.size();
+      if (m == 0) {
+	return vertexSubsetData<O>(GA.nv+GA.nu);
+      }
+
+      auto oneHop = edgeMapInduced<M, VS>(GA, vs);
+      oneHop.toSparse();
+
+      auto get_elm = make_in_imap<tuple<K, M> >(oneHop.size(), [&] (size_t i) { return oneHop.vtxAndData(i); });
+      auto get_key = make_in_imap<uintE>(oneHop.size(), [&] (size_t i) -> uintE { return oneHop.vtx(i); });
+
+      auto q = [&] (sequentialHT<K, Val>& S, tuple<K, M> v) -> void { S.template insertF<M>(v, reduce_f); };
+      auto res = pbbs::histogram_reduce<tuple<K, M>, tuple<K, O> >(get_elm, get_key, oneHop.size(), q, apply_f, ht);
+      oneHop.del();
+      return vertexSubsetData<O>(GA.nv+GA.nu, res.first, res.second);
+    }
+
+    template <class O, class Apply, class VS>
+      inline vertexSubsetData<O> bpedgePropCount(VS& vs, Apply& apply_f) {
+      auto reduce_f = [&] (const uintE& cur, const tuple<uintE, uintE>& r) { return cur + 1; };
+      return edgeMapReduce<O, uintE>(vs,reduce_f, apply_f);
+    }
+
+    template <class O, class Apply, class VS>
+      inline vertexSubsetData<O> vertexPropCount(VS& vs, Apply& apply_f) {
+      auto reduce_f = [&] (const uintE& cur, const tuple<uintE, uintE>& r) { return cur + 1; };
+      return edgeMapReduce<O, uintE>(vs, reduce_f, apply_f);
+    }
+
+    ~BipartiteProp() {
+      ht.del();
+    }
+  };
+
+struct Remove_BPedge {
+  bool* Flags;
+  Remove_BPedge (bool* _Flags) : Flags(_Flags) {}
+  inline bool update (uintE s, uintE d) {
+    return Flags[d] = 1;
+  }
+  inline bool updateAtomic (uintE s, uintE d){
+    return CAS(&Flags[d],(bool)0,(bool)1);
+  }
+  inline bool cond (uintE d) { return Flags[d] == 0; }
+};
+
+tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
+  long n = GA.nv + GA.nu;
+  bool* active = newA(bool,n);
+  {parallel_for(long i=0;i<n;i++) active[i] = 1;}
+  vertexSubset Frontier(n, n, active);
+  uintE* Degrees = newA(uintE,n);
+  {parallel_for(long i=0;i<GA.nv;i++) {
+      Degrees[i] = GA.offsetsV[i+1] - GA.offsetsV[i];
+    }}
+  {parallel_for(long i=0;i<GA.nu;i++) {
+      Degrees[GA.nv+i] = GA.offsetsU[i+1] - GA.offsetsU[i];
+    }}
+  bool* Flags = newA(bool,n);
+  {parallel_for(long i=0;i<n;i++) Flags[i] = 0;}
+  auto D = array_imap<uintE>(n, [&] (size_t i) {
+    if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
+    return GA.offsetsV[i+1] - GA.offsetsV[i];
+  });
+
+  auto hp = BipartiteProp<uintE>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.numEdges/5);
+  auto b = make_buckets(n, D, decreasing, num_buckets);
+
+  size_t finished = 0;
+  while (finished != n) {
+    auto bkt = b.next_bucket();
+    auto active = bkt.identifiers;
+    uintE k = bkt.id;
+    finished += active.size();
+    
+    auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
+      uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
+      uintE deg = D.s[v];
+      if (deg < k) {
+        uintE new_deg = min(deg - edgesRemoved, k);
+        D.s[v] = new_deg;
+        uintE bkt = b.get_bucket(deg, new_deg);
+        return wrap(v, bkt);
+      }
+      return Maybe<tuple<uintE, uintE> >();
+    };
+
+    //vertexSubset FrontierH = vertexProp(GA,active,Remove_BPedge(Flags));
+    //cout << "k="<<k<< " num active = " << active.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
+    vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active, apply_f);
+    b.update_buckets(moved.get_fn_repr(), moved.size());
+    moved.del(); active.del();
+  }
+  
+  auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
+    return D[a] > D[b];
+  };
+  
+  return getRanks(GA, samplesort_f);
 }
 
 tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=128) {
@@ -359,7 +535,6 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
   auto b = make_buckets(n, D, increasing, num_buckets);
   //intT* update = newA(intT, G.nu + G.nv);
   //parallel_for(long v=0; v < G.nv+G.nu; ++v) { update[v] = 0; }
-  sparseAdditiveSet<intT> update_hash = sparseAdditiveSet<intT>(G.nv+G.nu,1,INT_T_MAX);
 
   size_t finished = 0;
   while (finished != n) {
@@ -367,6 +542,9 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
     auto active = bkt.identifiers;
     uintE k = bkt.id;
     finished += active.size();
+
+    long num_hash = sequence::reduce<long>((long) 0, active.size(), addF<long>(), degF<long>(G.nv, G.offsetsV, G.offsetsU, active));
+    sparseAdditiveSet<intT> update_hash = sparseAdditiveSet<intT>(num_hash, 1, INT_T_MAX);
 
     parallel_for(intT i=0; i < active.size(); ++i) {
       bool use_v = active.vtx(i) < G.nv;
@@ -394,7 +572,7 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
       }
       else update_b[i] = make_tuple(UINT_E_MAX, UINT_E_MAX);
     }
-    update_hash.clear();
+    update_hash.del();
     update.del();
 
     X* update_filter = newA(X, update.n);
@@ -408,7 +586,6 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
     moved.del(); 
     active.del();
   }
-  update_hash.del();
 
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
