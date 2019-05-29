@@ -445,18 +445,12 @@ template <class Val>
       return edgeMapReduce<O, uintE>(vs,reduce_f, apply_f);
     }
 
-    template <class O, class Apply, class VS>
-      inline vertexSubsetData<O> vertexPropCount(VS& vs, Apply& apply_f) {
-      auto reduce_f = [&] (const uintE& cur, const tuple<uintE, uintE>& r) { return cur + 1; };
-      return edgeMapReduce<O, uintE>(vs, reduce_f, apply_f);
-    }
-
     ~BipartiteProp() {
       ht.del();
     }
   };
 
-struct Remove_BPedge {
+/*struct Remove_BPedge {
   bool* Flags;
   Remove_BPedge (bool* _Flags) : Flags(_Flags) {}
   inline bool update (uintE s, uintE d) {
@@ -466,8 +460,9 @@ struct Remove_BPedge {
     return CAS(&Flags[d],(bool)0,(bool)1);
   }
   inline bool cond (uintE d) { return Flags[d] == 0; }
-};
+};*/
 
+// TODO serialize for small buckets, log buckets
 tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
   long n = GA.nv + GA.nu;
   bool* active = newA(bool,n);
@@ -480,8 +475,8 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
   {parallel_for(long i=0;i<GA.nu;i++) {
       Degrees[GA.nv+i] = GA.offsetsU[i+1] - GA.offsetsU[i];
     }}
-  bool* Flags = newA(bool,n);
-  {parallel_for(long i=0;i<n;i++) Flags[i] = 0;}
+  //bool* Flags = newA(bool,n);
+  //{parallel_for(long i=0;i<n;i++) Flags[i] = 0;}
   auto D = array_imap<uintE>(n, [&] (size_t i) {
     if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
     return GA.offsetsV[i+1] - GA.offsetsV[i];
@@ -491,11 +486,15 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
   auto b = make_buckets(n, D, decreasing, num_buckets);
 
   size_t finished = 0;
+  long rounds = 0;
+  long small_rounds = 0;
   while (finished != n) {
+    rounds++;
     auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
     uintE k = bkt.id;
     finished += active.size();
+    if (active.size() <= 10) small_rounds++;
     
     auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
       uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
@@ -519,7 +518,8 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
   };
-  
+  cout << "Peeling rounds: " << rounds << "\n"; 
+  cout << "Small rounds: " << small_rounds << "\n";fflush(stdout);
   return getRanks(GA, samplesort_f);
 }
 

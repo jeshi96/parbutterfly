@@ -34,7 +34,9 @@ array_imap<uintE> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
   auto b = make_buckets(nv, D, increasing, num_buckets);
 
   size_t finished = 0;
+  long rounds = 0;
   while (finished != nv) {
+    rounds++;
     auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
     uintE k = bkt.id;
@@ -58,6 +60,7 @@ array_imap<uintE> KCore(hypergraph<vertex>& GA, size_t num_buckets=128) {
     b.update_buckets(moved.get_fn_repr(), moved.size());
     moved.del(); active.del();
   }
+  cout << "Peeling rounds: " << rounds << "\n"; fflush(stdout);
   return D;
 }
 

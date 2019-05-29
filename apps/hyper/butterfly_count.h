@@ -702,7 +702,7 @@ uintE* CountWorkEfficientParallel(graphCSR& GA, uintE* butterflies) {
   timer t1,t2;
   t1.start();
 
-  long stepSize = getWorkers() * 15; //tunable parameter
+  long stepSize = getWorkers() * 7; //15 tunable parameter
   uintE* wedges = newA(uintE, GA.n*stepSize);
   uintE* used = newA(uintE, GA.n*stepSize);
 
