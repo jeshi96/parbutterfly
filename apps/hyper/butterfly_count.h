@@ -157,10 +157,10 @@ intT CountSortCE(_seq<UVertexPair>& wedges_seq, _seq<tuple<uintE, uintE>>& butte
   uintE* freq_arr = freq_pair.first;
 
   using X = tuple<uintE,uintE>;
-  if (butterflies_seq.n < 2*freq_pair.second) {
+  if (butterflies_seq.n < 2*freq_pair.second-2) {
     free(butterflies_seq.A);
-    butterflies_seq.A = newA(X, 2*freq_pair.second);
-    butterflies_seq.n = 2*freq_pair.second;
+    butterflies_seq.A = newA(X, 2*freq_pair.second-2);
+    butterflies_seq.n = 2*freq_pair.second-2;
   }
 
   // store these counts in another array so we can store in CE manner
@@ -177,7 +177,7 @@ intT CountSortCE(_seq<UVertexPair>& wedges_seq, _seq<tuple<uintE, uintE>>& butte
   free(freq_arr);
 
   // now, we need to collate by our indices
-  pair<uintE*, long> b_freq_pair = getFreqs(butterflies_seq.A, 2*freq_pair.second, uintETupleLt(), uintETupleEq());
+  pair<uintE*, long> b_freq_pair = getFreqs(butterflies_seq.A, 2*freq_pair.second-2, uintETupleLt(), uintETupleEq());
   uintE* b_freq_arr = b_freq_pair.first;
   const intT eltsPerCacheLine = 64/sizeof(long);
 
