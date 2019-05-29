@@ -665,7 +665,7 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, uintE* butterflies) 
   for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
     parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,nu); ++i){
       intT used_idx = 0;
-      intT shift = nu*(i-step*stepSize);
+      long shift = nu*(i-step*stepSize);
       intT u_offset  = offsetsU[i];
       intT u_deg = offsetsU[i+1]-u_offset;
       for (intT j=0; j < u_deg; ++j ) {
@@ -839,8 +839,8 @@ uintE* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, lon
 if (tw != 0) {
   timer t_rank;
   t_rank.start();
-    //auto rank_tup = getDegRanks(GA);
-    //auto rank_tup2 = getCoreRanks(GA);
+  //auto rank_tup = getDegRanks(GA);
+  // auto rank_tup = getCoreRanks(GA);
   auto rank_tup = getCoCoreRanks(GA);
   
 

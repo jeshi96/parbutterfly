@@ -114,6 +114,7 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* wed
   uintE* wedges = newA(uintE, nu*stepSize);
   uintE* used = newA(uintE, nu*stepSize);
 
+  
   granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
   
@@ -134,14 +135,14 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* wed
 	if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
 	  for (intT i = start; i < end; i++){
 	    intT used_idx = 0;
-	    intT shift = nu*(i-step*stepSize);
+	    long shift = nu*(i-step*stepSize);
 	    intT u_offset  = offsetsU[i];
 	    intT u_deg = offsetsU[i+1]-u_offset;
 	    for (intT j=0; j < u_deg; ++j ) {
 	      intT v = edgesU[u_offset+j];
 	      intT v_offset = offsetsV[v];
 	      intT v_deg = offsetsV[v+1]-offsetsV[v];
-	      for (intT k=0; k < v_deg; ++k) { 
+	      for (intT k=0; k < v_deg; ++k) {
 		uintE u2_idx = edgesV[v_offset+k];
 		if (u2_idx < i) {
 		  //butterflies[i] += wedges[u2_idx];
