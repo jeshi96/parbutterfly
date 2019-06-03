@@ -89,15 +89,15 @@ struct UVertexPairRankCons {
 struct UVertexPairIntCons {
   long nu;
   UVertexPairIntCons(long _nu) : nu(_nu) {}
-  inline uintE operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
-    return v1 * nu + v2;
+  inline long operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
+    return (long) v1 * nu + (long) v2;
   }
 };
 struct UVertexPairIntRankCons {
   long nu;
   UVertexPairIntRankCons(long _nu) : nu(_nu) {}
-  inline uintE operator() (uintE v1, uintE v2, bool b) {
-    return ((v1 * nu + v2) << 1) + (b ? 0b1 : 0);
+  inline long operator() (uintE v1, uintE v2, bool b) {
+    return ((((long) v1) * nu + (long) v2) << 1) + (b ? 0b1 : 0);
   }
 };
 
@@ -926,38 +926,51 @@ uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
 }
 
 struct CountSpace {
-  long type;
-  long nu;
+  long type; long nu; bool rank;
   // for hash: 2, 3
-  sparseAdditiveSet<uintE> wedges_hash;
-  _seq<pair<uintE,uintE>> wedges_seq_intp;
+  sparseAdditiveSet<uintE, long> wedges_hash;
+  _seq<pair<long,uintE>> wedges_seq_intp;
   // for hash: 3
   sparseAdditiveSet<uintE> butterflies_hash;
+  _seq<pair<uintE,uintE>> butterflies_seq_intp;
   // for hist: 4, 6
-  pbbsa::sequence<tuple<uintE, uintE>> tmp;
-  pbbsa::sequence<tuple<uintE, uintE>> out;
-  _seq<uintE> wedges_seq_int;
+  pbbsa::sequence<tuple<long, uintE>> tmp;
+  pbbsa::sequence<tuple<long, uintE>> out;
+  _seq<long> wedges_seq_int;
+  // for hist: 6
   _seq<tuple<uintE,uintE>> butterflies_seq_intt;
+  pbbsa::sequence<tuple<uintE, uintE>> tmp_uint;
+  pbbsa::sequence<tuple<uintE, uintE>> out_uint;
   // for sort: 0, 1
+  _seq<UVertexPair> wedges_seq_uvp;
   _seq<UWedge> wedges_seq_uw;
 
-  CountSpace(long _type, long _nu) : type(_type), nu(_nu) {
+  CountSpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
     using T = pair<uintE,uintE>;
     using X = tuple<uintE,uintE>;
+    using E = pair<long, uintE>;
     if (type == 2 || type == 3) {
-      wedges_hash = sparseAdditiveSet<uintE>(nu,1,UINT_E_MAX);
-      wedges_seq_intp = _seq<T>(newA(T, nu), nu);
-      if (type == 3) butterflies_hash = sparseAdditiveSet<uintE>(nu, 1, UINT_E_MAX);
+      wedges_hash = sparseAdditiveSet<uintE, long>(nu,1,UINT_E_MAX, LONG_MAX);
+      wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+      if (type == 3) {
+        butterflies_hash = sparseAdditiveSet<uintE>(nu, 1, UINT_E_MAX);
+        butterflies_seq_intp = _seq<T>(newA(T, nu), nu);
+      }
     }
     else if (type == 4 || type == 6) {
-      tmp = pbbsa::sequence<tuple<uintE, uintE>>();
-      out = pbbsa::sequence<tuple<uintE, uintE>>();
-      wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
-      butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+      tmp = pbbsa::sequence<tuple<long, uintE>>();
+      out = pbbsa::sequence<tuple<long, uintE>>();
+      wedges_seq_int = _seq<long>(newA(long, nu), nu);
+      if (type == 6) {
+        butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+        tmp_uint = pbbsa::sequence<tuple<uintE, uintE>>();
+        out_uint = pbbsa::sequence<tuple<uintE, uintE>>();
+      }
     }
     else if (type == 0 || type == 1) {
       if (type == 1) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
-      wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
+      if (!rank) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+      else wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
     }
   }
 
@@ -969,12 +982,16 @@ struct CountSpace {
   void del() {
     if (type == 2 || type == 3) {
       wedges_hash.del(); wedges_seq_intp.del(); 
-      if (type == 3) butterflies_hash.del();
+      if (type == 3) { butterflies_hash.del(); butterflies_seq_intp.del(); }
     }
-    else if (type == 4 || type == 6) { wedges_seq_int.del(); butterflies_seq_intt.del(); }
+    else if (type == 4 || type == 6) {
+      wedges_seq_int.del();
+      if (type == 6) butterflies_seq_intt.del();
+    }
     else if (type == 0 || type == 1) {
       if (type == 1) butterflies_seq_intt.del(); 
-      wedges_seq_uw.del();
+      if (!rank) wedges_seq_uvp.del();
+      else wedges_seq_uw.del();
     }
   }
 };

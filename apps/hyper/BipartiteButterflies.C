@@ -6,7 +6,7 @@
 
 #define HYPER 1
 //#define LONG 1
-#define EDGELONG 1
+//#define EDGELONG 1
 #define MCX16 1
 
 #include "hypergraphIO.h"
@@ -304,7 +304,7 @@ if (te == 0) {
   b = b / 2;
   cout << "number of butterflies: " << b << "\n";
   
-  //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 2, 0);
+  //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 0, 0);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
 
   timer t2;

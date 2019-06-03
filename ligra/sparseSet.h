@@ -37,9 +37,9 @@ static int log2RoundUp(T i) {
   return a;
 }
 
-template <class E>
+template <class E, class X=uintE>
 class sparseAdditiveSet {
-  typedef pair<uintE,E> kvPair;
+  typedef pair<X, E> kvPair;
  public:
   uintT m=0;
   intT mask;
@@ -48,6 +48,7 @@ class sparseAdditiveSet {
   float loadFactor;
   bool alloc=false;
   bool* FL;
+  X empty_key;
 
   // needs to be in separate routine due to Cilk bugs
   static void clearA(kvPair* A, bool* B, long n, kvPair v) {
@@ -57,24 +58,25 @@ class sparseAdditiveSet {
     }
   }
 
-  struct notEmptyF { 
-    kvPair e; notEmptyF(kvPair _e) : e(_e) {} 
-    int operator() (kvPair a) {return a.first != UINT_E_MAX;}};
-
   inline uintT hashToRange(uintT h) {return h & mask;}
   inline uintT firstIndex(uintT v) {return hashToRange(hashInt(v));}
   inline uintT incrementIndex(uintT h) {return hashToRange(h+1);}
 
   // Size is the maximum number of values the hash table will hold.
   // Overfilling the table could put it into an infinite loop.
- sparseAdditiveSet(long size, float _loadFactor, E zero) :
+ sparseAdditiveSet(long size, float _loadFactor, E zero, X _empty_key=UINT_E_MAX) :
   loadFactor(_loadFactor), m((uintT) 1 << log2RoundUp((uintT)(_loadFactor*size)+100)),
-  mask(m-1), TA(newA(kvPair,m)), FL(newA(bool,m))
-      { empty=make_pair(UINT_E_MAX,zero); clearA(TA,FL,m,empty); alloc=true; }
+  mask(m-1), TA(newA(kvPair,m)), FL(newA(bool,m)), empty_key(_empty_key)
+      { empty=make_pair(_empty_key,zero); clearA(TA,FL,m,empty); alloc=true; }
 
   sparseAdditiveSet() {}
 
-  sparseAdditiveSet(E zero) {empty=make_pair(UINT_E_MAX,zero); alloc=false; m=0;}
+  sparseAdditiveSet(E zero, X _empty_key=UINT_E_MAX) {empty_key = _empty_key; empty=make_pair(_empty_key,zero); alloc=false; m=0;}
+
+  struct notEmptyF { 
+    kvPair e; X em;
+    notEmptyF(kvPair _e, X _em) : e(_e), em(_em) {} 
+    int operator() (kvPair a) {return a.first != em;}};
 
   // Deletes the allocated arrays
   void del() {
@@ -108,14 +110,14 @@ class sparseAdditiveSet {
 
   // nondeterministic insert
   bool insert(kvPair v) {
-    uintE vkey = v.first;
+    X vkey = v.first;
     uintT h = firstIndex(vkey); 
     while (1) {
       //kvPair c;
       int cmp;
       bool swapped = 0;
       //c = TA[h];
-      if(TA[h].first == UINT_E_MAX && CAS(&TA[h],empty,v)) {
+      if(TA[h].first == empty_key && CAS(&TA[h],empty,v)) {
         FL[h] = true;
 	      return 1; //return true if value originally didn't exist
       }
@@ -132,14 +134,14 @@ class sparseAdditiveSet {
   }
 
   E insertAndReturn(kvPair v) {
-    uintE vkey = v.first;
+    X vkey = v.first;
     uintT h = firstIndex(vkey); 
     while (1) {
       //kvPair c;
       int cmp;
       bool swapped = 0;
       //c = TA[h];
-      if(TA[h].first == UINT_E_MAX && CAS(&TA[h],empty,v)) {
+      if(TA[h].first == empty_key && CAS(&TA[h],empty,v)) {
         FL[h] = true;
 	      return 0; //return nothing
       }
@@ -156,11 +158,11 @@ class sparseAdditiveSet {
     return 0; // should never get here
   }
 
-  kvPair find(uintE v) {
+  kvPair find(X v) {
     uintT h = firstIndex(v);
     kvPair c = TA[h]; 
     while (1) {
-      if (c.first == UINT_E_MAX) return empty; 
+      if (c.first == empty_key) return empty; 
       else if (v == c.first)
 	return c;
       h = incrementIndex(h);
@@ -171,19 +173,19 @@ class sparseAdditiveSet {
   template <class F>
   void map(F f){ 
     parallel_for(long i=0;i<m;i++)
-      if(TA[i].first != UINT_E_MAX) f(TA[i]);
+      if(TA[i].first != empty_key) f(TA[i]);
   }
 
   template <class F>
   void mapIndex(F f){ 
     parallel_for(long i=0;i<m;i++)
-      if(TA[i].first != UINT_E_MAX) f(TA[i],i);
+      if(TA[i].first != empty_key) f(TA[i],i);
   }
 
 
   // returns all the current entries compacted into a sequence
   _seq<kvPair> entries() {
-    _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
+    _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,X>(TA));
     return R;
   }
 
@@ -196,7 +198,7 @@ class sparseAdditiveSet {
       out.A = newA(kvPair, num);
       out.n = num;
     }
-    return pack(out.A, FL, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA)).n;
+    return pack(out.A, FL, (uintT) 0, m, sequence::getA<kvPair,X>(TA)).n;
   }
 
   // returns all the current entries satisfying predicate f compacted into a sequence
@@ -204,8 +206,8 @@ class sparseAdditiveSet {
   _seq<kvPair> entries(F f) {
     bool *FLf = newA(bool,m);
     parallel_for (long i=0; i < m; i++) 
-      FLf[i] = (TA[i].first != UINT_E_MAX && f(TA[i]));
-    _seq<kvPair> R = pack((kvPair*)NULL, FLf, (uintT) 0, m, sequence::getA<kvPair,uintE>(TA));
+      FLf[i] = (TA[i].first != empty_key && f(TA[i]));
+    _seq<kvPair> R = pack((kvPair*)NULL, FLf, (uintT) 0, m, sequence::getA<kvPair,X>(TA));
     free(FLf);
     return R;
   }
@@ -213,12 +215,12 @@ class sparseAdditiveSet {
   // returns the number of entries
   // TODO use FL to make better? idk how though cause reduce doesn't like me
   intT count() {
-    return sequence::mapReduce<intT>(TA,m,addF<intT>(),notEmptyF(empty));
+    return sequence::mapReduce<intT>(TA,m,addF<intT>(),notEmptyF(empty, empty_key));
   }
 
-  void copy(sparseAdditiveSet<E> &A) {
+  void copy(sparseAdditiveSet<E,X> &A) {
     parallel_for(long i=0;i<A.m;i++) {
-      if(A.TA[i].first != UINT_E_MAX) insert(A.TA[i]);
+      if(A.TA[i].first != empty_key) insert(A.TA[i]);
     }
   }
 
@@ -226,7 +228,7 @@ class sparseAdditiveSet {
   void print() {
     cout << "vals = ";
     for (long i=0; i < m; i++) {
-      if (TA[i].first != UINT_E_MAX)
+      if (TA[i].first != empty_key)
   	{ cout << "(" << TA[i].first << "," << TA[i].second << ") ";}
     }
     cout << endl;
