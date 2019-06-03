@@ -292,78 +292,6 @@ struct degF {
   }
 };
 
-/*
-tuple<uintE*, uintE*, uintE*> getCoCoreRanks(bipartiteCSR& G, size_t num_buckets=128) {
-  using X = tuple<uintE, uintE>;
-  const size_t n = G.nv + G.nu; const size_t m = G.numEdges;
-  auto D = array_imap<uintE>(n, [&] (size_t i) {
-    if(i >= G.nv) return G.offsetsU[i-G.nv+1] - G.offsetsU[i-G.nv];
-    return G.offsetsV[i+1] - G.offsetsV[i];
-  });
-
-  //auto em = EdgeMap<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)G.numEdges/5);
-  auto b = make_buckets(n, D, decreasing, num_buckets);
-  //intT* update = newA(intT, G.nu + G.nv);
-  //parallel_for(long v=0; v < G.nv+G.nu; ++v) { update[v] = 0; }
-
-  size_t finished = 0;
-  while (finished != n) {
-    auto bkt = b.next_bucket();
-    auto active = bkt.identifiers;
-    uintE k = bkt.id;
-    finished += active.size();
-
-    long num_hash = sequence::reduce<long>((long) 0, active.size(), addF<long>(), degF<long>(G.nv, G.offsetsV, G.offsetsU, active));
-    sparseAdditiveSet<intT> update_hash = sparseAdditiveSet<intT>(num_hash, 1, INT_T_MAX);
-
-    parallel_for(intT i=0; i < active.size(); ++i) {
-      bool use_v = active.vtx(i) < G.nv;
-      intT idx = use_v ? active.vtx(i) : active.vtx(i) - G.nv;
-  	  intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
-      intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1]) - offset;
-      granular_for(j,0,deg,deg > 10000, { 
-      intT nbhr = use_v ? G.edgesV[offset+j] + G.nv : G.edgesU[offset+j];
-      // must decrement D.s[nbhr]
-      //writeAdd(&update[nbhr], 1);
-      update_hash.insert(make_pair(nbhr,1));
-      });
-    }
-
-    auto update = update_hash.entries();
-    X* update_b = newA(X, update.n);
-    parallel_for(long i=0; i < update.n; ++i) { 
-      intT v = update.A[i].first;
-      uintE deg = D.s[v];
-      if (deg < k) {
-        uintE new_deg = min(deg - update.A[i].second, k);
-        D.s[v] = new_deg;
-        uintE bkt = b.get_bucket(deg, new_deg);
-        update_b[i] = make_tuple(v, bkt);
-      }
-      else update_b[i] = make_tuple(UINT_E_MAX, UINT_E_MAX);
-    }
-    update_hash.del();
-    update.del();
-
-    X* update_filter = newA(X, update.n);
-    long num_updates_filter = sequence::filter(update_b ,update_filter, update.n, nonMaxTupleF());
-    free(update_b);
-
-    //vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(active, apply_f);
-    // second should be array of tuple<uintE,uintE> of idx, new bucket pairs; first is length of this array
-    vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(G.nu+G.nv, num_updates_filter, update_filter);
-    b.update_buckets(moved.get_fn_repr(), moved.size());
-    moved.del(); 
-    active.del();
-  }
-
-  auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
-    return D[a] > D[b];
-  };
-  
-  return getRanks(G, samplesort_f);
-}*/
-
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -463,7 +391,8 @@ template <class Val>
 };*/
 
 // TODO serialize for small buckets, log buckets
-tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
+tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
+  using X = tuple<bool, uintE>;
   long n = GA.nv + GA.nu;
   bool* active = newA(bool,n);
   {parallel_for(long i=0;i<n;i++) active[i] = 1;}
@@ -478,6 +407,11 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
   //bool* Flags = newA(bool,n);
   //{parallel_for(long i=0;i<n;i++) Flags[i] = 0;}
   auto D = array_imap<uintE>(n, [&] (size_t i) {
+    if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv] <= 0 ? 0 : (uintE) floor(log2(GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv])) + 1;
+    return GA.offsetsV[i+1] - GA.offsetsV[i] <= 0 ? 0 : (uintE) floor(log2(GA.offsetsV[i+1] - GA.offsetsV[i])) + 1;
+  });
+
+  auto D_act = array_imap<uintE>(n, [&] (size_t i) {
     if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
     return GA.offsetsV[i+1] - GA.offsetsV[i];
   });
@@ -486,16 +420,98 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
   auto b = make_buckets(n, D, decreasing, num_buckets);
 
   size_t finished = 0;
-  long rounds = 0;
-  long small_rounds = 0;
   while (finished != n) {
-    rounds++;
     auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
     uintE k = bkt.id;
     finished += active.size();
-    if (active.size() <= 10) small_rounds++;
-    
+    auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
+      uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
+      uintE deg = D_act.s[v];
+      uintE deg_log = D.s[v];
+      if (deg_log < k) {
+        uintE new_deg = deg - edgesRemoved; //min(deg - edgesRemoved, k);
+        uintE new_deg_log = deg - edgesRemoved <= 0 ? 0 : (uintE) floor(log2(new_deg)) + 1;
+        D_act.s[v] = new_deg;
+        D.s[v] = min(new_deg_log, k);
+        uintE bkt = b.get_bucket(deg_log, new_deg_log);
+        return wrap(v, bkt);
+      }
+      return Maybe<tuple<uintE, uintE> >();
+    };
+
+    vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active, apply_f);
+    b.update_buckets(moved.get_fn_repr(), moved.size());
+    moved.del(); active.del();
+  }
+  
+  auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
+    return D[a] > D[b];
+  };
+  return getRanks(GA, samplesort_f);
+}
+
+tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
+  using X = tuple<bool, uintE>;
+  long n = GA.nv + GA.nu;
+  bool* active = newA(bool,n);
+  {parallel_for(long i=0;i<n;i++) active[i] = 1;}
+  vertexSubset Frontier(n, n, active);
+  uintE* Degrees = newA(uintE,n);
+  {parallel_for(long i=0;i<GA.nv;i++) {
+      Degrees[i] = GA.offsetsV[i+1] - GA.offsetsV[i];
+    }}
+  {parallel_for(long i=0;i<GA.nu;i++) {
+      Degrees[GA.nv+i] = GA.offsetsU[i+1] - GA.offsetsU[i];
+    }}
+  //bool* Flags = newA(bool,n);
+  //{parallel_for(long i=0;i<n;i++) Flags[i] = 0;}
+
+  auto D = array_imap<uintE>(n, [&] (size_t i) {
+    if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
+    return GA.offsetsV[i+1] - GA.offsetsV[i];
+  });
+
+  auto hp = BipartiteProp<uintE>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.numEdges/5);
+  auto b = make_buckets(n, D, decreasing, num_buckets);
+
+  size_t finished = 0;
+  //long rounds = 0;
+  //long small_rounds = 0;
+  while (finished != n) {
+    //rounds++;
+    auto bkt = b.next_bucket();
+    auto active = bkt.identifiers;
+    uintE k = bkt.id;
+    finished += active.size();
+    /*if (active.size() <= 10) {
+      small_rounds++;
+      for (intT i=0; i < active.size(); ++i) {
+        bool use_v = active.vtx(i) < GA.nv;
+        intT idx = use_v ? active.vtx(i) : active.vtx(i) - GA.nv;
+  	    intT offset  = use_v ? GA.offsetsV[idx] : GA.offsetsU[idx];
+        intT deg = (use_v ? GA.offsetsV[idx+1] : GA.offsetsU[idx+1]) - offset;
+        X* updated = newA(X, deg);
+        intT deg_idx = 0;
+        granular_for(j,0,deg,deg > 10000, { 
+          intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
+      // must decrement D.s[nbhr]
+      //writeAdd(&update[nbhr], 1);
+          uintE old_deg = D.s[nbhr];
+          if (old_deg < k) {
+            uintE new_deg = min(old_deg - 1, k);
+            D.s[nbhr] = new_deg;
+            uintE bkt = b.get_bucket(old_deg, new_deg);
+            updated[deg_idx++] = make_tuple(nbhr, bkt);
+          }
+        });
+        vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(GA.nu+GA.nv,deg_idx,updated);
+        b.update_buckets(moved.get_fn_repr(), moved.size());
+        moved.del();
+      }
+      active.del();
+    }
+    else {*/
     auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
       uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
       uintE deg = D.s[v];
@@ -513,13 +529,12 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
     vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());
     moved.del(); active.del();
+    //}
   }
-  
+
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
   };
-  cout << "Peeling rounds: " << rounds << "\n"; 
-  cout << "Small rounds: " << small_rounds << "\n";fflush(stdout);
   return getRanks(GA, samplesort_f);
 }
 

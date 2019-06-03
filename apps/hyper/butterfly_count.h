@@ -836,12 +836,13 @@ uintE* CountRank(bipartiteCSR& GA, bool use_v, long nv, long nu, long num_wedges
 uintE* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long type=0, long tw=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
+  // tw 0 is use side, tw 1 is use co core ranks, tw 2 is use approx co core ranks, tw 3 is use the better b/w approx co core and side (TODO put in deg for tw 3)
 if (tw != 0) {
   timer t_rank;
   t_rank.start();
   //auto rank_tup = getDegRanks(GA);
   // auto rank_tup = getCoreRanks(GA);
-  auto rank_tup = getCoCoreRanks(GA);
+  auto rank_tup = tw == 1 ? getCoCoreRanks(GA) : getApproxCoCoreRanks(GA);
   
 
     //long num_rwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
@@ -866,7 +867,7 @@ if (tw != 0) {
   //cout << "Core wedges: " << num_cwedges << "\n";
   cout << "Co Core wedges: " << num_ccwedges << "\n";
 
-  if (num_ccwedges < num_wedges + 1000 || tw == 1) return CountRank(GA, use_v, nv, nu, num_ccwedges, max_wedges, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+  if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2) return CountRank(GA, use_v, nv, nu, num_ccwedges, max_wedges, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
   free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
 }
 
