@@ -414,13 +414,13 @@ pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, uintE* butterflie
   auto wedges_seq_num = ps.wedges_hash->entries_no_init(ps.wedges_seq_intp);
 
   using T = pair<uintE,uintE>;
-  //parallel_for (long j=0; j < sg_freqs.n; ++j) {
   granular_for ( j, 0, wedges_seq_num, (wedges_seq_num > 1000), {
     auto sg_freq_pair = ps.wedges_seq_intp.A[j];
     auto num = sg_freq_pair.second;
     if (num > 1) {ps.update_hash.insert(T(((long) sg_freq_pair.first % nu), (num * (num - 1)/2)));}
   });
-  // Compute updated butterfly counts]
+
+  // Compute updated butterfly counts
   auto num_updates = ps.update_hash.entries_no_init(ps.butterflies_seq_intp);
   ps.resize_update(num_updates);
 

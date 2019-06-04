@@ -379,18 +379,6 @@ template <class Val>
     }
   };
 
-/*struct Remove_BPedge {
-  bool* Flags;
-  Remove_BPedge (bool* _Flags) : Flags(_Flags) {}
-  inline bool update (uintE s, uintE d) {
-    return Flags[d] = 1;
-  }
-  inline bool updateAtomic (uintE s, uintE d){
-    return CAS(&Flags[d],(bool)0,(bool)1);
-  }
-  inline bool cond (uintE d) { return Flags[d] == 0; }
-};*/
-
 // TODO serialize for small buckets, log buckets
 tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
   using X = tuple<bool, uintE>;
@@ -465,8 +453,6 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
   {parallel_for(long i=0;i<GA.nu;i++) {
       Degrees[GA.nv+i] = GA.offsetsU[i+1] - GA.offsetsU[i];
     }}
-  //bool* Flags = newA(bool,n);
-  //{parallel_for(long i=0;i<n;i++) Flags[i] = 0;}
 
   auto D = array_imap<uintE>(n, [&] (size_t i) {
     if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
@@ -925,6 +911,67 @@ uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
 
   return idxs;
 }
+
+struct CountESpace {
+  long type; long nu;
+  // for sort: 0, 1
+  _seq<UWedge> wedges_seq_uw;
+  // for sort: 1
+  _seq<tuple<uintE,uintE>> butterflies_seq_intt;
+  // for hist: 4
+  pbbsa::sequence<tuple<long, uintE>> tmp;
+  pbbsa::sequence<tuple<long, uintE>> out;
+  _seq<long> wedges_seq_int;
+  // for hist: 4, for hash: 2, 3
+  sparseAdditiveSet<uintE, long> wedges_hash;
+  // for hash: 3
+  _seq<pair<uintE, uintE>> wedges_seq_intp;
+  sparseAdditiveSet<uintE> butterflies_hash;
+
+
+  CountESpace(long _type, long _nu) : type(_type), nu(_nu) {
+    using T = pair<uintE,uintE>;
+    using X = tuple<uintE,uintE>;
+    using E = pair<long, uintE>;
+    if (type == 2 || type == 3) {
+      wedges_hash = sparseAdditiveSet<uintE, long>(nu,1,UINT_E_MAX, LONG_MAX);
+      if (type == 3) {
+        wedges_seq_intp = _seq<T>(newA(T, nu), nu);
+        butterflies_hash = sparseAdditiveSet<uintE>(nu, 1, UINT_E_MAX);
+      }
+    }
+    else if (type == 4) {
+      tmp = pbbsa::sequence<tuple<long, uintE>>();
+      out = pbbsa::sequence<tuple<long, uintE>>();
+      wedges_seq_int = _seq<long>(newA(long, nu), nu);
+      wedges_hash = sparseAdditiveSet<uintE, long>(nu,1,UINT_E_MAX, LONG_MAX);
+    }
+    else if (type == 0 || type == 1) {
+      if (type == 1) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+      wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
+    }
+  }
+
+  void clear() {
+    if (type == 2 || type == 3 || type == 4) wedges_hash.clear();
+    if (type == 3) butterflies_hash.clear();
+  }
+
+  void del() {
+    if (type == 2 || type == 3) {
+      wedges_hash.del();
+      if (type == 3) { wedges_seq_intp.del(); butterflies_hash.del(); }
+    }
+    else if (type == 4) {
+      wedges_seq_int.del();
+      wedges_hash.del();
+    }
+    else if (type == 0 || type == 1) {
+      if (type == 1) butterflies_seq_intt.del();
+      wedges_seq_uw.del();
+    }
+  }
+};
 
 struct CountSpace {
   long type; long nu; bool rank;
