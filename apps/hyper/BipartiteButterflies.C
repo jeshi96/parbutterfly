@@ -329,7 +329,7 @@ else {
  auto eti = edgeToIdxs(GA, use_v);
  auto ite = idxsToEdge(GA, use_v);
  t3.start();
- uintE* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty);
+ uintE* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty, tw);
  t3.stop();
  if(ty==2) t3.reportTotal("E Hash:");
  else if (ty == 3) t3.reportTotal("E HashCE:");
@@ -342,6 +342,10 @@ else {
  
  for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[eltsPerCacheLine*i];}
  cout << "number of edge butterflies: " << b/4 << "\n";
+
+//uintE* butterflies2 = CountE(eti, GA, use_v, num_wedges, max_wedges, 0, 0);
+//for (long i=0; i < GA.numEdges; ++i) { assertf(ebutterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, ebutterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
+
 
 
 timer t2;

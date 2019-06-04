@@ -667,8 +667,10 @@ uintE* CountWorkEfficientParallel(graphCSR& GA, uintE* butterflies) {
   return butterflies;
 }
 
-uintE* CountRank(bipartiteCSR& GA, bool use_v, long nv, long nu, long num_wedges, long max_wedges, long type,
+uintE* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long type,
   uintE* ranks, uintE* rankV, uintE* rankU) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
   timer t_rank;
   t_rank.start();
   auto g = rankGraph(GA, use_v, ranks, rankV, rankU);
@@ -766,7 +768,7 @@ if (tw != 0) {
   //cout << "Core wedges: " << num_cwedges << "\n";
   cout << "Co Core wedges: " << num_ccwedges << "\n";
 
-  if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2) return CountRank(GA, use_v, nv, nu, num_ccwedges, max_wedges, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+  if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2) return CountRank(GA, use_v, num_ccwedges, max_wedges, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
   free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
 }
 

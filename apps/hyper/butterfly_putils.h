@@ -716,7 +716,7 @@ pair<tuple<uintE,uintE>*,long> _updateBuckets(uintE* update_idxs, long num_updat
   X* update = newA(X,num_updates);
   const intT eltsPerCacheLine = 64/sizeof(long);
 
-    // Filter for bucket updates
+  // Filter for bucket updates
   parallel_for(long i=0; i < num_updates; ++i) {
     const uintE u_idx = update_idxs[i];
     uintE old_b = D.s[u_idx];
@@ -762,8 +762,6 @@ void updateBuckets(array_imap<uintE>& D, buckets<array_imap<uintE>>& b, uintE k,
   pair<tuple<uintE,uintE>*,long> bucket_pair;
   if (is_seq) bucket_pair = _updateBuckets_seq(update_idxs, num_updates, butterflies, D, b, k);
   else bucket_pair = _updateBuckets(update_idxs, num_updates, butterflies, D, b, k);
-
-    //free(out.s);
 
   vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(nu, bucket_pair.second, bucket_pair.first);
   b.update_buckets(moved.get_fn_repr(), moved.size());

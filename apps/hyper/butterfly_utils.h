@@ -596,7 +596,6 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
   return getRanks(G, samplesort_f);
 }
 
-
 graphCSR rankGraph(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uintE* rankU) {
   using X = tuple<uintE,uintE>;
   // we put a 1 if nu and use_vb; 0 otherwise
@@ -632,6 +631,49 @@ graphCSR rankGraph(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uin
     sampleSort(&edges[offsets[i]], deg, lt);
   }
   return graphCSR(offsets,edges,G.nv+G.nu,G.numEdges);
+}
+
+pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uintE* rankU) {
+  using X = tuple<uintE,uintE>;
+  // we put a 1 if nu and use_vb; 0 otherwise
+  // store if 1, don't store if 0 (store if nu and use_v or if nv and not use_v)
+
+  uintT* offsets = newA(uintT,G.nv+G.nu+1);
+  offsets[G.nv+G.nu] = 0;
+
+  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
+    if (ranks[i] >= G.nv) offsets[i] = G.offsetsU[ranks[i]-G.nv+1]-G.offsetsU[ranks[i]-G.nv];
+    else offsets[i] = G.offsetsV[ranks[i]+1]-G.offsetsV[ranks[i]];
+  }
+
+  // Now we have to reformat the graph
+  sequence::plusScan(offsets,offsets,G.nv+G.nu+1);
+
+  uintE* edges = newA(uintE,offsets[G.nv+G.nu]);
+  X* edges_convert = newA(X,offsets[G.nv+G.nu]);
+
+  auto lt = [] (const uintE& l, const uintE& r) { return l > r; };
+  auto ltx = [] (const X& l, const X& r) { return get<0>(l) > get<0>(r); };
+  parallel_for(long i=0; i < G.nv + G.nu; ++i) {
+    // need to fill in offsets[i] to offsets[i+1] in edges array
+    bool use_v = (ranks[i] < G.nv);
+  	intT idx = use_v ? ranks[i] : ranks[i] - G.nv;
+  	intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
+    intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
+    granular_for(j,0,deg,deg > 10000, { 
+      intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
+      uintE r; 
+      if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
+      else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
+      //edges[offsets[i]+j] = r;
+      edges_convert[offsets[i]+j] = make_tuple(r,offset+j);
+      });
+    sampleSort(&edges_convert[offsets[i]], deg, ltx);
+    granular_for(j,0,deg,deg > 10000, {
+      edges[offsets[i]+j] = get<0>(edges_convert[offsets[i]+j]); 
+    });
+  }
+  return make_pair(graphCSR(offsets,edges,G.nv+G.nu,G.numEdges), edges_convert);
 }
 
 bipartiteCSR readBipartite(char* fname) {
@@ -923,7 +965,7 @@ struct CountESpace {
   pbbsa::sequence<tuple<long, uintE>> out;
   _seq<long> wedges_seq_int;
   // for hist: 4, for hash: 2, 3
-  sparseAdditiveSet<uintE, long> wedges_hash;
+  sparseAdditiveSet<long, long> wedges_hash;
   // for hash: 3
   _seq<pair<uintE, uintE>> wedges_seq_intp;
   sparseAdditiveSet<uintE> butterflies_hash;
@@ -934,7 +976,7 @@ struct CountESpace {
     using X = tuple<uintE,uintE>;
     using E = pair<long, uintE>;
     if (type == 2 || type == 3) {
-      wedges_hash = sparseAdditiveSet<uintE, long>(nu,1,UINT_E_MAX, LONG_MAX);
+      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
       if (type == 3) {
         wedges_seq_intp = _seq<T>(newA(T, nu), nu);
         butterflies_hash = sparseAdditiveSet<uintE>(nu, 1, UINT_E_MAX);
@@ -944,7 +986,7 @@ struct CountESpace {
       tmp = pbbsa::sequence<tuple<long, uintE>>();
       out = pbbsa::sequence<tuple<long, uintE>>();
       wedges_seq_int = _seq<long>(newA(long, nu), nu);
-      wedges_hash = sparseAdditiveSet<uintE, long>(nu,1,UINT_E_MAX, LONG_MAX);
+      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
     }
     else if (type == 0 || type == 1) {
       if (type == 1) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
