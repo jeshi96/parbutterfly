@@ -29,24 +29,31 @@ struct PeelSpace {
   long stepSize;
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<uintE> wedges_seq_int;
+  _seq<long> wedges_seq_long;
   _seq<uintE> used_seq_int;
   _seq<uintE> update_seq_int;
   sparseAdditiveSet<uintE> update_hash;
-  sparseAdditiveSet<uintE>* wedges_hash;
-  sparseAdditiveSet<uintE>** wedges_hash_list;
+  sparseAdditiveSet<long, long>* wedges_hash;
+  sparseAdditiveSet<long, long>** wedges_hash_list;
+  _seq<pair<long,long>> wedges_seq_intp;
+  _seq<pair<uintE,uintE>> butterflies_seq_intp;
   intT num_wedges_hash;
 PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
+  using E = pair<long, long>;
+  using X = pair<uintE,uintE>;
   update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
   if (type == 0) {
-    using T = sparseAdditiveSet<uintE>*;
-    wedges_hash = new sparseAdditiveSet<uintE>(1,1,UINT_E_MAX);
+    using T = sparseAdditiveSet<long, long>*;
+    wedges_hash = new sparseAdditiveSet<long, long>(1,1, LONG_MAX, LONG_MAX);
     wedges_hash_list = newA(T, 1);
     wedges_hash_list[0] = wedges_hash;
     num_wedges_hash = 1;
     update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
+    wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+    butterflies_seq_intp = _seq<X>(newA(X, nu), nu);
   }
   else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-  else if (type == 2) wedges_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  else if (type == 2) wedges_seq_long = _seq<long>(newA(long, nu), nu);
   else {
     timer t1;
     wedges_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
@@ -64,10 +71,8 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     }
   }
   
-  sparseAdditiveSet<uintE>* resize(size_t size) {
+  sparseAdditiveSet<long, long>* resize(size_t size) {
     if (type != 0) return nullptr;
-    //wedges_hash->resize(size);
-    //return wedges_hash;
     
     size_t find_idx = log2RoundUp(size);
     if (find_idx < num_wedges_hash) {
@@ -75,13 +80,13 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
       wedges_hash->clear(); 
       return wedges_hash_list[find_idx];
     }
-    using T = sparseAdditiveSet<uintE>*;
-    sparseAdditiveSet<uintE>** new_wedges_hash_list = newA(T, find_idx+1);
+    using T = sparseAdditiveSet<long, long>*;
+    T* new_wedges_hash_list = newA(T, find_idx+1);
     parallel_for(intT i=0; i < num_wedges_hash; ++i) {
       new_wedges_hash_list[i] = wedges_hash_list[i];
     }
     parallel_for(intT i=num_wedges_hash; i < find_idx+1; ++i) {
-      new_wedges_hash_list[i] = new sparseAdditiveSet<uintE>(1u << i,1,UINT_E_MAX);
+      new_wedges_hash_list[i] = new sparseAdditiveSet<long, long>(1u << i,1, LONG_MAX, LONG_MAX);
     }
     free(wedges_hash_list);
     wedges_hash_list = new_wedges_hash_list;
@@ -94,12 +99,6 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
 
   void clear() {
     if (type == 0) update_hash.clear();
-      //wedges_hash.del();
-      //wedges_hash = sparseAdditiveSet<uintE>(UINT_E_MAX);
-      //wedges_hash->clear();
-    	//free(wedges_hash);
-    	//wedges_hash = new sparseAdditiveSet<uintE>(UINT_E_MAX);
-    //}
   }
 
   void del() {
@@ -108,10 +107,11 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
       parallel_for(intT i=0; i < num_wedges_hash; ++i) { free(wedges_hash_list[i]); }
       free(wedges_hash_list);
       update_hash.del();
-    	//free(wedges_hash);
+      wedges_seq_intp.del(); 
+      butterflies_seq_intp.del();
     }
     else if (type == 1) wedges_seq_uvp.del();
-    else if (type == 2) wedges_seq_int.del();
+    else if (type == 2) wedges_seq_long.del();
     else {wedges_seq_int.del(); used_seq_int.del();}
   }
 };
@@ -239,9 +239,7 @@ void _getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& G
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   if (next_idx == INT_T_MAX) next_idx = num_I;
-
-  sparseAdditiveSet<uintE>* wedges = ps.resize(num_wedges);
-
+  auto wedges = ps.resize(num_wedges);
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
     uintE u = I[i];

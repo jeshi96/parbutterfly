@@ -111,7 +111,8 @@ class sparseAdditiveSet {
   // nondeterministic insert
   bool insert(kvPair v) {
     X vkey = v.first;
-    uintT h = firstIndex(vkey); 
+    uintT h = firstIndex(vkey);
+
     while (1) {
       //kvPair c;
       int cmp;
