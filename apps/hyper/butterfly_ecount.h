@@ -400,6 +400,72 @@ void CountEOrigCompactParallel(uintE* eti, uintE* butterflies, bipartiteCSR& GA,
   free(used);
 }
 
+void CountEWorkEfficientParallel(graphCSR& GA, uintE* butterflies) {
+  timer t1,t2;
+  t1.start();
+
+  long stepSize = getWorkers() * 7; //15 tunable parameter
+  uintE* wedges = newA(uintE, GA.n*stepSize);
+  uintE* used = newA(uintE, GA.n*stepSize);
+
+  granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
+  const intT eltsPerCacheLine = 64/sizeof(long);
+
+  t1.reportTotal("preprocess");
+
+  t2.start();
+
+  for(long step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
+    parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,GA.n); ++i){
+      intT used_idx = 0;
+      long shift = GA.n*(i-step*stepSize);
+      intT u_offset  = GA.offsets[i];
+      intT u_deg = GA.offsets[i+1]-u_offset;
+      for (intT j=0; j < u_deg; ++j ) {
+	intT v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1]-v_offset;
+	if (v <= i) break;
+	for (intT k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+	  if (u2_idx > i) {
+	    wedges[shift+u2_idx]++;
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = GA.edges[v_offset+k];
+	  }
+	  else break;
+	}
+      }
+
+      for (long j=0; j < u_deg; ++j ) {
+	intT v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1]-v_offset;
+	if (v <= i) break;
+  //if (!(GA.edges[u_offset+j] & 0b1)) continue;
+	for (long k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+	  if (u2_idx > i) { //TODO combine into one graph
+	    if (wedges[shift+u2_idx] > 1) {
+        writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], (uintE)(wedges[shift+u2_idx]-1));
+        writeAdd(&butterflies[eltsPerCacheLine*(u_offset+j)], (uintE)(wedges[shift+u2_idx]-1));
+      }
+	  }
+	  else break;
+	}
+      }
+
+      for(long j=0; j < used_idx; ++j) {
+        uintE u2_idx = used[shift+j] >> 1;
+        wedges[shift+u2_idx] = 0;
+      }
+    }
+  }
+  t2.reportTotal("main loop");
+  
+  free(wedges);
+  free(used);
+}
+
 uintE* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long type,
   uintE* ranks, uintE* rankV, uintE* rankU) {
   timer t_rank;
@@ -421,8 +487,8 @@ uintE* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, lon
   uintE* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
   CountESpace cs = CountESpace(type, numEdges);
 
-  //if (type == 11) CountWorkEfficientParallel(g, rank_butterflies);
-  //else {
+  if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies);
+  else {
   if (max_wedges >= num_wedges) {
     //if (type == 0) CountSort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
     //else if (type == 1) CountSortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
@@ -439,7 +505,7 @@ uintE* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, lon
     cs.clear();
   }
   }
-  //}
+  }
 
   cs.del();
   if (type != 11) free(wedge_idxs);
