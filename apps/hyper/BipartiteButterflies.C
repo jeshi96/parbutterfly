@@ -354,7 +354,8 @@ auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
 t2.stop();
 if (tp ==0) t2.reportTotal("Hash Peel:");
 else if (tp==1) t2.reportTotal("Sort Peel:");
-else t2.reportTotal("Hist Peel:");
+else if (tp == 2) t2.reportTotal("Hist Peel:");
+else t2.reportTotal("Par Peel:");
 
   free(eti);
   free(ite);

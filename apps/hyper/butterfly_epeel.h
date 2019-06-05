@@ -106,17 +106,114 @@ long PeelEHash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubs
   return num_updates;
 }
 
-void PeelE_helper (uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies,
+pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  long stepSize = active.size() < MAX_STEP_SIZE ? active.size() : MAX_STEP_SIZE; //tunable parameter
+
+  auto wedges_seq = ps.wedges_seq_int;
+  auto used_seq = ps.used_seq_int;
+
+  uintE* wedges = wedges_seq.A;
+  uintE* used = used_seq.A;
+
+  //granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
+
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  granular_for(i,0,GA.numEdges,GA.numEdges > 10000, { update_dense[eltsPerCacheLine*i] = false; });
+
+  parallel_for(intT i=0; i < active.size(); ++i){ current[active.vtx(i)] = 1; }
+
+  for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
+    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){//parallel_for_1
+      intT used_idx = 0;
+      intT shift = nu*(i-step*stepSize);
+      intT idx_vu = active.vtx(i);
+  
+      uintE u = edgesV[idx_vu];
+      intT u_offset = offsetsU[u];
+      intT u_deg = offsetsU[u+1] - u_offset;
+
+      uintE v = edgesU[ite[idx_vu]];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
+  // we want to go through all neighbors of v
+  // intersect each N(u') with N(u)
+  // get all u, v, u2
+  // intersection of N(u) and N(u2) - 1 is the num butterflies to subtract from v, u2
+    for (intT k=0; k < v_deg; ++k) { 
+      uintE u2 = edgesV[v_offset + k];
+      if (u2 != u && u2 != UINT_E_MAX && (!current[v_offset+k] || idx_vu < v_offset + k)) {//u2 != UINT_E_MAX - 1
+
+  intT u2_offset = offsetsU[u2];
+  intT u2_deg = offsetsU[u2+1] - u2_offset;
+
+  //bool* same = newA(bool, u2_deg);
+  intT int_offset = 0;
+  //parallel_for(intT j = 0; j < u2_deg; ++j) { same[j] = 0; }
+  for(intT j = 0; j < u2_deg; ++j) {
+    uintE v2 = edgesU[u2_offset + j];
+    uintE idx_v2u2 = eti[u2_offset + j];
+    if(v2 != UINT_E_MAX && v2 != v && (!current[idx_v2u2] || idx_v2u2 >= idx_vu)) {
+      while(int_offset < u_deg && (edgesU[u_offset + int_offset] == UINT_E_MAX || edgesU[u_offset + int_offset] < v2)) { int_offset++; }
+      if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 && (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
+        //same[j] = 1;
+        wedges[shift+k]++;
+        writeAdd(&butterflies[eltsPerCacheLine*eti[u2_offset + j]], (uintE) -1);
+        writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + int_offset]], (uintE) -1);
+        if(!update_dense[eltsPerCacheLine*eti[u2_offset + j]]) CAS(&update_dense[eltsPerCacheLine*eti[u2_offset + j]],false,true);
+        if(!update_dense[eltsPerCacheLine*eti[u_offset + int_offset]]) CAS(&update_dense[eltsPerCacheLine*eti[u_offset + int_offset]],false,true);
+        if (wedges[shift+k] == 1) {
+          used[shift+used_idx++] = k;
+          if(!update_dense[eltsPerCacheLine*(v_offset+k)]) CAS(&update_dense[eltsPerCacheLine*(v_offset+k)],false,true);
+        }
+      }
+      else if(int_offset >= u_deg) break;
+    }
+  }
+  //long num_same = sequence::sum(same, u2_deg);
+  //if (num_same > 0) { 
+  //  writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k), -1*num_same);
+  //}
+  //free(same);
+      }
+	  }
+
+    granular_for(j,0,used_idx,used_idx > 10000, { 
+      intT k = used[shift+j];
+      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], -1*wedges[shift+k]);
+      wedges[shift+k] = 0;
+    });
+    }
+  }
+
+  parallel_for(intT i=0; i < active.size(); ++i){
+    edgesV[active.vtx(i)] = UINT_E_MAX; edgesU[ite[active.vtx(i)]] = UINT_E_MAX;
+    current[active.vtx(i)] = 0;
+  }
+    auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
+    auto f_in = make_in_imap<bool>(GA.numEdges, f);
+    auto out = pbbs::pack_index<uintE>(f_in);
+    out.alloc = false;
+    return make_pair(out.s, out.size());
+}
+
+void PeelE_helper (uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies,  bool* update_dense,
   bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<uintE>& D, buckets<array_imap<uintE>>& b, uintE k) {
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
-  /*if (type == 3) {
-  	auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v);
-  	updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
+  if (type == 3) {
+  	auto ret = PeelEOrigParallel(eti, ite, current, ps, active, butterflies, update_dense, GA, use_v);
+  	updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ret.first, ret.second);
   	free(ret.first);
   	return;
-  }*/
-  if (type == 0) {
+  }
+  else if (type == 0) {
     auto num_updates = PeelEHash(eti, ite, current, ps, active, butterflies, GA, use_v);
     updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ps.update_seq_int.A, num_updates);
     ps.clear();
@@ -150,8 +247,9 @@ array_imap<uintE> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, ui
 
   auto b = make_buckets(GA.numEdges, D, increasing, num_buckets);
 
-  //bool* update_dense = newA(bool, eltsPerCacheLine*GA.numEdges);
-  PeelESpace ps = PeelESpace(type, GA.numEdges, MAX_STEP_SIZE);
+  bool* update_dense = nullptr;
+  if (type == 3) update_dense = newA(bool, eltsPerCacheLine*GA.numEdges);
+  PeelESpace ps = PeelESpace(type, GA.numEdges, MAX_STEP_SIZE, nu);
 
   bool* current = newA(bool, GA.numEdges);
   parallel_for(size_t i=0; i < GA.numEdges; ++i) { current[i] = false; }
@@ -165,12 +263,12 @@ array_imap<uintE> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, ui
     finished += active.size();
     bool is_seq = (active.size() < 1000);
 
-    //parallel_for(intT i=0; i < nu; ++i) { update_dense[eltsPerCacheLine*i] = false; }
-    PeelE_helper(eti, ite, current, ps, active, butterflies, GA, use_v, max_wedges, type, D, b, k);
+    PeelE_helper(eti, ite, current, ps, active, butterflies, update_dense, GA, use_v, max_wedges, type, D, b, k);
 
     active.del();
   }
   ps.del();
+  if (type == 3) free(update_dense);
   free(current);
   
   return D;

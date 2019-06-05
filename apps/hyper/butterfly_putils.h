@@ -23,6 +23,51 @@
 
 using namespace std;
 
+struct PeelESpace {
+  long type;
+  long nu;
+  long stepSize;
+  long n_side;
+  _seq<tuple<uintE,uintE>> wedges_seq_tup;
+  _seq<tuple<uintE,uintE>> wedges_seq_tup_fil;
+  _seq<uintE> update_seq_int;
+  sparseAdditiveSet<uintE> update_hash;
+  _seq<uintE> wedges_seq_int;
+  _seq<uintE> used_seq_int;
+PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
+  using X = tuple<uintE,uintE>;
+  update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  if (type == 0) update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
+  else if (type == 1 || type == 2) {
+    wedges_seq_tup = _seq<X>(newA(X, nu), nu);
+    wedges_seq_tup_fil = _seq<X>(newA(X, nu), nu);
+  }
+  else {
+    wedges_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
+    granular_for(i,0,n_side*stepSize,n_side*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
+    used_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
+  }
+}
+  void resize_update(size_t size) {
+  	if (update_seq_int.n < size) {
+      free(update_seq_int.A);
+      update_seq_int.A = newA(uintE, size);
+      update_seq_int.n = size;
+    }
+  }
+
+  void clear() {
+    if (type == 0) update_hash.clear();
+  }
+
+  void del() {
+  	update_seq_int.del();
+    if (type == 0) update_hash.del();
+    else if (type == 1 || type == 2) { wedges_seq_tup.del(); wedges_seq_tup_fil.del(); }
+    else {wedges_seq_int.del(); used_seq_int.del();}
+  }
+};
+
 struct PeelSpace {
   long type;
   long nu;
@@ -346,51 +391,6 @@ long getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& GA
 //***************************************************************************************************
 //***************************************************************************************************
 
-struct PeelESpace {
-  long type;
-  long nu;
-  long stepSize;
-  _seq<tuple<uintE,uintE>> wedges_seq_tup;
-  _seq<tuple<uintE,uintE>> wedges_seq_tup_fil;
-  _seq<uintE> update_seq_int;
-  sparseAdditiveSet<uintE> update_hash;
-PeelESpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
-  using X = tuple<uintE,uintE>;
-  update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
-  if (type == 0) update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
-  else if (type == 1 || type == 2) {
-    wedges_seq_tup = _seq<X>(newA(X, nu), nu);
-    wedges_seq_tup_fil = _seq<X>(newA(X, nu), nu);
-  }
-  /*else {
-    timer t1;
-    wedges_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
-    t1.start();
-    granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
-    t1.reportTotal("time for init wedges");
-    used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
-  }*/
-}
-  void resize_update(size_t size) {
-  	if (update_seq_int.n < size) {
-      free(update_seq_int.A);
-      update_seq_int.A = newA(uintE, size);
-      update_seq_int.n = size;
-    }
-  }
-
-  void clear() {
-    if (type == 0) update_hash.clear();
-  }
-
-  void del() {
-  	update_seq_int.del();
-    if (type == 0) update_hash.del();
-    else if (type == 1 || type == 2) { wedges_seq_tup.del(); wedges_seq_tup_fil.del(); }
-    /*else {wedges_seq_int.del(); used_seq_int.del();}*/
-  }
-};
-
 // store as tuple uintE, uintE -- so hist can use
 /*template<class Sequence>
 void _getIntersectWedges_seq(_seq<tuple<uintE,uintE>>& wedges_seq, uintE* eti, uintE* ite, bool* current, Sequence I, intT num_I, 
@@ -446,16 +446,16 @@ void intersect(_seq<tuple<uintE,uintE>>& wedges_seq, uintE* eti, uintE* ite, boo
       while(int_offset < u_deg && (edgesU[u_offset + int_offset] == UINT_E_MAX || edgesU[u_offset + int_offset] < v2)) { int_offset++; }
       if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 && (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
         same[j] = 1;//edgesU[u2_offset + j];
-        assert(wedges_idx+1 < wedges_seq.n);
+        //assert(wedges_idx+1 < wedges_seq.n);
         wedges_seq.A[wedges_idx++] = make_tuple(eti[u2_offset + j],1);
-        assert(wedges_idx+1 < wedges_seq.n);
+        //assert(wedges_idx+1 < wedges_seq.n);
         wedges_seq.A[wedges_idx++] = make_tuple(eti[u_offset + int_offset],1);
       }
       else if(int_offset >= u_deg) break;
     }
   }
   long num_same = sequence::sum(same, u2_deg);
-  assert(wedges_idx+1 < wedges_seq.n);
+  //assert(wedges_idx+1 < wedges_seq.n);
   if (num_same > 0) { wedges_seq.A[wedges_idx++] = make_tuple(idx_vu2, num_same); }
   free(same);
 }
