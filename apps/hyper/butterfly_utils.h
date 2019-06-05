@@ -35,6 +35,14 @@ struct UWedge {
 
 struct UWedgeCons { inline UWedge operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UWedge(v1, v2, c, j, k); }};
 
+struct UWedgeIntRankCons {
+  long nu;
+  UWedgeIntRankCons(long _nu) : nu(_nu) {}
+  inline long operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
+    return ((((long) v1) * nu + ((long) v2 >> 1)) << 1) + (v2 & 0b1);
+  }
+};
+
 struct UWedgeCmp {
   inline bool operator() (UWedge vs1, UWedge vs2) {
   	if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
@@ -1051,6 +1059,10 @@ struct CountSpace {
       tmp = pbbsa::sequence<tuple<long, uintE>>();
       out = pbbsa::sequence<tuple<long, uintE>>();
       wedges_seq_int = _seq<long>(newA(long, nu), nu);
+      if (type == 4 && rank) {
+        wedges_hash = sparseAdditiveSet<uintE, long>(nu,1,UINT_E_MAX, LONG_MAX);
+        wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+      }
       if (type == 6) {
         butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
         tmp_uint = pbbsa::sequence<tuple<uintE, uintE>>();
@@ -1065,8 +1077,12 @@ struct CountSpace {
   }
 
   void clear() {
-    if (type == 2 || type == 3) wedges_hash.clear();
-    if (type == 3) butterflies_hash.clear();
+    if (type == 2 || type == 3) {
+      wedges_hash.clear();
+      if (type == 3) butterflies_hash.clear();
+    }
+    else if (type == 4 && rank) wedges_hash.clear();
+
   }
 
   void del() {
@@ -1076,6 +1092,9 @@ struct CountSpace {
     }
     else if (type == 4 || type == 6) {
       wedges_seq_int.del();
+      if (type == 4 && rank){
+        wedges_hash.del(); wedges_seq_intp.del();
+      }
       if (type == 6) butterflies_seq_intt.del();
     }
     else if (type == 0 || type == 1) {

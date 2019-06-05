@@ -451,6 +451,65 @@ intT CountHashCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 //********************************************************************************************
 //********************************************************************************************
 
+intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, 
+  intT curr_idx=0) {
+  using X = tuple<long,uintE>;
+  const intT eltsPerCacheLine = 64/sizeof(long);
+
+  pair<long, intT> wedges_pair  = getWedges<long>(cs.wedges_seq_int, GA, UWedgeIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
+  intT next_idx = wedges_pair.second;
+
+  pbbsa::sequence<long> wedges_seq = pbbsa::sequence<long>(cs.wedges_seq_int.A, wedges_pair.first);
+
+  tuple<size_t,X*> wedges_tuple = pbbsa::sparse_histogram<long, uintE>(wedges_seq, ((GA.n*(GA.n+1)) << 1), cs.tmp, cs.out);
+  X* wedge_freqs = get<1>(wedges_tuple);
+  size_t wedge_freqs_n = get<0>(wedges_tuple);
+
+  cs.wedges_hash.resize(wedge_freqs_n);
+
+  parallel_for (long i=0; i < wedge_freqs_n; ++i) {
+    cs.wedges_hash.insert(make_pair(get<0>(wedge_freqs[i]), get<1>(wedge_freqs[i])));
+  }
+
+  intT num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
+
+  parallel_for(long i=0; i < num_wedges_seq; ++i) {
+    auto wedge_freq_pair = cs.wedges_seq_intp.A[i];
+    uintE num_butterflies = wedge_freq_pair.second;
+    if (num_butterflies > 1 && (wedge_freq_pair.first & 0b1)) {
+      uintE u2 = ((wedge_freq_pair.first >> 1) % (GA.n));
+      uintE u = ((wedge_freq_pair.first >> 1) / (GA.n));
+      num_butterflies = (num_butterflies * (num_butterflies - 1))/2;
+      writeAdd(&butterflies[eltsPerCacheLine*u], num_butterflies);
+      writeAdd(&butterflies[eltsPerCacheLine*u2], num_butterflies);
+    }
+    // if slow, could try to do an intersect here to find v
+  }
+
+  parallel_for(intT i=curr_idx; i < next_idx; ++i){
+    intT u_offset = GA.offsets[i];
+    intT u_deg = GA.offsets[i+1] - u_offset;
+    parallel_for (intT j=0; j < u_deg; ++j ) {
+      uintE v = GA.edges[u_offset+j] >> 1;
+      intT v_offset = GA.offsets[v];
+      intT v_deg = GA.offsets[v+1] - v_offset;
+      if (v > i && (GA.edges[u_offset+j] & 0b1)) {
+      for (intT k=0; k < v_deg; ++k) { 
+        uintE u2 = GA.edges[v_offset+k] >> 1;
+        if (u2 > i) {
+          long to_find = (((long) i) *GA.n + (long) u2) << 1;
+          uintE num_butterflies = cs.wedges_hash.find(to_find).second;
+          if (num_butterflies > 1) writeAdd(&butterflies[eltsPerCacheLine*v], num_butterflies - 1);
+        }
+        else break;
+      }
+      }
+    }
+  }
+
+  return next_idx;
+}
+
 intT CountHist(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, uintE* butterflies, long max_wedges, uintE* wedge_idxs, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
   const intT eltsPerCacheLine = 64/sizeof(long);
@@ -694,6 +753,7 @@ uintE* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges,
     else if (type == 1) CountSortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
     else if (type == 2) CountHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
     else if (type == 3) CountHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+    else if (type == 4) CountHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
   }
   else {
   intT curr_idx = 0;
@@ -702,6 +762,7 @@ uintE* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges,
     else if (type ==1) curr_idx = CountSortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
     else if (type ==2) curr_idx = CountHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
     else if (type == 3) curr_idx = CountHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+    else if (type == 4) curr_idx = CountHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
     cs.clear();
   }
   }
