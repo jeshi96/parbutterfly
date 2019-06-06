@@ -250,7 +250,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long tp = P.getOptionLongValue("-tp",0);
   long te = P.getOptionLongValue("-e",0);
   long tw = P.getOptionLongValue("-w",0);
-
+  bool nopeel = P.getOptionValue("-nopeel");
+  
   // # of max wedges
   long max_wedges = P.getOptionLongValue("-m",2577500000);
 
@@ -306,20 +307,20 @@ if (te == 0) {
   
   //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 0, 0);
   //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
+  if(!nopeel) {
+    timer t2;
+    t2.start();
+    auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
+    t2.stop();
+    if (tp ==0) t2.reportTotal("Hash Peel:");
+    else if (tp==1) t2.reportTotal("Sort Peel:");
+    else if (tp==2) t2.reportTotal("Hist Peel:");
+    else t2.reportTotal("Par Peel: ");
 
-  timer t2;
-  t2.start();
-  auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
-  t2.stop();
-  if (tp ==0) t2.reportTotal("Hash Peel:");
-  else if (tp==1) t2.reportTotal("Sort Peel:");
-  else if (tp==2) t2.reportTotal("Hist Peel:");
-  else t2.reportTotal("Par Peel: ");
-
-  uintE mc = 0;
-  for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-  cout << "### Max core: " << mc << endl;
-
+    uintE mc = 0;
+    for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
+    cout << "### Max core: " << mc << endl;
+  }
   free(butterflies);
 }
 else {
@@ -347,35 +348,35 @@ else {
 //for (long i=0; i < GA.numEdges; ++i) { assertf(ebutterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, ebutterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
 
 
-
-timer t2;
-t2.start();
-auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
-t2.stop();
-if (tp ==0) t2.reportTotal("Hash Peel:");
-else if (tp==1) t2.reportTotal("Sort Peel:");
-else if (tp == 2) t2.reportTotal("Hist Peel:");
-else t2.reportTotal("Par Peel:");
-
-  free(eti);
-  free(ite);
-  free(ebutterflies);
-}
+ if(!nopeel) {
+   timer t2;
+   t2.start();
+   auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
+   t2.stop();
+   if (tp ==0) t2.reportTotal("Hash Peel:");
+   else if (tp==1) t2.reportTotal("Sort Peel:");
+   else if (tp == 2) t2.reportTotal("Hist Peel:");
+   else t2.reportTotal("Par Peel:");
+ }
+ free(eti);
+ free(ite);
+ free(ebutterflies);
+ }
 }
 
 int parallel_main(int argc, char* argv[]) {
   commandLine P(argc,argv," <inFile>");
   char* iFile = P.getArgument(0);
-  //long rounds = P.getOptionLongValue("-rounds",3);
+  long rounds = P.getOptionLongValue("-r",0);
 
   bipartiteCSR G = readBipartite(iFile);
 
   Compute(G,P);
-  // for(int r=0;r<rounds;r++) {
+  for(int r=0;r<rounds;r++) {
   //   startTime();
-  //   Compute(G,P);
+     Compute(G,P);
   //   nextTime("Running time");
-  // }
+  }
   G.del();
 }
 

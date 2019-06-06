@@ -767,7 +767,7 @@ uintE* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges,
   }
   }
   }
-
+  g.del();
   cs.del();
   if (type != 11) free(wedge_idxs);
 
