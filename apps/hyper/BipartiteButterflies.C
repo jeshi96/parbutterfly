@@ -258,7 +258,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   //TODO wedgesPrefixSum not needed except in CountOrigCompactParallel_WedgeAware
   timer t1;
   t1.start();
-  tuple<bool,long,long*> use_v_tuple = cmpWedgeCounts(GA);
+  tuple<bool,long> use_v_tuple = cmpWedgeCounts(GA);
   bool use_v = get<0>(use_v_tuple);
   long num_wedges = get<1>(use_v_tuple);
   t1.reportTotal("compute wedge counts + work prefix sum");
@@ -268,7 +268,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 if (te == 0) {
   
   if (ty == 8) {
-  	long* workPrefixSum = get<2>(use_v_tuple);
+  	long* workPrefixSum = computeWorkPrefixSum(GA,use_v);
   	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
   	free(workPrefixSum);
   }

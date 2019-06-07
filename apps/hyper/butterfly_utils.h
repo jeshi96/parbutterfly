@@ -758,55 +758,44 @@ struct wedgeF {
   }
 };
 
-tuple<bool,long,long*> cmpWedgeCounts(bipartiteCSR & GA) {
-  const long nv = GA.nv, nu = GA.nu;
-  long num_wedges_v = sequence::reduce<long>((long) 0, nv, addF<long>(), wedgeF<long>(GA.offsetsV));
-  long num_wedges_u = sequence::reduce<long>((long) 0, nu, addF<long>(), wedgeF<long>(GA.offsetsU));
+long* computeWorkPrefixSum(bipartiteCSR & GA, bool use_v) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
   long* workPrefixSum;
-  if(num_wedges_v <= num_wedges_u) {
     workPrefixSum = newA(long,nu);
     parallel_for(intT i=0;i<nu;i++) {
       long u_work = 0;
-      intT u_offset = GA.offsetsU[i];
-      intT u_deg = GA.offsetsU[i+1]-GA.offsetsU[i];
+      intT u_offset = offsetsU[i];
+      intT u_deg = offsetsU[i+1]-offsetsU[i];
       for(intT j=0; j<u_deg;j++) {
-  uintE v = GA.edgesU[u_offset+j];
-  intT v_offset = GA.offsetsV[v];
-  intT v_deg = GA.offsetsV[v+1]-GA.offsetsV[v];
+  uintE v = edgesU[u_offset+j];
+  intT v_offset = offsetsV[v];
+  intT v_deg = offsetsV[v+1]-offsetsV[v];
   // for(intT k=0; k<v_deg;k++) {
   //   uintE u2_idx = GA.edgesV[v_offset+k];
   //   if(u2_idx < i) u_work++;
   //   else break;
   
   // }
-  u_work += GA.offsetsV[v+1]-GA.offsetsV[v];
+  u_work += offsetsV[v+1]-offsetsV[v];
       }
       workPrefixSum[i] = u_work;
     }
     sequence::plusScan(workPrefixSum,workPrefixSum,nu);
-  } else {
-    workPrefixSum = newA(long,nv);
-    parallel_for(intT i=0;i<nv;i++) {
-      long v_work = 0;
-      intT v_offset = GA.offsetsV[i];
-      intT v_deg = GA.offsetsV[i+1]-GA.offsetsV[i];
-      for(intT j=0; j<v_deg;j++) {
-  uintE u = GA.edgesV[v_offset+j];
-  intT u_offset = GA.offsetsU[u];
-  intT u_deg = GA.offsetsU[u+1]-GA.offsetsU[u];
-  // for(intT k=0; k<u_deg; k++) {
-  //   uintE v2_idx = GA.edgesU[u_offset+k];
-  //   if(v2_idx < i) v_work++;
-  //   else break;
-  // }
-  v_work += GA.offsetsU[u+1]-GA.offsetsU[u];
-      }
-      workPrefixSum[i] = v_work;
-    }
-    sequence::plusScan(workPrefixSum,workPrefixSum,nv);
-    //sequence::scan<long>(tuplePrefixSum,(long) 0, nu, addF<long>(),wedgeF<long>(GA.offsetsU), 0, false, false);
-  }
-  return make_tuple((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u, workPrefixSum);
+  return workPrefixSum;
+}
+
+tuple<bool,long> cmpWedgeCounts(bipartiteCSR & GA, long type=0) {
+  const long nv = GA.nv, nu = GA.nu;
+  long num_wedges_v = sequence::reduce<long>((long) 0, nv, addF<long>(), wedgeF<long>(GA.offsetsV));
+  long num_wedges_u = sequence::reduce<long>((long) 0, nu, addF<long>(), wedgeF<long>(GA.offsetsU));
+
+  return make_tuple((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
 }
 
 pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
