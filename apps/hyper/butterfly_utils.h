@@ -148,6 +148,17 @@ struct nonEmptyUWF{inline bool operator() (UWedge &a) {return (a.v1 != UINT_E_MA
 
 struct nonMaxTupleF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}};
 
+template<class T, class X>
+struct tupleLt {inline bool operator() (tuple<T,X> a, tuple<T,X> b) {return get<0>(a) < get<0>(b);} };
+template<class T, class X>
+struct tupleEq {inline bool operator() (tuple<T,X> a,tuple<T,X> b) {return get<0>(a) == get<0>(b); }};
+template<class T, class X>
+struct tupleAdd {
+  inline tuple<T,X> operator() (tuple<T,X> a, tuple<T,X> b) const {
+    return make_tuple(get<0>(a), get<1>(a) + get<1>(b));
+  };
+};
+
 struct uintELt {inline bool operator () (uintE a, uintE b) {return a < b;};};
 struct uintEEq {inline bool operator() (uintE a, uintE b) {return a == b;};};
 struct uintETupleLt {inline bool operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) {return get<0>(a) < get<0>(b);} };
@@ -168,9 +179,9 @@ struct uintETupleLtBoth {
 template<class T> struct refl{inline T operator() (T obj) {return obj;}};
 template<class T> struct reflCount{inline long operator() (T obj) {return 1;}};
 struct UVertexPairV2{inline uintE operator() (UVertexPair obj) {return obj.v2;}};
-struct choose2{inline uintE operator() (uintE obj) {return obj*(obj-1)/2;}};
-struct uintETupleGet0{inline uintE operator() (tuple<uintE,uintE> obj) {return get<0>(obj);}};
-struct uintECount{inline long operator() (tuple<uintE,uintE> obj) {return get<1>(obj);}};
+struct choose2{inline long operator() (long obj) {return obj*(obj-1)/2;}};
+struct uintETupleGet0{inline uintE operator() (tuple<uintE,long> obj) {return get<0>(obj);}};
+struct uintECount{inline long operator() (tuple<uintE,long> obj) {return get<1>(obj);}};
 
 template <class E>
 struct writeAddArr {
@@ -828,32 +839,33 @@ pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
  * 
  *  Returns: Array and length of array with frequency counts (as described above)
  */
-template <class T, class Cmp, class Eq>
-pair<uintE*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, bool sort=true) {
+struct nonMaxLongF{bool operator() (long &a) {return (a != LONG_MAX);}};
+template <class L, class T, class Cmp, class Eq, class F>
+pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool sort=true) {
   // Sort objects
   if (sort) sampleSort(objs, num, cmp);
 
-  uintE* freqs = newA(uintE, num + 1);
+  L* freqs = newA(L, num + 1);
   freqs[0] = 0;
   freqs[num] = num;
 
   // Retrieve indices where objects differ
   parallel_for(long i=1; i < num; ++i) {
     if (!eq(objs[i-1],objs[i])) freqs[i] = i;
-    else freqs[i] = UINT_E_MAX;
+    else freqs[i] = maxL;
   }
-  uintE* freqs_f = newA(uintE, num+1);
-  long num_freqs_f = sequence::filter(freqs, freqs_f, num+1, nonMaxF());
+  L* freqs_f = newA(L, num+1);
+  long num_freqs_f = sequence::filter(freqs, freqs_f, num+1, nonF);
   free(freqs);
   return make_pair(freqs_f, num_freqs_f);
 }
 
-template <class S, class T, class Cmp, class Eq, class OpT, class OpuintE, class OpCount>
-pair<tuple<S,uintE>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
-  OpuintE opuinte=refl<uintE>(), OpCount opcount=reflCount<T>()) {
+template <class L, class S, class T, class Cmp, class Eq, class OpT, class OpuintE, class OpCount>
+pair<tuple<S,L>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
+  OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
   if(sort) sampleSort(objs, num, cmp);
 
-  using X = tuple<S,uintE>;
+  using X = tuple<S,L>;
   X* freqs = newA(X, num);
   T prev = objs[0];
   T curr = objs[0];
@@ -878,11 +890,11 @@ pair<tuple<S,uintE>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool
 //********************************************************************************************
 //********************************************************************************************
 
-uintE* countWedgesScan(graphCSR& G) {
-  uintE* idxs = newA(uintE, G.n + 1);
+long* countWedgesScan(graphCSR& G) {
+  long* idxs = newA(long, G.n + 1);
   idxs[G.n] = 0;
 
-  using T = uintE*;
+  using T = long*;
   T* nbhd_idxs = newA(T, G.n);
 
   parallel_for(intT i=0; i < G.n; ++i) {
@@ -890,7 +902,7 @@ uintE* countWedgesScan(graphCSR& G) {
     intT offset = G.offsets[i];
     intT deg = G.offsets[i+1] - offset;
 
-    nbhd_idxs[i] = newA(uintE, deg + 1);
+    nbhd_idxs[i] = newA(long, deg + 1);
     (nbhd_idxs[i])[deg] = 0;
 
     parallel_for(intT j=0; j < deg; ++j) {
@@ -915,17 +927,17 @@ uintE* countWedgesScan(graphCSR& G) {
 }
 
 //TODO we don't use nbhrs or save nbhrs -- delete from everything
-uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
+long* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  uintE* idxs = newA(uintE, nu + 1);
+  long* idxs = newA(long, nu + 1);
   idxs[nu] = 0;
 
-  using T = uintE*;
+  using T = long*;
   T* nbhd_idxs = newA(T, nu);
 
   parallel_for(intT i=0; i < nu; ++i) {
@@ -933,7 +945,7 @@ uintE* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
 
-    nbhd_idxs[i] = newA(uintE, u_deg + 1);
+    nbhd_idxs[i] = newA(long, u_deg + 1);
     parallel_for(intT j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;}
 
     parallel_for(intT j=0; j < u_deg; ++j) { //TODO can parallelize this too technically
@@ -967,7 +979,7 @@ struct CountESpace {
   // for sort: 0, 1
   _seq<UWedge> wedges_seq_uw;
   // for sort: 1
-  _seq<tuple<uintE,uintE>> butterflies_seq_intt;
+  _seq<tuple<uintE,long>> butterflies_seq_intt;
   // for hist: 4
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
@@ -975,19 +987,19 @@ struct CountESpace {
   // for hist: 4, for hash: 2, 3
   sparseAdditiveSet<long, long> wedges_hash;
   // for hash: 3
-  _seq<pair<uintE, uintE>> wedges_seq_intp;
-  sparseAdditiveSet<uintE> butterflies_hash;
+  _seq<pair<uintE, long>> wedges_seq_intp;
+  sparseAdditiveSet<long> butterflies_hash;
 
 
   CountESpace(long _type, long _nu) : type(_type), nu(_nu) {
-    using T = pair<uintE,uintE>;
-    using X = tuple<uintE,uintE>;
+    using T = pair<uintE,long>;
+    using X = tuple<uintE,long>;
     using E = pair<long, uintE>;
     if (type == 2 || type == 3) {
       wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
       if (type == 3) {
         wedges_seq_intp = _seq<T>(newA(T, nu), nu);
-        butterflies_hash = sparseAdditiveSet<uintE>(nu, 1, UINT_E_MAX);
+        butterflies_hash = sparseAdditiveSet<long>(nu, 1, LONG_MAX);
       }
     }
     else if (type == 4) {
@@ -1026,32 +1038,33 @@ struct CountESpace {
 struct CountSpace {
   long type; long nu; bool rank;
   // for hash: 2, 3
-  sparseAdditiveSet<uintE, long> wedges_hash;
-  _seq<pair<long,uintE>> wedges_seq_intp;
+  sparseAdditiveSet<long, long> wedges_hash;
+  _seq<pair<long,long>> wedges_seq_intp;
   // for hash: 3
-  sparseAdditiveSet<uintE> butterflies_hash;
-  _seq<pair<uintE,uintE>> butterflies_seq_intp;
+  sparseAdditiveSet<long> butterflies_hash;
+  _seq<pair<uintE,long>> butterflies_seq_intp;
   // for hist: 4, 6
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
   _seq<long> wedges_seq_int;
   // for hist: 6
-  _seq<tuple<uintE,uintE>> butterflies_seq_intt;
-  pbbsa::sequence<tuple<uintE, uintE>> tmp_uint;
-  pbbsa::sequence<tuple<uintE, uintE>> out_uint;
+  _seq<tuple<uintE,long>> butterflies_seq_intt;
+  pbbsa::sequence<tuple<uintE, long>> tmp_uint;
+  pbbsa::sequence<tuple<uintE, long>> out_uint;
   // for sort: 0, 1
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<UWedge> wedges_seq_uw;
 
   CountSpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
-    using T = pair<uintE,uintE>;
+    using T = pair<uintE,long>;
     using X = tuple<uintE,uintE>;
-    using E = pair<long, uintE>;
+    using E = pair<long,long>;
+    using L = tuple<uintE,long>;
     if (type == 2 || type == 3) {
-      wedges_hash = sparseAdditiveSet<uintE, long>(nu,1,UINT_E_MAX, LONG_MAX);
+      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
       wedges_seq_intp = _seq<E>(newA(E, nu), nu);
       if (type == 3) {
-        butterflies_hash = sparseAdditiveSet<uintE>(nu, 1, UINT_E_MAX);
+        butterflies_hash = sparseAdditiveSet<long>(nu, 1, LONG_MAX);
         butterflies_seq_intp = _seq<T>(newA(T, nu), nu);
       }
     }
@@ -1060,17 +1073,17 @@ struct CountSpace {
       out = pbbsa::sequence<tuple<long, uintE>>();
       wedges_seq_int = _seq<long>(newA(long, nu), nu);
       if (type == 4 && rank) {
-        wedges_hash = sparseAdditiveSet<uintE, long>(nu,1,UINT_E_MAX, LONG_MAX);
+        wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
         wedges_seq_intp = _seq<E>(newA(E, nu), nu);
       }
       if (type == 6) {
-        butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
-        tmp_uint = pbbsa::sequence<tuple<uintE, uintE>>();
-        out_uint = pbbsa::sequence<tuple<uintE, uintE>>();
+        butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
+        tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
+        out_uint = pbbsa::sequence<tuple<uintE, long>>();
       }
     }
     else if (type == 0 || type == 1) {
-      if (type == 1) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+      if (type == 1) butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
       if (!rank) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
       else wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
     }
@@ -1139,7 +1152,7 @@ void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons,
 }
 
 template<class wedge, class wedgeCons>
-void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, uintE* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
+void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -1241,13 +1254,13 @@ intT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, intT cur
 }
 
 // TODO doubling search
-intT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx, uintE* wedge_idxs) {
+intT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx, long* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   //nextWedgeTimer.start();
   if (nu - curr_idx < 2000) return getNextWedgeIdx_seq(GA, use_v, max_wedges, curr_idx);
 
-  auto idx_map = make_in_imap<uintE>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
-  auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
+  auto idx_map = make_in_imap<long>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
+  auto lte = [] (const long& l, const long& r) { return l <= r; };
   size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
   //nextWedgeTimer.stop();
@@ -1256,7 +1269,7 @@ intT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_id
 
 //TODO 3 tuple instead of nested pairs
 template<class wedge, class wedgeCons>
-pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, uintE* wedge_idxs) {
+pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, long* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   if (max_wedges >= num_wedges) {
     _getWedges<wedge>(wedges, GA, use_v, cons, num_wedges, wedge_idxs);
@@ -1269,7 +1282,7 @@ pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, we
 }
 
 template<class wedgeCons, class T>
-intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, uintE* wedge_idxs) {
+intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, long* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   if (max_wedges >= num_wedges) {
     _getWedgesHash(wedges, GA, use_v, cons, num_wedges);
@@ -1310,7 +1323,7 @@ void _getWedges_seq(wedge* wedges, graphCSR& GA, wedgeCons cons, long num_wedges
 
 template<class wedge, class wedgeCons>
 void _getWedges(_seq<wedge>& wedges_seq, graphCSR& GA, wedgeCons cons, long num_wedges, 
-  uintE* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
+  long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
   // Allocate space for seagull storage
   if (wedges_seq.n < num_wedges) {
     free(wedges_seq.A);
@@ -1373,10 +1386,10 @@ void _getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long num_wedges, in
   }
 }
 
-intT getNextWedgeIdx(graphCSR& GA, long max_wedges, intT curr_idx, uintE* wedge_idxs) {
+intT getNextWedgeIdx(graphCSR& GA, long max_wedges, intT curr_idx, long* wedge_idxs) {
   //if (GA.n - curr_idx < 2000) return getNextWedgeIdx_seq(GA, use_v, max_wedges, curr_idx);
-  auto idx_map = make_in_imap<uintE>(GA.n - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
-  auto lte = [] (const uintE& l, const uintE& r) { return l <= r; };
+  auto idx_map = make_in_imap<long>(GA.n - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
+  auto lte = [] (const long& l, const long& r) { return l <= r; };
   size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
 
@@ -1385,7 +1398,7 @@ intT getNextWedgeIdx(graphCSR& GA, long max_wedges, intT curr_idx, uintE* wedge_
 
 template<class wedgeCons, class T>
 intT getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, 
-  intT curr_idx, long num_wedges, uintE* wedge_idxs) {
+  intT curr_idx, long num_wedges, long* wedge_idxs) {
   if (max_wedges >= num_wedges) {
     _getWedgesHash(wedges, GA, cons, num_wedges);
     return GA.n;
@@ -1397,7 +1410,7 @@ intT getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long max_wedges,
 }
 
 template<class wedge, class wedgeCons>
-pair<long, intT> getWedges(_seq<wedge>& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, uintE* wedge_idxs) {
+pair<long, intT> getWedges(_seq<wedge>& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, long* wedge_idxs) {
   if (max_wedges >= num_wedges) {
     _getWedges<wedge>(wedges, GA, cons, num_wedges, wedge_idxs);
     return make_pair(num_wedges, GA.n);

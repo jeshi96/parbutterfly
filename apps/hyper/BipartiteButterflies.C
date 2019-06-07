@@ -6,7 +6,7 @@
 
 #define HYPER 1
 //#define LONG 1
-//#define EDGELONG 1
+#define EDGELONG 1
 #define MCX16 1
 
 #include "hypergraphIO.h"
@@ -288,7 +288,7 @@ if (te == 0) {
 
   timer t;
   t.start();
-  uintE* butterflies = Count(GA, use_v, num_wedges, max_wedges, ty, tw);
+  long* butterflies = Count(GA, use_v, num_wedges, max_wedges, ty, tw);
   t.stop();
 
   if (ty==0) t.reportTotal("Sort:");
@@ -317,7 +317,7 @@ if (te == 0) {
     else if (tp==2) t2.reportTotal("Hist Peel:");
     else t2.reportTotal("Par Peel: ");
 
-    uintE mc = 0;
+    long mc = 0;
     for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
     cout << "### Max core: " << mc << endl;
   }
@@ -330,7 +330,7 @@ else {
  auto eti = edgeToIdxs(GA, use_v);
  auto ite = idxsToEdge(GA, use_v);
  t3.start();
- uintE* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty, tw);
+ long* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty, tw);
  t3.stop();
  if(ty==2) t3.reportTotal("E Hash:");
  else if (ty == 3) t3.reportTotal("E HashCE:");

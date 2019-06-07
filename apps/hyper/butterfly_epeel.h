@@ -24,9 +24,9 @@
 #include "butterfly_putils.h"
 #include "butterfly_utils.h"
 
-pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies, bipartiteCSR& GA, 
+pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, 
   bool use_v, long max_wedges, intT curr_idx=0) {
-  using X = tuple<uintE,uintE>;
+  using X = tuple<uintE,long>;
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
@@ -34,15 +34,15 @@ pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
   //ps.wedges_seq_tup_fil contains edge idx, val pairs; ret.first is size of this, ret.second is next idx
   // just need to hist up, update butterflies, return num updates
 
-  pair<uintE*, long> b_freq_pair = getFreqs(ps.wedges_seq_tup_fil.A, ret.first, uintETupleLt(), uintETupleEq());
-  uintE* b_freq_arr = b_freq_pair.first;
+  auto b_freq_pair = getFreqs<long>(ps.wedges_seq_tup_fil.A, ret.first, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
+  auto b_freq_arr = b_freq_pair.first;
   ps.resize_update(b_freq_pair.second-1);
   uintE* update = ps.update_seq_int.A;
 
   parallel_for(long i=1; i < b_freq_pair.second; ++i) {
-    uintE num_freq = b_freq_arr[i] - b_freq_arr[i-1];
+    long num_freq = b_freq_arr[i] - b_freq_arr[i-1];
     // Reduce to sum the butterflies over the necessary range
-    X reduce = sequence::reduce(&(ps.wedges_seq_tup_fil.A[b_freq_arr[i-1]]), num_freq, uintETupleAdd());
+    X reduce = sequence::reduce(&(ps.wedges_seq_tup_fil.A[b_freq_arr[i-1]]), num_freq, tupleAdd<uintE, long>());
     // These are our butterfly counts
     butterflies[get<0>(reduce)*eltsPerCacheLine] -= get<1>(reduce);
     update[i-1] = get<0>(reduce);
@@ -53,9 +53,9 @@ pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
   return make_pair(ret.second, b_freq_pair.second-1);
 }
 
-pair<intT, long> PeelEHist(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies, bipartiteCSR& GA, 
+pair<intT, long> PeelEHist(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, 
   bool use_v, long max_wedges, intT curr_idx=0) {
-  using X = tuple<uintE,uintE>;
+  using X = tuple<uintE,long>;
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
@@ -64,10 +64,10 @@ pair<intT, long> PeelEHist(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
   // just need to hist up, update butterflies, return num updates
   pbbsa::sequence<X> wedge_seq = pbbsa::sequence<X>(ps.wedges_seq_tup_fil.A, ret.first);
   // TODO fix these
-  pbbsa::sequence<tuple<uintE, uintE>> tmp = pbbsa::sequence<tuple<uintE, uintE>>();
-  pbbsa::sequence<tuple<uintE, uintE>> out = pbbsa::sequence<tuple<uintE, uintE>>();
+  pbbsa::sequence<tuple<uintE, long>> tmp = pbbsa::sequence<tuple<uintE, long>>();
+  pbbsa::sequence<tuple<uintE, long>> out = pbbsa::sequence<tuple<uintE, long>>();
   tuple<size_t, X*> butterflies_tuple = 
-    pbbsa::sparse_histogram_f<uintE,uintE>(wedge_seq, GA.numEdges, getAdd<uintE,uintE>, getAddReduce<uintE,uintE>, tmp, out);
+    pbbsa::sparse_histogram_f<uintE,long>(wedge_seq, GA.numEdges, getAdd<uintE,long>, getAddReduce<uintE,long>, tmp, out);
   X* butterflies_l = get<1>(butterflies_tuple);
   size_t butterflies_n = get<0>(butterflies_tuple);
 
@@ -81,21 +81,20 @@ pair<intT, long> PeelEHist(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
   return make_pair(ret.second, butterflies_n);
 }
 
-long PeelEHash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies, bipartiteCSR& GA, 
+long PeelEHash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, 
   bool use_v) {
   // Retrieve all seagulls
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   getIntersectWedgesHash(eti, ite, current, ps, active_map, active.size(), GA, use_v);
  
-  _seq<pair<uintE,uintE>> update_seq = ps.update_hash.entries();
+  _seq<pair<uintE,long>> update_seq = ps.update_hash.entries();
   long num_updates = update_seq.n;
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
 
-  using T = pair<uintE,uintE>;
   const intT eltsPerCacheLine = 64/sizeof(long);
   granular_for(i, 0, num_updates, (num_updates>1000), {
-    T update_pair = update_seq.A[i];
+    auto update_pair = update_seq.A[i];
     uintE idx = update_pair.first;
     butterflies[eltsPerCacheLine*idx] -= update_pair.second;
     update[i] = idx;
@@ -106,7 +105,7 @@ long PeelEHash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubs
   return num_updates;
 }
 
-pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v) {
+pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, long* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -164,8 +163,8 @@ pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, Peel
       if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 && (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
         //same[j] = 1;
         wedges[shift+k]++;
-        writeAdd(&butterflies[eltsPerCacheLine*eti[u2_offset + j]], (uintE) -1);
-        writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + int_offset]], (uintE) -1);
+        writeAdd(&butterflies[eltsPerCacheLine*eti[u2_offset + j]], (long) -1);
+        writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + int_offset]], (long) -1);
         if(!update_dense[eltsPerCacheLine*eti[u2_offset + j]]) CAS(&update_dense[eltsPerCacheLine*eti[u2_offset + j]],false,true);
         if(!update_dense[eltsPerCacheLine*eti[u_offset + int_offset]]) CAS(&update_dense[eltsPerCacheLine*eti[u_offset + int_offset]],false,true);
         if (wedges[shift+k] == 1) {
@@ -186,7 +185,7 @@ pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, Peel
 
     granular_for(j,0,used_idx,used_idx > 10000, { 
       intT k = used[shift+j];
-      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], -1*wedges[shift+k]);
+      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)],(long) -1*wedges[shift+k]);
       wedges[shift+k] = 0;
     });
     }
@@ -203,8 +202,8 @@ pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, Peel
     return make_pair(out.s, out.size());
 }
 
-void PeelE_helper (uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, uintE* butterflies,  bool* update_dense,
-  bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<uintE>& D, buckets<array_imap<uintE>>& b, uintE k) {
+void PeelE_helper (uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, long* butterflies,  bool* update_dense,
+  bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<long>& D, buckets<array_imap<long>>& b, long k) {
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
   if (type == 3) {
@@ -231,7 +230,7 @@ void PeelE_helper (uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertex
   }
 }
 
-array_imap<uintE> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, uintE* butterflies, long max_wedges, long type=0, size_t num_buckets=128) {
+array_imap<long> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, long* butterflies, long max_wedges, long type=0, size_t num_buckets=128) {
   // Butterflies are assumed to be stored on U
   const long nu = use_v ? GA.nu : GA.nv;
 
@@ -243,7 +242,7 @@ array_imap<uintE> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, ui
   using X = tuple<uintE,uintE>;
   const intT eltsPerCacheLine = 64/sizeof(long);
 
-  auto D = array_imap<uintE>(GA.numEdges, [&] (size_t i) { return butterflies[eltsPerCacheLine*i]; });
+  auto D = array_imap<long>(GA.numEdges, [&] (size_t i) { return butterflies[eltsPerCacheLine*i]; });
 
   auto b = make_buckets(GA.numEdges, D, increasing, num_buckets);
 
@@ -259,7 +258,7 @@ array_imap<uintE> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, ui
 
     auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
-    uintE k = bkt.id;
+    long k = bkt.id;
     finished += active.size();
     bool is_seq = (active.size() < 1000);
 

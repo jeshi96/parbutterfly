@@ -28,16 +28,16 @@ struct PeelESpace {
   long nu;
   long stepSize;
   long n_side;
-  _seq<tuple<uintE,uintE>> wedges_seq_tup;
-  _seq<tuple<uintE,uintE>> wedges_seq_tup_fil;
+  _seq<tuple<uintE,long>> wedges_seq_tup;
+  _seq<tuple<uintE,long>> wedges_seq_tup_fil;
   _seq<uintE> update_seq_int;
-  sparseAdditiveSet<uintE> update_hash;
+  sparseAdditiveSet<long> update_hash;
   _seq<uintE> wedges_seq_int;
   _seq<uintE> used_seq_int;
 PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
-  using X = tuple<uintE,uintE>;
+  using X = tuple<uintE,long>;
   update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
-  if (type == 0) update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
+  if (type == 0) update_hash = sparseAdditiveSet<long>(nu, (float) 1, LONG_MAX);
   else if (type == 1 || type == 2) {
     wedges_seq_tup = _seq<X>(newA(X, nu), nu);
     wedges_seq_tup_fil = _seq<X>(newA(X, nu), nu);
@@ -77,15 +77,15 @@ struct PeelSpace {
   _seq<long> wedges_seq_long;
   _seq<uintE> used_seq_int;
   _seq<uintE> update_seq_int;
-  sparseAdditiveSet<uintE> update_hash;
+  sparseAdditiveSet<long> update_hash;
   sparseAdditiveSet<long, long>* wedges_hash;
   sparseAdditiveSet<long, long>** wedges_hash_list;
   _seq<pair<long,long>> wedges_seq_intp;
-  _seq<pair<uintE,uintE>> butterflies_seq_intp;
+  _seq<pair<uintE,long>> butterflies_seq_intp;
   intT num_wedges_hash;
 PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
   using E = pair<long, long>;
-  using X = pair<uintE,uintE>;
+  using X = pair<uintE,long>;
   update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
   if (type == 0) {
     using T = sparseAdditiveSet<long, long>*;
@@ -93,7 +93,7 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     wedges_hash_list = newA(T, 1);
     wedges_hash_list[0] = wedges_hash;
     num_wedges_hash = 1;
-    update_hash = sparseAdditiveSet<uintE>(nu, (float) 1, UINT_E_MAX);
+    update_hash = sparseAdditiveSet<long>(nu, (float) 1, LONG_MAX);
     wedges_seq_intp = _seq<E>(newA(E, nu), nu);
     butterflies_seq_intp = _seq<X>(newA(X, nu), nu);
   }
@@ -421,7 +421,7 @@ void _getIntersectWedges_seq(_seq<tuple<uintE,uintE>>& wedges_seq, uintE* eti, u
   }
 }*/
 
-void intersect(_seq<tuple<uintE,uintE>>& wedges_seq, uintE* eti, uintE* ite, bool* current, 
+void intersect(_seq<tuple<uintE,long>>& wedges_seq, uintE* eti, uintE* ite, bool* current, 
   bipartiteCSR& GA, bool use_v, uintE u, uintE v, uintE u2, uintE idx_vu, uintE idx_vu2, intT wedges_idx) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -447,9 +447,9 @@ void intersect(_seq<tuple<uintE,uintE>>& wedges_seq, uintE* eti, uintE* ite, boo
       if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 && (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
         same[j] = 1;//edgesU[u2_offset + j];
         //assert(wedges_idx+1 < wedges_seq.n);
-        wedges_seq.A[wedges_idx++] = make_tuple(eti[u2_offset + j],1);
+        wedges_seq.A[wedges_idx++] = make_tuple(eti[u2_offset + j],(long)1);
         //assert(wedges_idx+1 < wedges_seq.n);
-        wedges_seq.A[wedges_idx++] = make_tuple(eti[u_offset + int_offset],1);
+        wedges_seq.A[wedges_idx++] = make_tuple(eti[u_offset + int_offset],(long)1);
       }
       else if(int_offset >= u_deg) break;
     }
@@ -463,7 +463,7 @@ void intersect(_seq<tuple<uintE,uintE>>& wedges_seq, uintE* eti, uintE* ite, boo
 template<class Sequence>
 long _getIntersectWedges(PeelESpace& ps, uintE* eti, uintE* ite, bool* current, Sequence I, intT num_I, 
   bipartiteCSR& GA, bool use_v, long num_wedges, long* idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
-  using X = tuple<uintE,uintE>;
+  using X = tuple<uintE,long>;
 
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -479,8 +479,8 @@ long _getIntersectWedges(PeelESpace& ps, uintE* eti, uintE* ite, bool* current, 
     ps.wedges_seq_tup.n = num;
     ps.wedges_seq_tup_fil.n = num;
   }
-  parallel_for(long i=0; i < num_wedges*2+next_idx-curr_idx; ++i) { ps.wedges_seq_tup.A[i] = make_tuple(UINT_E_MAX, UINT_E_MAX); }
-
+  parallel_for(long i=0; i < num_wedges*2+next_idx-curr_idx; ++i) { ps.wedges_seq_tup.A[i] = make_tuple(UINT_E_MAX, LONG_MAX); }
+auto nonMaxLF = [] (const X& r) { return get<0>(r) != UINT_E_MAX || get<1>(r) != LONG_MAX; };
   if (next_idx == INT_T_MAX) next_idx = num_I;
   //if (num_wedges < 10000)
   //  return _getIntersectWedges_seq(wedges_seq, eti, ite, current, I, num_I, GA, use_v, num_wedges, curr_idx, next_idx);
@@ -502,7 +502,7 @@ long _getIntersectWedges(PeelESpace& ps, uintE* eti, uintE* ite, bool* current, 
       }
 	  }
   }
-  long num_wedges_fil = sequence::filter(ps.wedges_seq_tup.A, ps.wedges_seq_tup_fil.A, num_wedges*2+next_idx-curr_idx, nonMaxTupleF());
+  long num_wedges_fil = sequence::filter(ps.wedges_seq_tup.A, ps.wedges_seq_tup_fil.A, num_wedges*2+next_idx-curr_idx, nonMaxLF);
   return num_wedges_fil;
 }
 
@@ -710,46 +710,47 @@ void getIntersectWedgesHash(uintE* eti, uintE* ite, bool* current, PeelESpace& p
 //***************************************************************************************************
 //***************************************************************************************************
 
-pair<tuple<uintE,uintE>*,long> _updateBuckets(uintE* update_idxs, long num_updates, uintE* butterflies, 
-  array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
-  using X = tuple<uintE,uintE>;
+pair<tuple<uintE,long>*,long> _updateBuckets(uintE* update_idxs, long num_updates, long* butterflies, 
+  array_imap<long> D, buckets<array_imap<long>> b, long k) {
+  using X = tuple<uintE,long>;
   X* update = newA(X,num_updates);
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   // Filter for bucket updates
   parallel_for(long i=0; i < num_updates; ++i) {
     const uintE u_idx = update_idxs[i];
-    uintE old_b = D.s[u_idx];
+    long old_b = D.s[u_idx];
 
     if (old_b > k) {
-        uintE new_b = max(butterflies[eltsPerCacheLine*u_idx],k);
+        long new_b = max(butterflies[eltsPerCacheLine*u_idx],k);
         D.s[u_idx] = new_b;
-        uintE new_bkt = b.get_bucket(old_b, new_b);
+        long new_bkt = b.get_bucket(old_b, new_b);
         update[i] = make_tuple(u_idx, new_bkt);
     }
-    else {update[i] = make_tuple(UINT_E_MAX,UINT_E_MAX);}
+    else {update[i] = make_tuple(UINT_E_MAX,LONG_MAX);}
   }
 
   X* update_filter = newA(X, num_updates);
-  long num_updates_filter = sequence::filter(update,update_filter,num_updates, nonMaxTupleF());
+  auto nonMaxLF = [] (const X& r) { return get<0>(r)!=UINT_E_MAX || get<1>(r)!= LONG_MAX; };
+  long num_updates_filter = sequence::filter(update,update_filter,num_updates, nonMaxLF);
   free(update);
   return make_pair(update_filter,  num_updates_filter);
 }
 
-pair<tuple<uintE,uintE>*,long> _updateBuckets_seq(uintE* update_idxs, long num_updates, uintE* butterflies, 
-  array_imap<uintE> D, buckets<array_imap<uintE>> b, uintE k) {
-  using X = tuple<uintE, uintE>;
+pair<tuple<uintE,long>*,long> _updateBuckets_seq(uintE* update_idxs, long num_updates, long* butterflies, 
+  array_imap<long> D, buckets<array_imap<long>> b, long k) {
+  using X = tuple<uintE, long>;
   X* update = newA(X, num_updates);
   const intT eltsPerCacheLine = 64/sizeof(long);
   long idx = 0;
   for(long i=0; i < num_updates; ++i) {
     uintE u_idx = update_idxs[i];
-    uintE old_b = D.s[u_idx];
+    long old_b = D.s[u_idx];
 
     if(old_b > k) {
       uintE new_b = max(butterflies[eltsPerCacheLine*u_idx], k);
       D.s[u_idx] = new_b;
-      uintE new_bkt = b.get_bucket(old_b, new_b);
+      long new_bkt = b.get_bucket(old_b, new_b);
       update[idx] = make_tuple(u_idx, new_bkt);
       ++idx;
     }
@@ -757,13 +758,13 @@ pair<tuple<uintE,uintE>*,long> _updateBuckets_seq(uintE* update_idxs, long num_u
   return make_pair(update, idx);
 }
 
-void updateBuckets(array_imap<uintE>& D, buckets<array_imap<uintE>>& b, uintE k, uintE* butterflies, bool is_seq, long nu,
+void updateBuckets(array_imap<long>& D, buckets<array_imap<long>>& b, uintE k, long* butterflies, bool is_seq, long nu,
   uintE* update_idxs, long num_updates) {
-  pair<tuple<uintE,uintE>*,long> bucket_pair;
+  pair<tuple<uintE,long>*,long> bucket_pair;
   if (is_seq) bucket_pair = _updateBuckets_seq(update_idxs, num_updates, butterflies, D, b, k);
   else bucket_pair = _updateBuckets(update_idxs, num_updates, butterflies, D, b, k);
 
-  vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(nu, bucket_pair.second, bucket_pair.first);
+  vertexSubsetData<long> moved = vertexSubsetData<long>(nu, bucket_pair.second, bucket_pair.first);
   b.update_buckets(moved.get_fn_repr(), moved.size());
 
   moved.del();
