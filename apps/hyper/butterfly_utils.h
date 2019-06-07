@@ -987,19 +987,19 @@ struct CountESpace {
   // for hist: 4, for hash: 2, 3
   sparseAdditiveSet<long, long> wedges_hash;
   // for hash: 3
-  _seq<pair<uintE, long>> wedges_seq_intp;
-  sparseAdditiveSet<long> butterflies_hash;
+  _seq<pair<long, long>> wedges_seq_intp;
+  sparseAdditiveSet<long, long> butterflies_hash;
 
 
   CountESpace(long _type, long _nu) : type(_type), nu(_nu) {
-    using T = pair<uintE,long>;
+    using T = pair<long,long>;
     using X = tuple<uintE,long>;
     using E = pair<long, uintE>;
     if (type == 2 || type == 3) {
       wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
       if (type == 3) {
         wedges_seq_intp = _seq<T>(newA(T, nu), nu);
-        butterflies_hash = sparseAdditiveSet<long>(nu, 1, LONG_MAX);
+        butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
       }
     }
     else if (type == 4) {
@@ -1041,8 +1041,8 @@ struct CountSpace {
   sparseAdditiveSet<long, long> wedges_hash;
   _seq<pair<long,long>> wedges_seq_intp;
   // for hash: 3
-  sparseAdditiveSet<long> butterflies_hash;
-  _seq<pair<uintE,long>> butterflies_seq_intp;
+  sparseAdditiveSet<long, long> butterflies_hash;
+  _seq<pair<long,long>> butterflies_seq_intp;
   // for hist: 4, 6
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
@@ -1064,8 +1064,8 @@ struct CountSpace {
       wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
       wedges_seq_intp = _seq<E>(newA(E, nu), nu);
       if (type == 3) {
-        butterflies_hash = sparseAdditiveSet<long>(nu, 1, LONG_MAX);
-        butterflies_seq_intp = _seq<T>(newA(T, nu), nu);
+        butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
+        butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
       }
     }
     else if (type == 4 || type == 6) {

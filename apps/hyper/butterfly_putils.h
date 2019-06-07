@@ -31,13 +31,13 @@ struct PeelESpace {
   _seq<tuple<uintE,long>> wedges_seq_tup;
   _seq<tuple<uintE,long>> wedges_seq_tup_fil;
   _seq<uintE> update_seq_int;
-  sparseAdditiveSet<long> update_hash;
+  sparseAdditiveSet<long, long> update_hash;
   _seq<uintE> wedges_seq_int;
   _seq<uintE> used_seq_int;
 PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
   using X = tuple<uintE,long>;
   update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
-  if (type == 0) update_hash = sparseAdditiveSet<long>(nu, (float) 1, LONG_MAX);
+  if (type == 0) update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
   else if (type == 1 || type == 2) {
     wedges_seq_tup = _seq<X>(newA(X, nu), nu);
     wedges_seq_tup_fil = _seq<X>(newA(X, nu), nu);
@@ -77,11 +77,11 @@ struct PeelSpace {
   _seq<long> wedges_seq_long;
   _seq<uintE> used_seq_int;
   _seq<uintE> update_seq_int;
-  sparseAdditiveSet<long> update_hash;
+  sparseAdditiveSet<long, long> update_hash;
   sparseAdditiveSet<long, long>* wedges_hash;
   sparseAdditiveSet<long, long>** wedges_hash_list;
   _seq<pair<long,long>> wedges_seq_intp;
-  _seq<pair<uintE,long>> butterflies_seq_intp;
+  _seq<pair<long,long>> butterflies_seq_intp;
   intT num_wedges_hash;
 PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
   using E = pair<long, long>;
@@ -93,9 +93,9 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     wedges_hash_list = newA(T, 1);
     wedges_hash_list[0] = wedges_hash;
     num_wedges_hash = 1;
-    update_hash = sparseAdditiveSet<long>(nu, (float) 1, LONG_MAX);
+    update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
     wedges_seq_intp = _seq<E>(newA(E, nu), nu);
-    butterflies_seq_intp = _seq<X>(newA(X, nu), nu);
+    butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
   }
   else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
   else if (type == 2) wedges_seq_long = _seq<long>(newA(long, nu), nu);

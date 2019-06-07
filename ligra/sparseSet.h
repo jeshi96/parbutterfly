@@ -41,8 +41,8 @@ template <class E, class X=uintE>
 class sparseAdditiveSet {
   typedef pair<X, E> kvPair;
  public:
-  uintT m=0;
-  intT mask;
+  long m=0;
+  long mask;
   kvPair empty;
   kvPair* TA;
   float loadFactor;
@@ -58,14 +58,14 @@ class sparseAdditiveSet {
     }
   }
 
-  inline uintT hashToRange(uintT h) {return h & mask;}
-  inline uintT firstIndex(uintT v) {return hashToRange(hashInt(v));}
-  inline uintT incrementIndex(uintT h) {return hashToRange(h+1);}
+  inline long hashToRange(long h) {return h & mask;}
+  inline long firstIndex(long v) {return hashToRange(hashInt((ulong) v));}
+  inline long incrementIndex(long h) {return hashToRange(h+1);}
 
   // Size is the maximum number of values the hash table will hold.
   // Overfilling the table could put it into an infinite loop.
  sparseAdditiveSet(long size, float _loadFactor, E zero, X _empty_key=UINT_E_MAX) :
-  loadFactor(_loadFactor), m((uintT) 1 << log2RoundUp((uintT)(_loadFactor*size)+100)),
+  loadFactor(_loadFactor), m((long) 1 << log2RoundUp((long)(_loadFactor*size)+100)),
   mask(m-1), TA(newA(kvPair,m)), FL(newA(bool,m)), empty_key(_empty_key)
       { empty=make_pair(_empty_key,zero); clearA(TA,FL,m,empty); alloc=true; }
 
@@ -90,7 +90,7 @@ class sparseAdditiveSet {
     if (size * lf > m) {
       del();
       loadFactor = lf;
-      m = (uintT) 1 << log2RoundUp((uintT)(lf * size)+100);
+      m = (long) 1 << log2RoundUp((long)(lf * size)+100);
       mask = m-1;
       TA = newA(kvPair, m);
       FL = newA(bool, m);
@@ -111,7 +111,7 @@ class sparseAdditiveSet {
   // nondeterministic insert
   bool insert(kvPair v) {
     X vkey = v.first;
-    uintT h = firstIndex(vkey);
+    long h = firstIndex(vkey);
 
     while (1) {
       //kvPair c;
@@ -136,7 +136,7 @@ class sparseAdditiveSet {
 
   E insertAndReturn(kvPair v) {
     X vkey = v.first;
-    uintT h = firstIndex(vkey); 
+    long h = firstIndex(vkey); 
     while (1) {
       //kvPair c;
       int cmp;
@@ -160,12 +160,11 @@ class sparseAdditiveSet {
   }
 
   kvPair find(X v) {
-    uintT h = firstIndex(v);
+    long h = firstIndex(v);
     kvPair c = TA[h]; 
     while (1) {
       if (c.first == empty_key) return empty; 
-      else if (v == c.first)
-	return c;
+      else if (v == c.first) return c;
       h = incrementIndex(h);
       c = TA[h];
     }
@@ -186,7 +185,7 @@ class sparseAdditiveSet {
 
   // returns all the current entries compacted into a sequence
   _seq<kvPair> entries() {
-    _seq<kvPair> R = pack((kvPair*)NULL, FL, (uintT) 0, m, sequence::getA<kvPair,X>(TA));
+    _seq<kvPair> R = pack((kvPair*)NULL, FL, (long) 0, m, sequence::getA<kvPair,X>(TA));
     return R;
   }
 
@@ -199,7 +198,7 @@ class sparseAdditiveSet {
       out.A = newA(kvPair, num);
       out.n = num;
     }
-    return pack(out.A, FL, (uintT) 0, m, sequence::getA<kvPair,X>(TA)).n;
+    return pack(out.A, FL, (long) 0, m, sequence::getA<kvPair,X>(TA)).n;
   }
 
   // returns all the current entries satisfying predicate f compacted into a sequence
@@ -208,7 +207,7 @@ class sparseAdditiveSet {
     bool *FLf = newA(bool,m);
     parallel_for (long i=0; i < m; i++) 
       FLf[i] = (TA[i].first != empty_key && f(TA[i]));
-    _seq<kvPair> R = pack((kvPair*)NULL, FLf, (uintT) 0, m, sequence::getA<kvPair,X>(TA));
+    _seq<kvPair> R = pack((kvPair*)NULL, FLf, (long) 0, m, sequence::getA<kvPair,X>(TA));
     free(FLf);
     return R;
   }

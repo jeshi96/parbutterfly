@@ -87,7 +87,7 @@ long PeelEHash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubs
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   getIntersectWedgesHash(eti, ite, current, ps, active_map, active.size(), GA, use_v);
  
-  _seq<pair<uintE,long>> update_seq = ps.update_hash.entries();
+  auto update_seq = ps.update_hash.entries();
   long num_updates = update_seq.n;
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
