@@ -267,6 +267,7 @@ array_imap<long> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, lon
     active.del();
   }
   ps.del();
+  b.del();
   if (type == 3) free(update_dense);
   free(current);
   

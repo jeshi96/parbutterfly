@@ -402,16 +402,16 @@ template <class Val>
 tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
   using X = tuple<bool, uintE>;
   long n = GA.nv + GA.nu;
-  bool* active = newA(bool,n);
-  {parallel_for(long i=0;i<n;i++) active[i] = 1;}
-  vertexSubset Frontier(n, n, active);
-  uintE* Degrees = newA(uintE,n);
+  //bool* active = newA(bool,n);
+  //{parallel_for(long i=0;i<n;i++) active[i] = 1;}
+  //vertexSubset Frontier(n, n, active);
+  /*uintE* Degrees = newA(uintE,n);
   {parallel_for(long i=0;i<GA.nv;i++) {
       Degrees[i] = GA.offsetsV[i+1] - GA.offsetsV[i];
     }}
   {parallel_for(long i=0;i<GA.nu;i++) {
       Degrees[GA.nv+i] = GA.offsetsU[i+1] - GA.offsetsU[i];
-    }}
+    }}*/
   //bool* Flags = newA(bool,n);
   //{parallel_for(long i=0;i<n;i++) Flags[i] = 0;}
   auto D = array_imap<uintE>(n, [&] (size_t i) {
@@ -430,9 +430,9 @@ tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_bu
   size_t finished = 0;
   while (finished != n) {
     auto bkt = b.next_bucket();
-    auto active = bkt.identifiers;
+    auto active2 = bkt.identifiers;
     uintE k = bkt.id;
-    finished += active.size();
+    finished += active2.size();
     auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
       uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
       uintE deg = D_act.s[v];
@@ -448,30 +448,32 @@ tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_bu
       return Maybe<tuple<uintE, uintE> >();
     };
 
-    vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active, apply_f);
+    vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active2, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());
-    moved.del(); active.del();
+    moved.del(); active2.del();
   }
+  b.del();
   
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
   };
+  //free(active);
   return getRanks(GA, samplesort_f);
 }
 
 tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
   using X = tuple<bool, uintE>;
   long n = GA.nv + GA.nu;
-  bool* active = newA(bool,n);
-  {parallel_for(long i=0;i<n;i++) active[i] = 1;}
-  vertexSubset Frontier(n, n, active);
-  uintE* Degrees = newA(uintE,n);
+  //bool* active = newA(bool,n);
+  //{parallel_for(long i=0;i<n;i++) active[i] = 1;}
+  //vertexSubset Frontier(n, n, active);
+  /*uintE* Degrees = newA(uintE,n);
   {parallel_for(long i=0;i<GA.nv;i++) {
       Degrees[i] = GA.offsetsV[i+1] - GA.offsetsV[i];
     }}
   {parallel_for(long i=0;i<GA.nu;i++) {
       Degrees[GA.nv+i] = GA.offsetsU[i+1] - GA.offsetsU[i];
-    }}
+    }}*/
 
   auto D = array_imap<uintE>(n, [&] (size_t i) {
     if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
@@ -487,9 +489,9 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
   while (finished != n) {
     //rounds++;
     auto bkt = b.next_bucket();
-    auto active = bkt.identifiers;
+    auto active2 = bkt.identifiers;
     uintE k = bkt.id;
-    finished += active.size();
+    finished += active2.size();
     /*if (active.size() <= 10) {
       small_rounds++;
       for (intT i=0; i < active.size(); ++i) {
@@ -532,11 +534,13 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
 
     //vertexSubset FrontierH = vertexProp(GA,active,Remove_BPedge(Flags));
     //cout << "k="<<k<< " num active = " << active.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
-    vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active, apply_f);
+    vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active2, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());
-    moved.del(); active.del();
+    moved.del(); active2.del();
     //}
   }
+  b.del();
+  //free(active);
 
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
@@ -737,6 +741,8 @@ bipartiteCSR readBipartite(char* fname) {
       if(edgesU[i] < 0 || edgesU[i] >= nv) { cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0); }
     }}
 
+  S.del();
+  free(W.Strings);
   //W.del(); // to deal with performance bug in malloc
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
 }

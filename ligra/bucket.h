@@ -84,6 +84,11 @@ struct buckets {
       update_buckets(get_id_and_bkt, n);
     }
 
+    void del() {
+      for (size_t i=0; i<total_buckets; i++) { bkts[i].del(); }
+      free(bkts);
+    }
+
     // Returns the next non-empty bucket from the bucket structure. The return
     // value's bkt_id is null_bkt when no further buckets remain.
     inline bucket next_bucket() {

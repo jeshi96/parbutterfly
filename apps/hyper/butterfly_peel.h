@@ -567,6 +567,7 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
     active.del();
   }
   ps.del();
+  b.del();
   if (type == 3) free(update_dense);
   //cout << "totalRounds = " << totalRounds << endl;
   //cout << "nonZeroRounds = " << nonZeroRounds << endl;

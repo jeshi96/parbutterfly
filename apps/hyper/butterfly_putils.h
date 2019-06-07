@@ -149,7 +149,7 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
   void del() {
   	update_seq_int.del();
     if (type == 0) {
-      parallel_for(intT i=0; i < num_wedges_hash; ++i) { free(wedges_hash_list[i]); }
+      parallel_for(intT i=0; i < num_wedges_hash; ++i) { wedges_hash_list[i]->del(); free(wedges_hash_list[i]); }
       free(wedges_hash_list);
       update_hash.del();
       wedges_seq_intp.del(); 
