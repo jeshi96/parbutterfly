@@ -470,7 +470,7 @@ pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* b
 	  uintE u2_idx = edgesV[v_offset+k];
 	  if (u2_idx != u_idx) {
 	  //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
-	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1*wedges[shift+u2_idx]);
+	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
 	    // alternatively, at end before clear do this
 	    wedges[shift+u2_idx]++;
 	    if (wedges[shift+u2_idx] == 1) {used[shift+used_idx++] = shift+u2_idx; if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);}//update_dense[u2_idx]=true;}

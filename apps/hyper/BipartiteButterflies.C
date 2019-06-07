@@ -6,7 +6,7 @@
 
 #define HYPER 1
 //#define LONG 1
-#define EDGELONG 1
+//#define EDGELONG 1
 #define MCX16 1
 
 #include "hypergraphIO.h"

@@ -185,7 +185,7 @@ pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, Peel
 
     granular_for(j,0,used_idx,used_idx > 10000, { 
       intT k = used[shift+j];
-      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)],(long) -1*wedges[shift+k]);
+      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)],(long) -1* ((long)wedges[shift+k]));
       wedges[shift+k] = 0;
     });
     }
