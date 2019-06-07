@@ -539,7 +539,7 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies) {
       intT u_offset  = offsetsU[i];
       intT u_deg = offsetsU[i+1]-u_offset;
       for (intT j=0; j < u_deg; ++j ) {
-	intT v = edgesU[u_offset+j];
+	uintE v = edgesU[u_offset+j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1]-offsetsV[v];
 	for (intT k=0; k < v_deg; ++k) { 
@@ -590,7 +590,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies) {
       intT u_offset  = GA.offsets[i];
       intT u_deg = GA.offsets[i+1]-u_offset;
       for (intT j=0; j < u_deg; ++j ) {
-	intT v = GA.edges[u_offset+j] >> 1;
+	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
 	if (v <= i) break;
@@ -605,7 +605,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies) {
       }
 
       for (long j=0; j < u_deg; ++j ) {
-	intT v = GA.edges[u_offset+j] >> 1;
+	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
 	if (v <= i) break;

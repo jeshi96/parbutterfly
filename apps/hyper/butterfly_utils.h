@@ -262,7 +262,7 @@ struct rankWedgeF {
     intT v_deg = offsets[i+1]-v_offset;
     intT in_deg = 0; intT out_deg = 0;
     for(intT j=0; j < v_deg; ++j) {
-      intT u = edges[v_offset+j];
+      uintE u = edges[v_offset+j];
       if (orank[u] < rank[i]) in_deg++;
       else out_deg++;
     }
@@ -583,7 +583,7 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
     auto update = update_hash.entries();
     X* update_b = newA(X, update.n);
     parallel_for(long i=0; i < update.n; ++i) { 
-      intT v = update.A[i].first;
+      uintE v = update.A[i].first;
       uintE deg = D.s[v];
       if (deg > k) {
         uintE new_deg = max(deg - update.A[i].second, k);
@@ -764,7 +764,7 @@ tuple<bool,long,long*> cmpWedgeCounts(bipartiteCSR & GA) {
       intT u_offset = GA.offsetsU[i];
       intT u_deg = GA.offsetsU[i+1]-GA.offsetsU[i];
       for(intT j=0; j<u_deg;j++) {
-  intT v = GA.edgesU[u_offset+j];
+  uintE v = GA.edgesU[u_offset+j];
   intT v_offset = GA.offsetsV[v];
   intT v_deg = GA.offsetsV[v+1]-GA.offsetsV[v];
   // for(intT k=0; k<v_deg;k++) {
@@ -785,7 +785,7 @@ tuple<bool,long,long*> cmpWedgeCounts(bipartiteCSR & GA) {
       intT v_offset = GA.offsetsV[i];
       intT v_deg = GA.offsetsV[i+1]-GA.offsetsV[i];
       for(intT j=0; j<v_deg;j++) {
-  intT u = GA.edgesV[v_offset+j];
+  uintE u = GA.edgesV[v_offset+j];
   intT u_offset = GA.offsetsU[u];
   intT u_deg = GA.offsetsU[u+1]-GA.offsetsU[u];
   // for(intT k=0; k<u_deg; k++) {
@@ -907,7 +907,7 @@ long* countWedgesScan(graphCSR& G) {
 
     parallel_for(intT j=0; j < deg; ++j) {
       (nbhd_idxs[i])[j] = 0;
-      intT v = G.edges[offset+j] >> 1;
+      uintE v = G.edges[offset+j] >> 1;
       intT v_offset = G.offsets[v];
       intT v_deg = G.offsets[v+1] - v_offset;
       if (v > i) {
@@ -1182,7 +1182,7 @@ void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons
       intT v_deg = offsetsV[v+1] - v_offset;
       // Find neighbors (not equal to u) of v
       for (intT k = 0; k < v_deg; ++k) {
-        intT u2 = edgesV[v_offset+k];
+        uintE u2 = edgesV[v_offset+k];
         if (u2 < i) {
           wedges_seq.A[wedge_idx+idx] = cons(i, u2, v, j, k);
           ++idx;
@@ -1349,7 +1349,7 @@ void _getWedges(_seq<wedge>& wedges_seq, graphCSR& GA, wedgeCons cons, long num_
       if (v <= i) break;
       // Find neighbors (not equal to u) of v
       for (intT k = 0; k < v_deg; ++k) {
-        intT u2 = GA.edges[v_offset+k] >> 1;
+        uintE u2 = GA.edges[v_offset+k] >> 1;
         if (u2 > i) {
           wedges_seq.A[wedge_idx+idx] = cons(i, GA.edges[v_offset+k], v, j, k);
           ++idx;
@@ -1371,7 +1371,7 @@ void _getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long num_wedges, in
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
     parallel_for (intT j=0; j < u_deg; ++j ) {
-      intT v = GA.edges[u_offset+j] >> 1;
+      uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
       if (v > i) {

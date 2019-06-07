@@ -82,7 +82,7 @@ long countSeagulls_seq(bipartiteCSR& GA, bool use_v, vertexSubset active) {
     uintT u_offset = offsetsU[u];
     long u_deg = offsetsU[u+1] - u_offset;
     for (uintT j=0; j < u_deg; ++j) {
-      uintT v = edgesU[u_offset + j];
+      uintE v = edgesU[u_offset + j];
       num_sg += (offsetsV[v+1] - offsetsV[v] - 1);
     }
   }
@@ -463,7 +463,7 @@ pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* b
       intT u_offset  = offsetsU[u_idx];
       intT u_deg = offsetsU[u_idx+1]-u_offset;
       for (intT j=0; j < u_deg; ++j ) {
-	intT v = edgesU[u_offset+j];
+	uintE v = edgesU[u_offset+j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1]-offsetsV[v];
 	for (intT k=0; k < v_deg; ++k) { 
