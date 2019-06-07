@@ -129,38 +129,38 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* wed
   
   //JS: try wedge-aware parallelism using wedge counts per vertex
   for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
-      std::function<void(intT,intT)> recursive_lambda =
-	[&]
-	(intT start, intT end){
-	if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
-	  for (intT i = start; i < end; i++){
-	    intT used_idx = 0;
-	    long shift = nu*(i-step*stepSize);
-	    intT u_offset  = offsetsU[i];
-	    intT u_deg = offsetsU[i+1]-u_offset;
-	    for (intT j=0; j < u_deg; ++j ) {
-	      uintE v = edgesU[u_offset+j];
-	      intT v_offset = offsetsV[v];
-	      intT v_deg = offsetsV[v+1]-offsetsV[v];
-	      for (intT k=0; k < v_deg; ++k) {
-		uintE u2_idx = edgesV[v_offset+k];
-		if (u2_idx < i) {
-		  //butterflies[i] += wedges[u2_idx];
-		  //butterflies[u2_idx] += wedges[u2_idx];
-		  results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
-		  wedges[shift+u2_idx]++;
-		  if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
-		}
-		else break;
+    std::function<void(intT,intT)> recursive_lambda =
+      [&]
+      (intT start, intT end){
+      if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
+	for (intT i = start; i < end; i++){
+	  intT used_idx = 0;
+	  long shift = nu*(i-step*stepSize);
+	  intT u_offset  = offsetsU[i];
+	  intT u_deg = offsetsU[i+1]-u_offset;
+	  for (intT j=0; j < u_deg; ++j ) {
+	    uintE v = edgesU[u_offset+j];
+	    intT v_offset = offsetsV[v];
+	    intT v_deg = offsetsV[v+1]-offsetsV[v];
+	    for (intT k=0; k < v_deg; ++k) {
+	      uintE u2_idx = edgesV[v_offset+k];
+	      if (u2_idx < i) {
+		//butterflies[i] += wedges[u2_idx];
+		//butterflies[u2_idx] += wedges[u2_idx];
+		results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
+		wedges[shift+u2_idx]++;
+		if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
 	      }
+	      else break;
 	    }
-	    for(intT j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
 	  }
-	} else {
-	  cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
-	  recursive_lambda(start + ((end-start)>>1), end);
+	  for(intT j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
 	}
-      }; 
+      } else {
+	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	recursive_lambda(start + ((end-start)>>1), end);
+      }
+    }; 
     recursive_lambda(step*stepSize,min((step+1)*stepSize,nu));
   }
   t2.reportTotal("main loop");
@@ -201,10 +201,10 @@ void CountWorkEfficientSerial(graphCSR& GA) {
       for (intT k=0; k < v_deg; ++k) { 
 	uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	if (u2_idx > i) { //TODO combine into one graph
-    if (GA.edges[v_offset+k] & 0b1) {
-	  butterflies[i] += wedges[u2_idx];
-	  butterflies[u2_idx] += wedges[u2_idx];
-    }
+	  if (GA.edges[v_offset+k] & 0b1) {
+	    butterflies[i] += wedges[u2_idx];
+	    butterflies[u2_idx] += wedges[u2_idx];
+	  }
 	  //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
 	  wedges[u2_idx]++;
 	  if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
@@ -265,103 +265,103 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   
   //TODO seq code integrate w/count
-if (te == 0) {
+  if (te == 0) {
   
-  if (ty == 8) {
-  	long* workPrefixSum = computeWorkPrefixSum(GA,use_v);
-  	CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
-  	free(workPrefixSum);
+    if (ty == 8) {
+      long* workPrefixSum = computeWorkPrefixSum(GA,use_v);
+      CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
+      free(workPrefixSum);
+    }
+    else if (ty == 9) CountOrigCompact(GA,use_v);
+    else if (ty == 12) {
+      timer t_rank;
+      t_rank.start();
+      auto rank_tup = getDegRanks(GA);
+      auto g = rankGraph(GA, use_v, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+      free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
+      t_rank.reportTotal("ranking");
+      CountWorkEfficientSerial(g);
+    }
+
+    if (ty == 8 || ty == 9 || ty == 12) return;
+    const intT eltsPerCacheLine = 64/sizeof(long);
+
+    timer t;
+    t.start();
+    long* butterflies = Count(GA, use_v, num_wedges, max_wedges, ty, tw);
+    t.stop();
+
+    if (ty==0) t.reportTotal("Sort:");
+    else if (ty==1) t.reportTotal("SortCE:");
+    else if (ty==2) t.reportTotal("Hash:");
+    else if (ty==3) t.reportTotal("HashCE:");
+    else if (ty==4) t.reportTotal("Hist:");
+    else if (ty==6) t.reportTotal("HistCE:");
+
+  
+    long num_idxs = use_v ? GA.nu : GA.nv;
+    long b = 0;
+    for (long i=0; i < num_idxs; ++i) {b += butterflies[eltsPerCacheLine*i];}
+    b = b / 2;
+    cout << "number of butterflies: " << b << "\n";
+  
+    //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 0, 0);
+    //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
+    if(!nopeel) {
+      timer t2;
+      t2.start();
+      auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
+      t2.stop();
+      if (tp ==0) t2.reportTotal("Hash Peel:");
+      else if (tp==1) t2.reportTotal("Sort Peel:");
+      else if (tp==2) t2.reportTotal("Hist Peel:");
+      else t2.reportTotal("Par Peel: ");
+
+      long mc = 0;
+      for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
+      cout << "### Max core: " << mc << endl;
+    }
+    free(butterflies);
   }
-  else if (ty == 9) CountOrigCompact(GA,use_v);
-  else if (ty == 12) {
-    timer t_rank;
-    t_rank.start();
-    auto rank_tup = getDegRanks(GA);
-    auto g = rankGraph(GA, use_v, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
-    free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
-    t_rank.reportTotal("ranking");
-    CountWorkEfficientSerial(g);
-  }
-
-  if (ty == 8 || ty == 9 || ty == 12) return;
-  const intT eltsPerCacheLine = 64/sizeof(long);
-
-  timer t;
-  t.start();
-  long* butterflies = Count(GA, use_v, num_wedges, max_wedges, ty, tw);
-  t.stop();
-
-  if (ty==0) t.reportTotal("Sort:");
-  else if (ty==1) t.reportTotal("SortCE:");
-  else if (ty==2) t.reportTotal("Hash:");
-  else if (ty==3) t.reportTotal("HashCE:");
-  else if (ty==4) t.reportTotal("Hist:");
-  else if (ty==6) t.reportTotal("HistCE:");
-
+  else {
   
-  long num_idxs = use_v ? GA.nu : GA.nv;
-  long b = 0;
-  for (long i=0; i < num_idxs; ++i) {b += butterflies[eltsPerCacheLine*i];}
-  b = b / 2;
-  cout << "number of butterflies: " << b << "\n";
-  
-  //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 0, 0);
-  //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
-  if(!nopeel) {
-    timer t2;
-    t2.start();
-    auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
-    t2.stop();
-    if (tp ==0) t2.reportTotal("Hash Peel:");
-    else if (tp==1) t2.reportTotal("Sort Peel:");
-    else if (tp==2) t2.reportTotal("Hist Peel:");
-    else t2.reportTotal("Par Peel: ");
-
-    long mc = 0;
-    for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-    cout << "### Max core: " << mc << endl;
-  }
-  free(butterflies);
-}
-else {
-  
- timer t3;
+    timer t3;
  
- auto eti = edgeToIdxs(GA, use_v);
- auto ite = idxsToEdge(GA, use_v);
- t3.start();
- long* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty, tw);
- t3.stop();
- if(ty==2) t3.reportTotal("E Hash:");
- else if (ty == 3) t3.reportTotal("E HashCE:");
- else if (ty == 0) t3.reportTotal("E Sort:");
- else if (ty==1) t3.reportTotal("E SortCE:");
- else if (ty==4) t3.reportTotal("E Hist:");
+    auto eti = edgeToIdxs(GA, use_v);
+    auto ite = idxsToEdge(GA, use_v);
+    t3.start();
+    long* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty, tw);
+    t3.stop();
+    if(ty==2) t3.reportTotal("E Hash:");
+    else if (ty == 3) t3.reportTotal("E HashCE:");
+    else if (ty == 0) t3.reportTotal("E Sort:");
+    else if (ty==1) t3.reportTotal("E SortCE:");
+    else if (ty==4) t3.reportTotal("E Hist:");
 
- const intT eltsPerCacheLine = 64/sizeof(long);
- long b=0;
+    const intT eltsPerCacheLine = 64/sizeof(long);
+    long b=0;
  
- for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[eltsPerCacheLine*i];}
- cout << "number of edge butterflies: " << b/4 << "\n";
+    for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[eltsPerCacheLine*i];}
+    cout << "number of edge butterflies: " << b/4 << "\n";
 
-//uintE* butterflies2 = CountE(eti, GA, use_v, num_wedges, max_wedges, 0, 0);
-//for (long i=0; i < GA.numEdges; ++i) { assertf(ebutterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, ebutterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
+    //uintE* butterflies2 = CountE(eti, GA, use_v, num_wedges, max_wedges, 0, 0);
+    //for (long i=0; i < GA.numEdges; ++i) { assertf(ebutterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, ebutterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
 
 
- if(!nopeel) {
-   timer t2;
-   t2.start();
-   auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
-   t2.stop();
-   if (tp ==0) t2.reportTotal("Hash Peel:");
-   else if (tp==1) t2.reportTotal("Sort Peel:");
-   else if (tp == 2) t2.reportTotal("Hist Peel:");
-   else t2.reportTotal("Par Peel:");
- }
- free(eti);
- free(ite);
- free(ebutterflies);
- }
+    if(!nopeel) {
+      timer t2;
+      t2.start();
+      auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
+      t2.stop();
+      if (tp ==0) t2.reportTotal("Hash Peel:");
+      else if (tp==1) t2.reportTotal("Sort Peel:");
+      else if (tp == 2) t2.reportTotal("Hist Peel:");
+      else t2.reportTotal("Par Peel:");
+    }
+    free(eti);
+    free(ite);
+    free(ebutterflies);
+  }
 }
 
 int parallel_main(int argc, char* argv[]) {
@@ -373,9 +373,9 @@ int parallel_main(int argc, char* argv[]) {
 
   Compute(G,P);
   for(int r=0;r<rounds;r++) {
-  //   startTime();
-     Compute(G,P);
-  //   nextTime("Running time");
+    //   startTime();
+    Compute(G,P);
+    //   nextTime("Running time");
   }
   G.del();
 }

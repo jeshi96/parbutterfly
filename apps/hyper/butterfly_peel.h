@@ -31,11 +31,11 @@ struct seagullSumHelper {
   uintT* offsetsU;
   uintT* offsetsV;
   uintE* edgesU;
-  seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) : u(_u), offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU) {}
+seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) : u(_u), offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU) {}
   inline E operator() (const E& i) const {
     intT u_offset = offsetsU[u];
     uintE v = edgesU[u_offset + i];
-	  return (E) (offsetsV[v+1] - offsetsV[v] - 1);
+    return (E) (offsetsV[v+1] - offsetsV[v] - 1);
   }
 };
 
@@ -45,19 +45,19 @@ struct seagullSum {
   uintT* offsetsV;
   uintE* edgesU;
   uintE* active;
-  seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) : offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
+seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) : offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
   inline E operator() (const E& i) const {
     /*uintE u = active[i];
-    intT u_offset = offsetsU[u];
-    intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
-    E ret=0;
-    for (long k=0; k < u_deg; ++k) {
+      intT u_offset = offsetsU[u];
+      intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
+      E ret=0;
+      for (long k=0; k < u_deg; ++k) {
       uintE v = edgesU[u_offset + k];
       ret += (offsetsV[v+1] - offsetsV[v] - 1);
-    }
-  return ret;*/
+      }
+      return ret;*/
     E u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
-	return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
+    return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
   }
 };
 
@@ -145,14 +145,14 @@ pair<tuple<uintE,long>*, long> getSeagullFreqs(const long nu, UVertexPair* seagu
 
 pair<tuple<uintE,long>*, long> getSeagullFreqs_seq(const long nu, UVertexPair* seagulls, long num_sgs) {
   return getFreqs_seq<long,uintE>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), true,
-    UVertexPairV2(), choose2(), reflCount<UVertexPair>());
+				  UVertexPairV2(), choose2(), reflCount<UVertexPair>());
 }
 
 long getUpdates_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, long* butterflies) {
   using X = tuple<uintE,long>;
 
   pair<X*, long> b_freq_pair = getFreqs_seq<long,uintE>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), false,
-    uintETupleGet0(), refl<long>(), uintECount());
+							uintETupleGet0(), refl<long>(), uintECount());
   long num_updates = b_freq_pair.second;
   //uintE* update = newA(uintE, num_updates);
   ps.resize_update(num_updates);
@@ -415,20 +415,20 @@ pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies
 
   using T = pair<uintE,long>;
   granular_for ( j, 0, wedges_seq_num, (wedges_seq_num > 1000), {
-    auto sg_freq_pair = ps.wedges_seq_intp.A[j];
-    long num = sg_freq_pair.second;
-    if (num > 1) {ps.update_hash.insert(T(((long) sg_freq_pair.first % nu), (num * (num - 1)/2)));}
-  });
+      auto sg_freq_pair = ps.wedges_seq_intp.A[j];
+      long num = sg_freq_pair.second;
+      if (num > 1) {ps.update_hash.insert(T(((long) sg_freq_pair.first % nu), (num * (num - 1)/2)));}
+    });
 
   // Compute updated butterfly counts
   auto num_updates = ps.update_hash.entries_no_init(ps.butterflies_seq_intp);
   ps.resize_update(num_updates);
 
   granular_for(i, 0, num_updates, (num_updates>1000), {
-    auto update_pair = ps.butterflies_seq_intp.A[i];
-    butterflies[eltsPerCacheLine*update_pair.first] -= update_pair.second;
-    ps.update_seq_int.A[i] = update_pair.first;
-  });
+      auto update_pair = ps.butterflies_seq_intp.A[i];
+      butterflies[eltsPerCacheLine*update_pair.first] -= update_pair.second;
+      ps.update_seq_int.A[i] = update_pair.first;
+    });
 
   return make_pair(next_idx, num_updates);
 }
@@ -469,7 +469,7 @@ pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* b
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = edgesV[v_offset+k];
 	  if (u2_idx != u_idx) {
-	  //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
+	    //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
 	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
 	    // alternatively, at end before clear do this
 	    wedges[shift+u2_idx]++;
@@ -479,38 +479,38 @@ pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* b
 	}
       }
       granular_for(j,0,used_idx,used_idx > 10000, { wedges[used[shift+j]] = 0; });
-//      for(intT j=0; j < used_idx; ++j) { 
-      	/*uintE num = wedges[used[shift+j]];
+      //      for(intT j=0; j < used_idx; ++j) { 
+      /*uintE num = wedges[used[shift+j]];
       	num = num * (num-1) / 2;
       	writeAdd(&butterflies[eltsPerCacheLine*(used[shift+j]-shift)], -1*num);*/
-//  	wedges[used[shift+j]] = 0; 
-//      }
+      //  	wedges[used[shift+j]] = 0; 
+      //      }
     }
   }
-    auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
-    auto f_in = make_in_imap<bool>(nu, f);
-    auto out = pbbs::pack_index<uintE>(f_in);
-    out.alloc = false;
-    return make_pair(out.s, out.size());
+  auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
+  auto f_in = make_in_imap<bool>(nu, f);
+  auto out = pbbs::pack_index<uintE>(f_in);
+  out.alloc = false;
+  return make_pair(out.s, out.size());
 }
 
 //***************************************************************************************************
 //***************************************************************************************************
 
 void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense,
-  bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<long>& D, buckets<array_imap<long>>& b, long k) {
+		  bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<long>& D, buckets<array_imap<long>>& b, long k) {
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
   if (type == 3) {
-  	auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v);
-  	updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
-  	free(ret.first);
-  	return;
+    auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v);
+    updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
+    free(ret.first);
+    return;
   }
   
   long num_wedges = countSeagulls(GA, use_v, active);
   pair<intT, long> ret;
-//TODO remove update dense from all of these
+  //TODO remove update dense from all of these
   if (max_wedges >= num_wedges) {
     if (type == 0) ret = PeelHash(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
     else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
@@ -527,7 +527,7 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* 
     if (type == 0) ret = PeelHash(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
     else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
     else if (type == 1) ret = PeelSort(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
-  	else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
     else ret = PeelHist(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
 
     curr_idx = ret.first;
