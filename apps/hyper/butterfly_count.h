@@ -208,7 +208,7 @@ intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
-  intT num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
+  size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
 
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto wedge_freq_pair = cs.wedges_seq_intp.A[i];
@@ -249,10 +249,10 @@ intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 
 intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
   intT curr_idx=0) {
-  using T = pair<uintE,uintE>;
+  using T = pair<uintE,long>;
   const intT eltsPerCacheLine = 64/sizeof(long);
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
-  intT num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
+  size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
 
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto wedge_freq_pair = cs.wedges_seq_intp.A[i];
@@ -305,7 +305,7 @@ intT CountHash(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, lo
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   
-  intT num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp); //TODO should be long num?
+  size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp); //TODO should be long num?
 
   // Retrieve count on each key; that number choose 2 is the number of butterflies  
   parallel_for (long i=0; i < num_wedges_seq; ++i) {
@@ -332,7 +332,7 @@ intT CountHashCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   //getWedgesFromHashTimer.start();
-  intT num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
+  size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
   //getWedgesFromHashTimer.stop();
   //numButterfliesHashInsertTimer.start();
   using T = pair<uintE, long>;
@@ -382,7 +382,7 @@ intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
     cs.wedges_hash.insert(make_pair(get<0>(wedge_freqs[i]), get<1>(wedge_freqs[i])));
   }
 
-  intT num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
+  size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
 
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto wedge_freq_pair = cs.wedges_seq_intp.A[i];

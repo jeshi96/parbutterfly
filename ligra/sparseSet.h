@@ -192,7 +192,7 @@ class sparseAdditiveSet {
 
 
 // note that FL has to be init to size m; also init out to size m prob
-  intT entries_no_init(_seq<kvPair>& out) {
+  size_t entries_no_init(_seq<kvPair>& out) {
     intT num = count();
     if (out.n < num) {
       free(out.A);

@@ -362,7 +362,7 @@ intT CountEHashCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
       }
     }
   }
-  intT num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.wedges_seq_intp);
+  size_t num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.wedges_seq_intp);
 
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto butterfly_pair = cs.wedges_seq_intp.A[i];
@@ -449,7 +449,7 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 //rehashWedgesTimer.stop();
 
 //retrieveCountsTimer.start();
-  intT num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.wedges_seq_intp);
+  size_t num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.wedges_seq_intp);
   const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
       auto butterflies_pair = cs.wedges_seq_intp.A[i];
