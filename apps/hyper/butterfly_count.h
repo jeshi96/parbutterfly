@@ -570,20 +570,22 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies) {
 }
 
 long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies) {
-  timer t1,t2;
+  timer t1,t2,t3;
   t1.start();
 
   long stepSize = getWorkers() * 7; //15 tunable parameter
   uintE* wedges = newA(uintE, GA.n*stepSize);
   uintE* used = newA(uintE, GA.n*stepSize);
+  t1.reportTotal("malloc");
+  t3.start();
   //for(long i=0;i<GA.n*stepSize;i++) wedges[i]=0;
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
 
-  t1.reportTotal("preprocess");
+  t3.reportTotal("preprocess");
   //return butterflies;
   t2.start();
-
+  
   for(long step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
     parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,GA.n); ++i){
       intT used_idx = 0;
@@ -619,7 +621,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies) {
 	  else break;
 	}
       }
-
+      
       for(long j=0; j < used_idx; ++j) {
         uintE u2_idx = used[shift+j] >> 1;
         if(used[shift+j] & 0b1) {
