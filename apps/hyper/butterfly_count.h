@@ -576,6 +576,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies) {
   long stepSize = getWorkers() * 7; //15 tunable parameter
   uintE* wedges = newA(uintE, GA.n*stepSize);
   uintE* used = newA(uintE, GA.n*stepSize);
+  
   t1.reportTotal("malloc");
   t3.start();
 
