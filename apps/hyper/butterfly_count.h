@@ -575,12 +575,12 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies) {
   long stepSize = getWorkers() * 7; //15 tunable parameter
   uintE* wedges = newA(uintE, GA.n*stepSize);
   uintE* used = newA(uintE, GA.n*stepSize);
-
+  //for(long i=0;i<GA.n*stepSize;i++) wedges[i]=0;
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   t1.reportTotal("preprocess");
-
+  //return butterflies;
   t2.start();
 
   for(long step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
@@ -655,31 +655,33 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
   long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
-  CountSpace cs = CountSpace(type, g.n, true);
+
 
   if (type == 11) CountWorkEfficientParallel(g, rank_butterflies);
   else {
-  if (max_wedges >= num_wedges) {
-    if (type == 0) CountSort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-    else if (type == 1) CountSortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-    else if (type == 2) CountHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-    else if (type == 3) CountHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-    else if (type == 4) CountHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-  }
-  else {
-  intT curr_idx = 0;
-  while(curr_idx < g.n) {
-    if (type ==0) curr_idx = CountSort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-    else if (type ==1) curr_idx = CountSortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-    else if (type ==2) curr_idx = CountHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-    else if (type == 3) curr_idx = CountHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-    else if (type == 4) curr_idx = CountHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-    cs.clear();
-  }
-  }
+    CountSpace cs = CountSpace(type, g.n, true);
+    if (max_wedges >= num_wedges) {
+      if (type == 0) CountSort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == 1) CountSortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == 2) CountHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == 3) CountHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == 4) CountHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+    }
+    else {
+      intT curr_idx = 0;
+      while(curr_idx < g.n) {
+	if (type ==0) curr_idx = CountSort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type ==1) curr_idx = CountSortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type ==2) curr_idx = CountHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type == 3) curr_idx = CountHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type == 4) curr_idx = CountHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+	cs.clear();
+      }
+    }
+    cs.del();
   }
   g.del();
-  cs.del();
+
   if (type != 11) free(wedge_idxs);
 
   //uintE* rank_butterflies2 = newA(uintE,eltsPerCacheLine*g.n);
