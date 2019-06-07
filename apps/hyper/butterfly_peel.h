@@ -216,14 +216,14 @@ long getUpdates(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, l
 /*
  *  Precisely getSeagullFreqs, but using histograms instead of sorting.
  */
-pair<tuple<uintE,long>*, long> getSeagullFreqsHist(const long nu, long* seagulls, long num_sgs) {
+pair<tuple<uintE,long>*, long> getSeagullFreqsHist(PeelSpace& ps, const long nu, long* seagulls, long num_sgs) {
   using X = tuple<long,uintE>;
   using T = tuple<uintE,long>;
   // TODO integrate sequence into histogram code (so we don't have to convert?)
   pbbsa::sequence<long> sg_seq = pbbsa::sequence<long>(seagulls,num_sgs);
 
   // Place seagulls into a histogram to retrieve frequency counts (considering both active + non-active endpoints)
-  tuple<size_t,X*> sg_hist_tuple = pbbsa::sparse_histogram<long,uintE>(sg_seq,nu*nu+nu);
+  tuple<size_t,X*> sg_hist_tuple = pbbsa::sparse_histogram<long,uintE>(sg_seq,nu*nu+nu,ps.tmp,ps.out);
   X* sg_freqs = get<1>(sg_hist_tuple);
 
   // Filter out any frequency count <= 1, since these won't contribute towards a butterfly
@@ -244,11 +244,11 @@ pair<tuple<uintE,long>*, long> getSeagullFreqsHist(const long nu, long* seagulls
   return make_pair(sg_freqs_ret, num_sg_freqs);
 }
 
-pair<tuple<uintE,long>*, long> getSeagullFreqsHist_seq(const long nu, long* seagulls, long num_sgs) {
+pair<tuple<uintE,long>*, long> getSeagullFreqsHist_seq(PeelSpace& ps, const long nu, long* seagulls, long num_sgs) {
   using X = tuple<long,uintE>;
   using T = tuple<uintE,long>;
   pbbsa::sequence<long> sg_seq = pbbsa::sequence<long>(seagulls,num_sgs);
-  tuple<size_t,X*> sg_hist_tuple = pbbsa::sparse_histogram<long,uintE>(sg_seq,nu*nu+nu);
+  tuple<size_t,X*> sg_hist_tuple = pbbsa::sparse_histogram<long,uintE>(sg_seq,nu*nu+nu,ps.tmp,ps.out);
   X* sg_freqs = get<1>(sg_hist_tuple);
   size_t num_sg_freqs = get<0>(sg_hist_tuple);
   T* sg_freqs_ret = newA(T, num_sg_freqs);
@@ -260,7 +260,7 @@ pair<tuple<uintE,long>*, long> getSeagullFreqsHist_seq(const long nu, long* seag
       idx++;
     }
   }
-  free(sg_freqs);
+  //free(sg_freqs);
   return make_pair(sg_freqs_ret, idx);
 }
 
@@ -378,7 +378,7 @@ pair<intT, long> PeelHist(PeelSpace& ps, vertexSubset& active, long* butterflies
   pair<long, intT> sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
   intT next_idx = sg_pair.second;
 
-  auto sg_freqs_pair = getSeagullFreqsHist(nu, ps.wedges_seq_long.A, sg_pair.first);
+  auto sg_freqs_pair = getSeagullFreqsHist(ps, nu, ps.wedges_seq_long.A, sg_pair.first);
   // Compute updated butterfly counts
   auto ret = getUpdatesHist(ps, sg_freqs_pair.first, sg_freqs_pair.second, nu, butterflies);
 
@@ -393,7 +393,7 @@ pair<intT, long> PeelHist_seq(PeelSpace& ps, vertexSubset& active, long* butterf
   pair<long, intT> sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
   intT next_idx = sg_pair.second;
 
-  auto sg_freqs_pair = getSeagullFreqsHist_seq(nu, ps.wedges_seq_long.A, sg_pair.first);
+  auto sg_freqs_pair = getSeagullFreqsHist_seq(ps, nu, ps.wedges_seq_long.A, sg_pair.first);
   // Compute updated butterfly counts
   auto ret = getUpdatesHist_seq(ps, sg_freqs_pair.first, sg_freqs_pair.second, nu, butterflies);
 

@@ -83,6 +83,7 @@ class sparseAdditiveSet {
     if(alloc) {
       free(TA); 
       free(FL);
+      alloc = false;
     }
   }
 

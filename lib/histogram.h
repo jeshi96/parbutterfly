@@ -338,6 +338,8 @@ namespace pbbsa {
         out[out_off] = tmp[offs[i]];
       }
     }
+    bucket_offsets.allocated = true;
+    bucket_offsets.~sequence();
     return make_tuple(c_offs[num_buckets], out);
   }
 
@@ -836,6 +838,8 @@ template <typename s_size_t, typename ct_t, typename E, typename V, typename F, 
         out[out_off] = tmp[offs[i]];
       }
     }
+    bucket_offsets.allocated = true;
+    bucket_offsets.~sequence();
     return make_tuple(c_offs[num_buckets], out);
   }
 

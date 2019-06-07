@@ -665,6 +665,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   }
   free(rank_butterflies);
   free(edge_converter);
+  g.del();
 
   t_convert.reportTotal("convert");
 
@@ -727,6 +728,7 @@ if (tw !=0) {
   }
   }
   }
+  cs.del();
 
   if (type != 5) free(wedge_idxs);
   return butterflies;

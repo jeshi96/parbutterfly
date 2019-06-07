@@ -83,6 +83,8 @@ struct PeelSpace {
   _seq<pair<long,long>> wedges_seq_intp;
   _seq<pair<long,long>> butterflies_seq_intp;
   intT num_wedges_hash;
+  pbbsa::sequence<tuple<long, uintE>> tmp;
+  pbbsa::sequence<tuple<long, uintE>> out;
 PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
   using E = pair<long, long>;
   using X = pair<uintE,long>;
@@ -98,13 +100,17 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
   }
   else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-  else if (type == 2) wedges_seq_long = _seq<long>(newA(long, nu), nu);
+  else if (type == 2) {
+    wedges_seq_long = _seq<long>(newA(long, nu), nu);
+    tmp = pbbsa::sequence<tuple<long, uintE>>();
+    out = pbbsa::sequence<tuple<long, uintE>>();
+  }
   else {
-    timer t1;
+    //timer t1;
     wedges_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
-    t1.start();
+    //t1.start();
     granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
-    t1.reportTotal("time for init wedges");
+    //t1.reportTotal("time for init wedges");
     used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
   }
 }
@@ -156,7 +162,9 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
       butterflies_seq_intp.del();
     }
     else if (type == 1) wedges_seq_uvp.del();
-    else if (type == 2) wedges_seq_long.del();
+    else if (type == 2) {
+      wedges_seq_long.del();
+    }
     else {wedges_seq_int.del(); used_seq_int.del();}
   }
 };
