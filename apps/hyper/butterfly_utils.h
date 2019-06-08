@@ -1197,7 +1197,9 @@ template<class wedgeCons, class T>
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   if (next_idx == INT_T_MAX) next_idx = nu;
+
   wedges.resize(num_wedges);
+
   //hashInsertTimer.start();
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
@@ -1359,8 +1361,8 @@ template<class wedge, class wedgeCons>
 template<class wedgeCons, class T>
   void _getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx=0, intT next_idx=INT_T_MAX) {
   if (next_idx == INT_T_MAX) next_idx = GA.n;
-  wedges.resize(num_wedges);
 
+  wedges.resize(num_wedges);
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
     intT u_offset = GA.offsets[i];

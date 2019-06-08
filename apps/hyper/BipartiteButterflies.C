@@ -40,7 +40,7 @@
 
 using namespace std;
 
-void CountOrigCompact(bipartiteCSR& GA, bool use_v) {
+void CountOrigCompactSerial(bipartiteCSR& GA, bool use_v) {
   timer t1,t2;
   t1.start();
   //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
@@ -254,7 +254,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   // # of max wedges
   long max_wedges = P.getOptionLongValue("-m",2577500000);
-
+  long max_array_size = P.getOptionLongValue("-a",23090996160);
   //TODO wedgesPrefixSum not needed except in CountOrigCompactParallel_WedgeAware
   timer t1;
   t1.start();
@@ -272,7 +272,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       CountOrigCompactParallel_WedgeAware(GA,use_v,workPrefixSum);
       free(workPrefixSum);
     }
-    else if (ty == 9) CountOrigCompact(GA,use_v);
+    else if (ty == 9) CountOrigCompactSerial(GA,use_v);
     else if (ty == 12) {
       timer t_rank;
       t_rank.start();
@@ -288,7 +288,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
     timer t;
     t.start();
-    long* butterflies = Count(GA, use_v, num_wedges, max_wedges, ty, tw);
+    long* butterflies = Count(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
     t.stop();
 
     if (ty==0) t.reportTotal("Sort:");
@@ -373,9 +373,7 @@ int parallel_main(int argc, char* argv[]) {
 
   Compute(G,P);
   for(int r=0;r<rounds;r++) {
-    //   startTime();
     Compute(G,P);
-    //   nextTime("Running time");
   }
   G.del();
 }
