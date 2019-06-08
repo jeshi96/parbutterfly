@@ -661,12 +661,12 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   parallel_for(intT i=0; i < g.n; ++i) {
     intT v_offset = g.offsets[i];
     intT v_deg = g.offsets[i+1] - v_offset;
-    parallel_for (intT j = 0; j < v_deg; ++j) {
-      uintE u = g.edges[v_offset + j] >> 1;
-      // can get rid of writeadd by using 2 butterfly arrays and then summing them
-      if (g.edges[v_offset + j] & 0b1) writeAdd(&butterflies[eltsPerCacheLine*(get<1>(edge_converter[v_offset+j]))], rank_butterflies[eltsPerCacheLine*(v_offset+j)]);
-      else writeAdd(&butterflies[eltsPerCacheLine*eti[(get<1>(edge_converter[v_offset+j]))]], rank_butterflies[eltsPerCacheLine*(v_offset+j)]);
-    }
+    granular_for(j, 0, v_deg, v_deg > 1000, {
+	uintE u = g.edges[v_offset + j] >> 1;
+	// can get rid of writeadd by using 2 butterfly arrays and then summing them
+	if (g.edges[v_offset + j] & 0b1) writeAdd(&butterflies[eltsPerCacheLine*(get<1>(edge_converter[v_offset+j]))], rank_butterflies[eltsPerCacheLine*(v_offset+j)]);
+	else writeAdd(&butterflies[eltsPerCacheLine*eti[(get<1>(edge_converter[v_offset+j]))]], rank_butterflies[eltsPerCacheLine*(v_offset+j)]);
+      });
   }
   free(rank_butterflies);
   free(edge_converter);
