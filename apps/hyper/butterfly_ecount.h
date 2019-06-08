@@ -475,10 +475,11 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, 
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  long stepSize = min<long>(getWorkers() * 60, max_array_size/nu); //15 tunable parameter
+  long stepSize = min<long>(getWorkers() * 15, max_array_size/nu); //15 tunable parameter
   //cout << stepSize << " " << getWorkers() * 60 << " " << max_array_size / nu << endl;
   uintE* wedges = newA(uintE, nu*stepSize);
   uintE* used = newA(uintE, nu*stepSize);
+  cout << nu*stepSize << endl;
   t1.reportTotal("malloc");
   t3.start();
   granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
@@ -502,7 +503,7 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, 
 	  uintE u2_idx = edgesV[v_offset+k];
 	  if (u2_idx < i) {
 	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = shift+u2_idx;
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = u2_idx;
 	  }
 	  else break;
 	}
@@ -521,7 +522,7 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, 
         }
       }
 
-      for(long j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
+      for(long j=0; j < used_idx; ++j) { wedges[used[shift+j]+shift] = 0; }
     }
   }
   t2.reportTotal("main loop");
