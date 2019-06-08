@@ -42,8 +42,8 @@ PCFLAGS = -std=c++14 -O3 $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
 endif
 
 COMMON= ligra.h graph.h compressedVertex.h vertex.h utils.h IO.h parallel.h gettime.h index_map.h maybe.h sequence.h edgeMap_utils.h binary_search.h quickSort.h blockRadixSort.h transpose.h parseCommandLine.h byte.h byteRLE.h nibble.h byte-pd.h byteRLE-pd.h nibble-pd.h vertexSubset.h decoder.C hypergraphIO.h hygra.h bucket.h counting_sort.h dyn_arr.h edgeMapReduce.h sequentialHT.h sparseSet.h sampleSort.h histogram.h
-LOCAL_COMMON =  butterfly_count.h butterfly_utils.h
-ALL= BipartiteButterflies HyperKCore-Efficient
+LOCAL_COMMON =  butterfly_count.h butterfly_utils.h butterfly_ecount.h butterfly_peel.h butterfly_epeel.h butterfly_putils.h
+ALL= BipartiteButterflies
 
 all: $(ALL)
 

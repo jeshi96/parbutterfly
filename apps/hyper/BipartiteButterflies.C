@@ -330,7 +330,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     auto eti = edgeToIdxs(GA, use_v);
     auto ite = idxsToEdge(GA, use_v);
     t3.start();
-    long* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, ty, tw);
+    long* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
     t3.stop();
     if(ty==2) t3.reportTotal("E Hash:");
     else if (ty == 3) t3.reportTotal("E HashCE:");

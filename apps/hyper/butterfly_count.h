@@ -208,6 +208,7 @@ intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
+
   size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
 
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
@@ -304,7 +305,7 @@ intT CountHash(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, lo
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
-  
+  cout << next_idx << endl;
   size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp); //TODO should be long num?
 
   // Retrieve count on each key; that number choose 2 is the number of butterflies  

@@ -93,8 +93,10 @@ class sparseAdditiveSet {
       loadFactor = lf;
       m = (long) 1 << log2RoundUp((long)(lf * size)+100);
       mask = m-1;
+      timer t;
       TA = newA(kvPair, m);
       FL = newA(bool, m);
+      t.reportTotal("malloc in resize");
       clear();
       alloc = true;
     }

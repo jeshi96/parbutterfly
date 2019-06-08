@@ -463,10 +463,10 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 //********************************************************************************************
 //********************************************************************************************
 
-void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, bool use_v) {
-  timer t1,t2;
+void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, bool use_v, long max_array_size) {
+  timer t1,t2,t3;
+  cout << "Original Parallel for Edges" << endl;
   t1.start();
-  cout << "Original Parallel" << endl;
   
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -475,29 +475,30 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, 
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  long stepSize = 1000; //tunable parameter
-
+  long stepSize = min<long>(getWorkers() * 60, max_array_size/nu); //15 tunable parameter
+  //cout << stepSize << " " << getWorkers() * 60 << " " << max_array_size / nu << endl;
   uintE* wedges = newA(uintE, nu*stepSize);
   uintE* used = newA(uintE, nu*stepSize);
-
+  t1.reportTotal("malloc");
+  t3.start();
   granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
   
-  t1.reportTotal("preprocess");
+  t3.reportTotal("initialize");
 
   t2.start();
 
-  for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
-    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,nu); ++i){
+  for(long step = 0; step < (nu+stepSize-1)/stepSize; step++) {
+    parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,nu); ++i){
       intT used_idx = 0;
-      intT shift = nu*(i-step*stepSize);
+      long shift = nu*(i-step*stepSize);
       intT u_offset  = offsetsU[i];
       intT u_deg = offsetsU[i+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) {
+      for (long j=0; j < u_deg; ++j ) {
 	uintE v = edgesU[u_offset+j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1]-offsetsV[v];
-	for (intT k=0; k < v_deg; ++k) { 
+	for (long k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = edgesV[v_offset+k];
 	  if (u2_idx < i) {
 	    wedges[shift+u2_idx]++;
@@ -506,7 +507,7 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, 
 	  else break;
 	}
       }
-      for(intT j=0; j < u_deg; ++j) {
+      for(long j=0; j < u_deg; ++j) {
         uintE v = edgesU[u_offset+j];
         intT v_offset = offsetsV[v];
         intT v_deg = offsetsV[v+1] - v_offset;
@@ -520,7 +521,7 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, 
         }
       }
 
-      for(intT j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
+      for(long j=0; j < used_idx; ++j) { wedges[used[shift+j]] = 0; }
     }
   }
   t2.reportTotal("main loop");
@@ -529,18 +530,20 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, 
   free(used);
 }
 
-void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies) {
-  timer t1,t2;
+void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_size) {
+  timer t1,t2,t3;
+  cout << "Original Work-efficient Parallel for Edges" << endl;
   t1.start();
 
-  long stepSize = getWorkers() * 7; //15 tunable parameter
+  long stepSize = min<long>(getWorkers() * 7.5, max_array_size/GA.n); //15 tunable parameter
   uintE* wedges = newA(uintE, GA.n*stepSize);
   uintE* used = newA(uintE, GA.n*stepSize);
-
+  t1.reportTotal("malloc");
+  t3.start();
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
 
-  t1.reportTotal("preprocess");
+  t3.reportTotal("initialize");
 
   t2.start();
 
@@ -594,7 +597,7 @@ void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies) {
   free(used);
 }
 
-long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long type,
+long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size, long type,
 		 uintE* ranks, uintE* rankV, uintE* rankU) {
   timer t_rank;
   t_rank.start();
@@ -604,18 +607,20 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   free(ranks); free(rankU); free(rankV); 
   t_rank.reportTotal("graph rank");
 
-  timer t_time;
+  timer t_time, t_time2;
   t_time.start();
 
   const intT eltsPerCacheLine = 64/sizeof(long);
   long numEdges = g.offsets[g.n]; //TODO check is this g.numEdges*2
   long* rank_butterflies = newA(long,eltsPerCacheLine*numEdges);
+  t_time.reportTotal("malloc");
+  t_time2.start();
   granular_for(i,0,numEdges,numEdges > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
   long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
   CountESpace cs = CountESpace(type, numEdges);
 
-  if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies);
+  if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
   else {
     if (max_wedges >= num_wedges) {
       if (type == 0) CountESort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
@@ -645,7 +650,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   //CountWorkEfficientParallel(g, rank_butterflies2);
   //for(long i=0; i < g.n; ++i) {assert(rank_butterflies2[eltsPerCacheLine*i] == rank_butterflies[eltsPerCacheLine*i]);}
 
-  t_time.reportTotal("counting");
+  t_time2.reportTotal("counting");
 
   timer t_convert;
   t_convert.start();
@@ -672,8 +677,11 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   return butterflies;
 }
 
-long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long type=0, long tw=0) {
+long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size, long type=0, long tw=0) {
   const long nu = use_v ? GA.nu : GA.nv;
+
+  timer t_time;
+  t_time.start();
 
   const intT eltsPerCacheLine = 64/sizeof(long);
   if (tw !=0) {
@@ -691,7 +699,7 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
     cout << "Side wedges: " << num_wedges << "\n";
     cout << "Co Core wedges: " << num_ccwedges << "\n";
 
-    if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2) return CountERank(eti, GA, use_v, num_ccwedges, max_wedges, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+    if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2) return CountERank(eti, GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
     free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
   }
 
@@ -704,7 +712,7 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   long* wedge_idxs = type == 5 ? nullptr : countWedgesScan(GA, use_v, true);
   CountESpace cs = CountESpace(type, nu);
 
-  if (type == 5) CountEOrigCompactParallel(eti, butterflies, GA, use_v);
+  if (type == 5) CountEOrigCompactParallel(eti, butterflies, GA, use_v, max_array_size);
   else {
     // TODO clean up utils, do overflow stuff (double check youtube needs it)
     // TODO check correctness against each other
@@ -731,5 +739,6 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   cs.del();
 
   if (type != 5) free(wedge_idxs);
+  t_time.reportTotal("counting");
   return butterflies;
 }
