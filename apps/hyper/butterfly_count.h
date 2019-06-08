@@ -227,22 +227,22 @@ intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for (intT j=0; j < u_deg; ++j ) {
-      uintE v = GA.edges[u_offset+j] >> 1;
-      intT v_offset = GA.offsets[v];
-      intT v_deg = GA.offsets[v+1] - v_offset;
-      if (v > i && (GA.edges[u_offset+j] & 0b1)) {
-	for (intT k=0; k < v_deg; ++k) { 
-	  uintE u2 = GA.edges[v_offset+k] >> 1;
-	  if (u2 > i) {
-	    long to_find = (((long) i) *GA.n + (long) u2) << 1;
-	    long num_butterflies = cs.wedges_hash.find(to_find).second;
-	    if (num_butterflies > 1) writeAdd(&butterflies[eltsPerCacheLine*v], num_butterflies - 1);
-	  }
-	  else break;
+    granular_for(j,0,u_deg,u_deg>1000,{
+	uintE v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1] - v_offset;
+	if (v > i && (GA.edges[u_offset+j] & 0b1)) {
+	  for (intT k=0; k < v_deg; ++k) { 
+	    uintE u2 = GA.edges[v_offset+k] >> 1;
+	    if (u2 > i) {
+	      long to_find = (((long) i) *GA.n + (long) u2) << 1;
+	      long num_butterflies = cs.wedges_hash.find(to_find).second;
+	      if (num_butterflies > 1) writeAdd(&butterflies[eltsPerCacheLine*v], num_butterflies - 1);
+	    }
+	    else break;
 	}
-      }
-    }
+	}
+      });
   }
 
   return next_idx;
@@ -269,11 +269,11 @@ intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for (intT j=0; j < u_deg; ++j ) {
-      uintE v = GA.edges[u_offset+j] >> 1;
-      intT v_offset = GA.offsets[v];
-      intT v_deg = GA.offsets[v+1] - v_offset;
-      if (v > i && (GA.edges[u_offset+j] & 0b1)) {
+    granular_for(j,0,u_deg,u_deg>1000,{
+	uintE v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1] - v_offset;
+	if (v > i && (GA.edges[u_offset+j] & 0b1)) {
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2 = GA.edges[v_offset+k] >> 1;
 	  if (u2 > i) {
@@ -283,10 +283,10 @@ intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 	  }
 	  else break;
 	}
-      }
-    }
+	}
+      });
   }
-
+      
   num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.butterflies_seq_intp);
 
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
@@ -401,22 +401,22 @@ intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for (intT j=0; j < u_deg; ++j ) {
-      uintE v = GA.edges[u_offset+j] >> 1;
-      intT v_offset = GA.offsets[v];
-      intT v_deg = GA.offsets[v+1] - v_offset;
-      if (v > i && (GA.edges[u_offset+j] & 0b1)) {
-	for (intT k=0; k < v_deg; ++k) { 
-	  uintE u2 = GA.edges[v_offset+k] >> 1;
-	  if (u2 > i) {
-	    long to_find = (((long) i) *GA.n + (long) u2) << 1;
-	    long num_butterflies = cs.wedges_hash.find(to_find).second;
-	    if (num_butterflies > 1) writeAdd(&butterflies[eltsPerCacheLine*v], num_butterflies - 1);
+    granular_for(j,0,u_deg,u_deg>1000,{
+	uintE v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1] - v_offset;
+	if (v > i && (GA.edges[u_offset+j] & 0b1)) {
+	  for (intT k=0; k < v_deg; ++k) { 
+	    uintE u2 = GA.edges[v_offset+k] >> 1;
+	    if (u2 > i) {
+	      long to_find = (((long) i) *GA.n + (long) u2) << 1;
+	      long num_butterflies = cs.wedges_hash.find(to_find).second;
+	      if (num_butterflies > 1) writeAdd(&butterflies[eltsPerCacheLine*v], num_butterflies - 1);
+	    }
+	    else break;
 	  }
-	  else break;
 	}
-      }
-    }
+      });
   }
 
   return next_idx;

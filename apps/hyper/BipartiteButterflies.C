@@ -328,7 +328,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     timer t3;
  
     auto eti = edgeToIdxs(GA, use_v);
-    auto ite = idxsToEdge(GA, use_v);
+
     t3.start();
     long* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
     t3.stop();
@@ -351,7 +351,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     if(!nopeel) {
       timer t2;
       t2.start();
+      auto ite = idxsToEdge(GA, use_v);
       auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
+      free(ite);	    
       t2.stop();
       if (tp ==0) t2.reportTotal("Hash Peel:");
       else if (tp==1) t2.reportTotal("Sort Peel:");
@@ -359,7 +361,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       else t2.reportTotal("Par Peel:");
     }
     free(eti);
-    free(ite);
+
     free(ebutterflies);
   }
 }
@@ -367,7 +369,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 int parallel_main(int argc, char* argv[]) {
   commandLine P(argc,argv," <inFile>");
   char* iFile = P.getArgument(0);
-  long rounds = P.getOptionLongValue("-r",0);
+  long rounds = P.getOptionLongValue("-r",3);
 
   bipartiteCSR G = readBipartite(iFile);
 
