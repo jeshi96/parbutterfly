@@ -255,14 +255,13 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   // # of max wedges
   long max_wedges = P.getOptionLongValue("-m",2577500000);
   long max_array_size = P.getOptionLongValue("-a",23090996160);
-  //TODO wedgesPrefixSum not needed except in CountOrigCompactParallel_WedgeAware
+
   timer t1;
   t1.start();
   tuple<bool,long> use_v_tuple = cmpWedgeCounts(GA);
   bool use_v = get<0>(use_v_tuple);
   long num_wedges = get<1>(use_v_tuple);
-  t1.reportTotal("compute wedge counts + work prefix sum");
-  
+  t1.reportTotal("preprocess (wedge counts)");
   
   //TODO seq code integrate w/count
   if (te == 0) {
@@ -297,13 +296,14 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==3) t.reportTotal("HashCE:");
     else if (ty==4) t.reportTotal("Hist:");
     else if (ty==6) t.reportTotal("HistCE:");
+    else t.reportTotal("Par");
 
   
-    long num_idxs = use_v ? GA.nu : GA.nv;
+    /*long num_idxs = use_v ? GA.nu : GA.nv;
     long b = 0;
     for (long i=0; i < num_idxs; ++i) {b += butterflies[eltsPerCacheLine*i];}
     b = b / 2;
-    cout << "number of butterflies: " << b << "\n";
+    cout << "number of butterflies: " << b << "\n";*/
   
     //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 0, 0);
     //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
@@ -315,11 +315,11 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       if (tp ==0) t2.reportTotal("Hash Peel:");
       else if (tp==1) t2.reportTotal("Sort Peel:");
       else if (tp==2) t2.reportTotal("Hist Peel:");
-      else t2.reportTotal("Par Peel: ");
+      else t2.reportTotal("Par Peel:");
 
-      long mc = 0;
+      /*long mc = 0;
       for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-      cout << "### Max core: " << mc << endl;
+      cout << "### Max core: " << mc << endl;*/
     }
     free(butterflies);
   }
@@ -337,16 +337,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty == 0) t3.reportTotal("E Sort:");
     else if (ty==1) t3.reportTotal("E SortCE:");
     else if (ty==4) t3.reportTotal("E Hist:");
+    else t3.reportTotal("E Par:");
 
-    const intT eltsPerCacheLine = 64/sizeof(long);
+    /*const intT eltsPerCacheLine = 64/sizeof(long);
     long b=0;
  
     for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[eltsPerCacheLine*i];}
-    cout << "number of edge butterflies: " << b/4 << "\n";
+    cout << "number of edge butterflies: " << b/4 << "\n";*/
 
     //uintE* butterflies2 = CountE(eti, GA, use_v, num_wedges, max_wedges, 0, 0);
     //for (long i=0; i < GA.numEdges; ++i) { assertf(ebutterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, ebutterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
-
 
     if(!nopeel) {
       timer t2;
@@ -355,10 +355,10 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
       free(ite);	    
       t2.stop();
-      if (tp ==0) t2.reportTotal("Hash Peel:");
-      else if (tp==1) t2.reportTotal("Sort Peel:");
-      else if (tp == 2) t2.reportTotal("Hist Peel:");
-      else t2.reportTotal("Par Peel:");
+      if (tp ==0) t2.reportTotal("Hash E Peel:");
+      else if (tp==1) t2.reportTotal("Sort E Peel:");
+      else if (tp == 2) t2.reportTotal("Hist E Peel:");
+      else t2.reportTotal("Par E Peel:");
     }
     free(eti);
 

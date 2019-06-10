@@ -551,15 +551,15 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
   PeelSpace ps = PeelSpace(type, nu, MAX_STEP_SIZE);
 
   size_t finished = 0;
-  long nonZeroRounds = 0;
-  long totalRounds = 0;
+  //long nonZeroRounds = 0;
+  //long totalRounds = 0;
   while (finished != nu) {
     auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
     long k = bkt.id;
     finished += active.size();
-    totalRounds++;
-    if(active.size() > 0) {nonZeroRounds++; }
+    //totalRounds++;
+    //if(active.size() > 0) {nonZeroRounds++; }
     bool is_seq = (active.size() < 1000);
 
     Peel_helper(ps, active, butterflies, update_dense, GA, use_v, max_wedges, type, D, b, k);
