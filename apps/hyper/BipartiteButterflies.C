@@ -256,6 +256,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long max_wedges = P.getOptionLongValue("-m",2577500000);
   long max_array_size = P.getOptionLongValue("-a",23090996160);
 
+  cout << "count " << ty << ", " << "peel " << tp << ", " << "edge " << te << ", " << "rank " << tw << ", " << "peel " << nopeel << "\n";
+
   timer t1;
   t1.start();
   tuple<bool,long> use_v_tuple = cmpWedgeCounts(GA);

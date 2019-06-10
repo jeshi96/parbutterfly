@@ -701,7 +701,7 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   //CountWorkEfficientParallel(g, rank_butterflies2);
   //for(long i=0; i < g.n; ++i) {assert(rank_butterflies2[eltsPerCacheLine*i] == rank_butterflies[eltsPerCacheLine*i]);}
 
-  t_time.reportTotal("counting");
+  if (type != 11) t_time.reportTotal("counting");
 
   timer t_convert;
   t_convert.start();
@@ -805,7 +805,7 @@ t_malloc.start();
   if (type != 7 && type != 11) free(wedge_idxs);
   cs.del();
   
-  t_time.reportTotal("counting");
+  if (type != 7 && type != 11) t_time.reportTotal("counting");
   return butterflies;
 
 }

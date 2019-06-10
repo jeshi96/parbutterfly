@@ -652,7 +652,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   //CountWorkEfficientParallel(g, rank_butterflies2);
   //for(long i=0; i < g.n; ++i) {assert(rank_butterflies2[eltsPerCacheLine*i] == rank_butterflies[eltsPerCacheLine*i]);}
 
-  t_time2.reportTotal("counting");
+  if (type != 11) t_time2.reportTotal("counting");
 
   timer t_convert;
   t_convert.start();
@@ -742,6 +742,6 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   cs.del();
 
   if (type != 5) free(wedge_idxs);
-  t_time.reportTotal("counting");
+  if (type != 5) t_time.reportTotal("counting");
   return butterflies;
 }
