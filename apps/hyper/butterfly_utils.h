@@ -941,9 +941,9 @@ long* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
     intT u_deg = offsetsU[i+1] - u_offset;
 
     nbhd_idxs[i] = newA(long, u_deg + 1);
-    parallel_for(intT j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;}
+    parallel_for(intT j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;} //JS: granular_for
 
-    parallel_for(intT j=0; j < u_deg; ++j) { //TODO can parallelize this too technically
+    parallel_for(intT j=0; j < u_deg; ++j) { //TODO can parallelize this too technically //JS: granular_for
       if (!half) {
         uintE v = edgesU[u_offset + j];
         (nbhd_idxs[i])[j] = offsetsV[v+1] - offsetsV[v] - 1;//V[U[i].getOutNeighbor(j)].getOutDegree() - 1;
@@ -1171,7 +1171,7 @@ template<class wedge, class wedgeCons>
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
     long idx = 0;
-    for(intT j=0; j < u_deg; ++j) {
+    for(intT j=0; j < u_deg; ++j) { //JS: test granular_for
       uintE v = edgesU[u_offset+j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
@@ -1205,16 +1205,16 @@ template<class wedgeCons, class T>
     // Set up for each active vertex
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
-    parallel_for (long j=0; j < u_deg; ++j ) {
-      uintE v = edgesU[u_offset+j];
-      intT v_offset = offsetsV[v];
-      intT v_deg = offsetsV[v+1] - v_offset;
-      // Find all seagulls with center v and endpoint u
-      for (long k=0; k < v_deg; ++k) { 
-        uintE u2 = edgesV[v_offset+k];
-        if (u2 < i) wedges.insert(make_pair(cons(i, u2, v, j, k),1));
-        else break;
-      }
+    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
+	uintE v = edgesU[u_offset+j];
+	intT v_offset = offsetsV[v];
+	intT v_deg = offsetsV[v+1] - v_offset;
+	// Find all seagulls with center v and endpoint u
+	for (long k=0; k < v_deg; ++k) { 
+	  uintE u2 = edgesV[v_offset+k];
+	  if (u2 < i) wedges.insert(make_pair(cons(i, u2, v, j, k),1));
+	  else break;
+	}
     }
   }
   //hashInsertTimer.stop();
@@ -1339,7 +1339,7 @@ template<class wedge, class wedgeCons>
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
     long idx = 0;
-    for(intT j=0; j < u_deg; ++j) {
+    for(intT j=0; j < u_deg; ++j) { //JS: test granular_fr
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
@@ -1367,19 +1367,19 @@ template<class wedgeCons, class T>
     // Set up for each active vertex
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for (intT j=0; j < u_deg; ++j ) {
-      uintE v = GA.edges[u_offset+j] >> 1;
-      intT v_offset = GA.offsets[v];
-      intT v_deg = GA.offsets[v+1] - v_offset;
-      if (v > i) {
-	// Find all seagulls with center v and endpoint u
-	for (intT k=0; k < v_deg; ++k) { 
-	  uintE u2 = GA.edges[v_offset+k] >> 1;
-	  if (u2 > i) wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
-	  else break;
-	}
-      }
-    }
+    granular_for(j,0,u_deg,u_deg>1000,{
+	uintE v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1] - v_offset;
+	if (v > i) {
+	  // Find all seagulls with center v and endpoint u
+	  for (intT k=0; k < v_deg; ++k) { 
+	    uintE u2 = GA.edges[v_offset+k] >> 1;
+	    if (u2 > i) wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
+	    else break;
+	  }
+	} 
+      });
   }
 }
 
@@ -1436,7 +1436,7 @@ uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
   parallel_for(intT i=0; i < nu; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
-    parallel_for (intT j = 0; j < u_deg; ++j) {
+    parallel_for (intT j = 0; j < u_deg; ++j) { //JS: test granular_for
       
       uintE v = edgesU[u_offset + j];
       intT v_offset = offsetsV[v];

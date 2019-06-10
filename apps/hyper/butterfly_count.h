@@ -134,15 +134,15 @@ intT CountSortCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
       num_butterflies = num_butterflies * (num_butterflies - 1)/2;
       cs.butterflies_seq_intt.A[freq_arr[i]] = make_tuple(wedges[wedge_idx].v1, num_butterflies);
       cs.butterflies_seq_intt.A[freq_arr[i]+1] = make_tuple(wedges[wedge_idx].v2 >> 1, num_butterflies);
-      parallel_for(long j=freq_arr[i]+2; j < freq_arr[i+1]; ++j) {cs.butterflies_seq_intt.A[j] = make_tuple(UINT_E_MAX, 0);}
+      parallel_for(long j=freq_arr[i]+2; j < freq_arr[i+1]; ++j) {cs.butterflies_seq_intt.A[j] = make_tuple(UINT_E_MAX, 0);} //JS: test granular_for
     } else if (!(wedges[wedge_idx].v2 & 0b1) && num_butterflies > 1){
-      parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) {
+      parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) { //JS: test granular_for
 	//writeAdd(&butterflies[eltsPerCacheLine*wedges[wedge_idx].u, num_butterflies - 1);
 	cs.butterflies_seq_intt.A[j] = make_tuple(wedges[j].u, num_butterflies - 1);
       }
     }
     else {
-      parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) {
+      parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) { //JS: test granular_for
         cs.butterflies_seq_intt.A[j] = make_tuple(UINT_E_MAX, 0);
       }
     }
@@ -189,7 +189,7 @@ intT CountSort(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
       writeAdd(&butterflies[eltsPerCacheLine*(wedges[wedge_idx].v2 >> 1)],num_butterflies);
     }
     else if (!(wedges[wedge_idx].v2 & 0b1) && (num_butterflies > 1)) {
-      parallel_for(long j=freq_pair.first[i]; j < freq_pair.first[i+1]; ++j) {
+      parallel_for(long j=freq_pair.first[i]; j < freq_pair.first[i+1]; ++j) { //JS: test granular_for
         writeAdd(&butterflies[eltsPerCacheLine*wedges[j].u], num_butterflies - 1);
       }
     }
@@ -240,7 +240,7 @@ intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 	      if (num_butterflies > 1) writeAdd(&butterflies[eltsPerCacheLine*v], num_butterflies - 1);
 	    }
 	    else break;
-	}
+	  }
 	}
       });
   }
@@ -254,7 +254,6 @@ intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   const intT eltsPerCacheLine = 64/sizeof(long);
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
   size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
-
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto wedge_freq_pair = cs.wedges_seq_intp.A[i];
     long num_butterflies = wedge_freq_pair.second;
@@ -269,22 +268,22 @@ intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    granular_for(j,0,u_deg,u_deg>1000,{
+    parallel_for(intT j=0;j<u_deg;j++){ //JS: test granular_for
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
 	if (v > i && (GA.edges[u_offset+j] & 0b1)) {
-	for (intT k=0; k < v_deg; ++k) { 
-	  uintE u2 = GA.edges[v_offset+k] >> 1;
-	  if (u2 > i) {
-	    long to_find = ((long)i*GA.n + u2) << 1;
-	    long num_butterflies = cs.wedges_hash.find(to_find).second;
-	    if (num_butterflies > 1) cs.butterflies_hash.insert(T(v, num_butterflies-1));
+	  for (intT k=0; k < v_deg; ++k) { 
+	    uintE u2 = GA.edges[v_offset+k] >> 1;
+	    if (u2 > i) {
+	      long to_find = ((long)i*GA.n + u2) << 1;
+	      long num_butterflies = cs.wedges_hash.find(to_find).second;
+	      if (num_butterflies > 1) cs.butterflies_hash.insert(T(v, num_butterflies-1));
+	    }
+	    else break;
 	  }
-	  else break;
 	}
-	}
-      });
+    }
   }
       
   num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.butterflies_seq_intp);
@@ -401,7 +400,7 @@ intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    granular_for(j,0,u_deg,u_deg>1000,{
+    parallel_for(intT j=0;j<u_deg;j++){ //JS: test granular_for
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
@@ -416,7 +415,7 @@ intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 	    else break;
 	  }
 	}
-      });
+      }
   }
 
   return next_idx;
@@ -541,7 +540,7 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, l
       long shift = nu*(i-step*stepSize);
       intT u_offset  = offsetsU[i];
       intT u_deg = offsetsU[i+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) {
+      for (intT j=0; j < u_deg; ++j ) { //JS: test granular_for
 	uintE v = edgesU[u_offset+j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1]-offsetsV[v];
@@ -596,11 +595,11 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
       long shift = GA.n*(i-step*stepSize);
       intT u_offset  = GA.offsets[i];
       intT u_deg = GA.offsets[i+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) {
+      for (intT j=0; j < u_deg; ++j ) { //JS: test granular_for
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
-	if (v <= i) break;
+	if (v <= i) break; 
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	  if (u2_idx > i) {
@@ -611,11 +610,11 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 	}
       }
 
-      for (long j=0; j < u_deg; ++j ) {
+      for (long j=0; j < u_deg; ++j ) { //JS: test granular_for
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
-	if (v <= i) break;
+	if (v <= i) break; 
 	if (!(GA.edges[u_offset+j] & 0b1)) continue;
 	for (long k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
@@ -626,7 +625,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 	}
       }
       
-      for(long j=0; j < used_idx; ++j) {
+      for(long j=0; j < used_idx; ++j) { //JS: test granular_for
         uintE u2_idx = used[shift+j] >> 1;
         if(used[shift+j] & 0b1) {
 	  writeAdd(&butterflies[i*eltsPerCacheLine],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
