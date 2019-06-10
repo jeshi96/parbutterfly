@@ -777,12 +777,12 @@ long* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long
     else {
       intT curr_idx = 0;
       while(curr_idx < nu) {
-	if (type == 0) CountSort(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
-	else if (type == 1) CountSortCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
-	else if (type == 2) CountHash(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
-	else if (type == 3) CountHashCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
-	else if (type == 4) CountHist(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
-	else if (type == 6) CountHistCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
+	if (type == 0) curr_idx = CountSort(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type == 1) curr_idx = CountSortCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type == 2) curr_idx = CountHash(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type == 3) curr_idx = CountHashCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type == 4) curr_idx = CountHist(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
+	else if (type == 6) curr_idx = CountHistCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, curr_idx);
 	cs.clear();
       }
     }

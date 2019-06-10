@@ -1235,7 +1235,7 @@ intT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, intT cur
       uintE v = edgesU[u_offset+j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
-      uintE num = 0;
+      long num = 0;
       for (intT k=0; k < v_deg; ++k) {
         if (edgesV[v_offset+k] < i) num ++;
         else break;
