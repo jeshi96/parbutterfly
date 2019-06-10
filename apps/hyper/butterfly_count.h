@@ -134,17 +134,12 @@ intT CountSortCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
       num_butterflies = num_butterflies * (num_butterflies - 1)/2;
       cs.butterflies_seq_intt.A[freq_arr[i]] = make_tuple(wedges[wedge_idx].v1, num_butterflies);
       cs.butterflies_seq_intt.A[freq_arr[i]+1] = make_tuple(wedges[wedge_idx].v2 >> 1, num_butterflies);
-      parallel_for(long j=freq_arr[i]+2; j < freq_arr[i+1]; ++j) {cs.butterflies_seq_intt.A[j] = make_tuple(UINT_E_MAX, 0);} //JS: test granular_for
+      granular_for(j,freq_arr[i]+2,freq_arr[i+1],freq_arr[i+1]-(freq_arr[i]+2) > 10000, { cs.butterflies_seq_intt.A[j] = make_tuple(UINT_E_MAX, 0); });
     } else if (!(wedges[wedge_idx].v2 & 0b1) && num_butterflies > 1){
-      parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) { //JS: test granular_for
-	//writeAdd(&butterflies[eltsPerCacheLine*wedges[wedge_idx].u, num_butterflies - 1);
-	cs.butterflies_seq_intt.A[j] = make_tuple(wedges[j].u, num_butterflies - 1);
-      }
+      granular_for(j,freq_arr[i],freq_arr[i+1],freq_arr[i+1]-freq_arr[i] > 10000, { cs.butterflies_seq_intt.A[j] = make_tuple(wedges[j].u, num_butterflies - 1); });
     }
     else {
-      parallel_for(long j=freq_arr[i]; j < freq_arr[i+1]; ++j) { //JS: test granular_for
-        cs.butterflies_seq_intt.A[j] = make_tuple(UINT_E_MAX, 0);
-      }
+      granular_for(j,freq_arr[i],freq_arr[i+1],freq_arr[i+1]-freq_arr[i] > 10000, { cs.butterflies_seq_intt.A[j] = make_tuple(UINT_E_MAX, 0); });
     }
   }
 
@@ -189,9 +184,9 @@ intT CountSort(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
       writeAdd(&butterflies[eltsPerCacheLine*(wedges[wedge_idx].v2 >> 1)],num_butterflies);
     }
     else if (!(wedges[wedge_idx].v2 & 0b1) && (num_butterflies > 1)) {
-      parallel_for(long j=freq_pair.first[i]; j < freq_pair.first[i+1]; ++j) { //JS: test granular_for
+      granular_for(j,freq_pair.first[i],freq_pair.first[i+1],freq_pair.first[i+1]-freq_pair.first[i] > 10000, {
         writeAdd(&butterflies[eltsPerCacheLine*wedges[j].u], num_butterflies - 1);
-      }
+      });
     }
   }
 
@@ -268,7 +263,7 @@ intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for(intT j=0;j<u_deg;j++){ //JS: test granular_for
+    granular_for(j,0,u_deg,u_deg > 10000, { 
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
@@ -283,7 +278,7 @@ intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 	    else break;
 	  }
 	}
-    }
+    });
   }
       
   num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.butterflies_seq_intp);
@@ -400,7 +395,8 @@ intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for(intT j=0;j<u_deg;j++){ //JS: test granular_for
+    parallel_for(intT j=0;j<u_deg;j++){
+    //granular_for(j,0,u_deg,u_deg > 10000, { 
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
@@ -415,7 +411,7 @@ intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 	    else break;
 	  }
 	}
-      }
+      }//);
   }
 
   return next_idx;
@@ -574,8 +570,8 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
   timer t1,t2,t3;
   //cout << "Original Work-efficient Parallel" << endl;
   t1.start();
-  //cout << getWorkers()*15 << " " << GA.n << " " << max_array_size << " " << max_array_size/GA.n << endl;
-  long stepSize = min<long>(getWorkers() * 15, max_array_size/GA.n); //15 tunable parameter
+  //cout << getWorkers()*20 << " " << GA.n << " " << max_array_size << " " << max_array_size/GA.n << endl;
+  long stepSize = min<long>(getWorkers() * 60, max_array_size/GA.n); //15 tunable parameter
   uintE* wedges = newA(uintE, GA.n*stepSize);
   uintE* used = newA(uintE, GA.n*stepSize);
   
