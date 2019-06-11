@@ -341,11 +341,11 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==4) t3.reportTotal("E Hist:");
     else t3.reportTotal("E Par:");
 
-    /*const intT eltsPerCacheLine = 64/sizeof(long);
+    const intT eltsPerCacheLine = 64/sizeof(long);
     long b=0;
  
     for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[eltsPerCacheLine*i];}
-    cout << "number of edge butterflies: " << b/4 << "\n";*/
+    cout << "number of edge butterflies: " << b/4 << "\n";
 
     //uintE* butterflies2 = CountE(eti, GA, use_v, num_wedges, max_wedges, 0, 0);
     //for (long i=0; i < GA.numEdges; ++i) { assertf(ebutterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, ebutterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }

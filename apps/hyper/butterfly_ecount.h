@@ -200,9 +200,11 @@ intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
     long num = freq_arr[i+1] - freq_arr[i] - 1;
+    if (num > 0) {
     parallel_for(intT j=freq_arr[i];j<freq_arr[i+1];j++){ //JS: test granular_for
 	writeAdd(&butterflies[eltsPerCacheLine*eti[offsetsU[wedges[j].v1] + wedges[j].j]], num);
 	writeAdd(&butterflies[eltsPerCacheLine*(offsetsV[wedges[j].u] + wedges[j].k)], num);
+    }
     }
   }
   //rehashWedgesTimer.stop();
@@ -419,44 +421,46 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
   //getWedgesTimer.start();
   UVertexPairIntCons cons = UVertexPairIntCons(nu);
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, cons, max_wedges, curr_idx, num_wedges, wedge_idxs);
   //getWedgesTimer.stop();
-
   //rehashWedgesTimer.start();
-  cs.butterflies_hash.resize(2*cs.wedges_hash.count());
+  //TODO this is weird
+  //cs.butterflies_hash.resize(2*GA.numEdges);
+  auto butterflies_hash = sparseAdditiveSet<long, long>(GA.numEdges, 1, LONG_MAX, LONG_MAX);
   parallel_for (intT i = curr_idx; i < next_idx; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
-    parallel_for(intT j=0;j<u_deg;j++){ //JS: test granular_for
+    //granular_for (j, 0, u_deg, (u_deg > 1000), {
+    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
 	uintE v = edgesU[u_offset + j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1] - v_offset;
 	// Find all seagulls with center v and endpoint u
-	for (long k=0; k < v_deg; ++k) {
+	for (intT k=0; k < v_deg; ++k) {
 	  uintE u2 = edgesV[v_offset + k];
 	  if (u2 < i) {
-	    long num_butterflies = cs.wedges_hash.find(i*nu + u2).second - 1;
-	    cs.butterflies_hash.insert(make_pair(eti[u_offset + j], num_butterflies));
-	    cs.butterflies_hash.insert(make_pair(v_offset + k, num_butterflies));
+	    long num_butterflies = cs.wedges_hash.find(((long) i)*nu + (long)u2).second - 1;
+	    if (num_butterflies > 0) {
+	    butterflies_hash.insert(make_pair((long) (eti[u_offset + j]), num_butterflies));
+	    butterflies_hash.insert(make_pair((long) (v_offset + k), num_butterflies));
+	    }
 	  }
 	  else break;
 	}
     }
   }
   //rehashWedgesTimer.stop();
-
   //retrieveCountsTimer.start();
-  size_t num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.wedges_seq_intp);
+  size_t num_wedges_seq = butterflies_hash.entries_no_init(cs.wedges_seq_intp);
+  butterflies_hash.del();
   const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto butterflies_pair = cs.wedges_seq_intp.A[i];
     butterflies[eltsPerCacheLine*butterflies_pair.first] += butterflies_pair.second;
   }
   //retrieveCountsTimer.stop();
-  
   return next_idx;
 }
 
@@ -620,7 +624,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   granular_for(i,0,numEdges,numEdges > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
   long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
-  CountESpace cs = CountESpace(type, numEdges);
+  CountESpace cs = CountESpace(type, GA.numEdges);
 
   if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
   else {

@@ -994,7 +994,7 @@ CountESpace(long _type, long _nu) : type(_type), nu(_nu) {
     wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
     if (type == 3) {
       wedges_seq_intp = _seq<T>(newA(T, nu), nu);
-      butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
+      //butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
     }
   }
   else if (type == 4) {
@@ -1011,13 +1011,13 @@ CountESpace(long _type, long _nu) : type(_type), nu(_nu) {
 
   void clear() {
     if (type == 2 || type == 3 || type == 4) wedges_hash.clear();
-    if (type == 3) butterflies_hash.clear();
+    //if (type == 3) butterflies_hash.clear();
   }
 
   void del() {
     if (type == 2 || type == 3) {
       wedges_hash.del();
-      if (type == 3) { wedges_seq_intp.del(); butterflies_hash.del(); }
+      if (type == 3) { wedges_seq_intp.del(); }//butterflies_hash.del(); }
     }
     else if (type == 4) {
       wedges_seq_int.del();

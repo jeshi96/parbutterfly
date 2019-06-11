@@ -536,7 +536,7 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, l
       long shift = nu*(i-step*stepSize);
       intT u_offset  = offsetsU[i];
       intT u_deg = offsetsU[i+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) { //JS: test granular_for
+      for (intT j=0; j < u_deg; ++j ) {
 	uintE v = edgesU[u_offset+j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1]-offsetsV[v];
@@ -591,7 +591,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
       long shift = GA.n*(i-step*stepSize);
       intT u_offset  = GA.offsets[i];
       intT u_deg = GA.offsets[i+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) { //JS: test granular_for
+      for (intT j=0; j < u_deg; ++j ) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
@@ -606,7 +606,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 	}
       }
 
-      for (long j=0; j < u_deg; ++j ) { //JS: test granular_for
+      for (long j=0; j < u_deg; ++j ) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
@@ -621,7 +621,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 	}
       }
       
-      for(long j=0; j < used_idx; ++j) { //JS: test granular_for
+      for(long j=0; j < used_idx; ++j) {
         uintE u2_idx = used[shift+j] >> 1;
         if(used[shift+j] & 0b1) {
 	  writeAdd(&butterflies[i*eltsPerCacheLine],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
