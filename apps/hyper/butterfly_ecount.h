@@ -22,7 +22,7 @@ using namespace std;
 
 timer rehashWedgesTimer, getWedgesTimer, retrieveCountsTimer;
 
-intT CountEHist(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
+intT CountEHist(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long* butterflies_u, long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -69,7 +69,8 @@ intT CountEHist(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 	  if (u2 < i) {
 	    // TODO should take out -1, put in if to store only if > 0
 	    long num_butterflies = cs.wedges_hash.find(i*nu + u2).second - 1;
-	    writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + j]],num_butterflies); 
+	    //writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + j]],num_butterflies); 
+      writeAdd(&butterflies_u[eltsPerCacheLine*(u_offset + j)],num_butterflies); 
 	    writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)],num_butterflies); 
 	  }
 	  else break;
@@ -165,7 +166,7 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   free(freq_arr);
 
   // now, we need to collate by our indices
-  auto b_freq_pair = getFreqs(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
+  auto b_freq_pair = getFreqs(cs.butterflies_seq_intt.A, num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
   const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=1; i < b_freq_pair.second; ++i) {
@@ -177,11 +178,12 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   }
 
   free(b_freq_arr);
+
   //retrieveCountsTimer.stop();
   return wedges_pair.second;
 }
 
-intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
+intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long* butterflies_u, long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
 
@@ -202,7 +204,8 @@ intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
     long num = freq_arr[i+1] - freq_arr[i] - 1;
     if (num > 0) {
     parallel_for(intT j=freq_arr[i];j<freq_arr[i+1];j++){ //JS: test granular_for
-	writeAdd(&butterflies[eltsPerCacheLine*eti[offsetsU[wedges[j].v1] + wedges[j].j]], num);
+	writeAdd(&butterflies_u[eltsPerCacheLine*(offsetsU[wedges[j].v1] + wedges[j].j)], num);
+  //writeAdd(&butterflies[eltsPerCacheLine*(eti[offsetsU[wedges[j].v1] + wedges[j].j])], num);
 	writeAdd(&butterflies[eltsPerCacheLine*(offsetsV[wedges[j].u] + wedges[j].k)], num);
     }
     }
@@ -373,7 +376,7 @@ intT CountEHashCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
   return next_idx;
 }
 
-intT CountEHash(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
+intT CountEHash(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long* butterflies_u, long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -402,7 +405,7 @@ intT CountEHash(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 	  uintE u2 = edgesV[v_offset + k];
 	  if (u2 < i) {
 	    long num_butterflies = cs.wedges_hash.find(i*nu + u2).second - 1;
-	    writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + j]],num_butterflies); 
+	    writeAdd(&butterflies_u[eltsPerCacheLine*(u_offset + j)],num_butterflies); 
 	    writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)],num_butterflies); 
 	  }
 	  else break;
@@ -426,9 +429,6 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, cons, max_wedges, curr_idx, num_wedges, wedge_idxs);
   //getWedgesTimer.stop();
   //rehashWedgesTimer.start();
-  //TODO this is weird
-  //cs.butterflies_hash.resize(2*GA.numEdges);
-  auto butterflies_hash = sparseAdditiveSet<long, long>(GA.numEdges, 1, LONG_MAX, LONG_MAX);
   parallel_for (intT i = curr_idx; i < next_idx; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
@@ -443,8 +443,8 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 	  if (u2 < i) {
 	    long num_butterflies = cs.wedges_hash.find(((long) i)*nu + (long)u2).second - 1;
 	    if (num_butterflies > 0) {
-	    butterflies_hash.insert(make_pair((long) (eti[u_offset + j]), num_butterflies));
-	    butterflies_hash.insert(make_pair((long) (v_offset + k), num_butterflies));
+	    cs.butterflies_hash.insert(make_pair(eti[u_offset + j], num_butterflies));
+	    cs.butterflies_hash.insert(make_pair(v_offset + k, num_butterflies));
 	    }
 	  }
 	  else break;
@@ -453,8 +453,8 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   }
   //rehashWedgesTimer.stop();
   //retrieveCountsTimer.start();
-  size_t num_wedges_seq = butterflies_hash.entries_no_init(cs.wedges_seq_intp);
-  butterflies_hash.del();
+  size_t num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.wedges_seq_intp);
+
   const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto butterflies_pair = cs.wedges_seq_intp.A[i];
@@ -467,7 +467,7 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 //********************************************************************************************
 //********************************************************************************************
 
-void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, bool use_v, long max_array_size) {
+void CountEOrigCompactParallel(uintE* eti, long* butterflies, long* butterflies_u, bipartiteCSR& GA, bool use_v, long max_array_size) {
   timer t1,t2,t3;
   //cout << "Original Parallel for Edges" << endl;
   t1.start();
@@ -519,7 +519,7 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, bipartiteCSR& GA, 
         for(intT k=0; k < v_deg; ++k) {
           uintE u2_idx = edgesV[v_offset+k];
           if (u2_idx < i) {
-	    writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + j]], (long) wedges[shift+u2_idx]-1);
+	    writeAdd(&butterflies_u[eltsPerCacheLine*(u_offset + j)], (long) wedges[shift+u2_idx]-1);
 	    writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)], (long) wedges[shift+u2_idx]-1);
           }
           else break;
@@ -624,7 +624,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   granular_for(i,0,numEdges,numEdges > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
   long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
-  CountESpace cs = CountESpace(type, GA.numEdges);
+  CountESpace cs = CountESpace(type, GA.numEdges, true);
 
   if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
   else {
@@ -713,32 +713,39 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
     butterflies[eltsPerCacheLine*i] = 0;
   }
 
+  long* butterflies_u = (type == 3 || type == 1) ? nullptr : newA(long, eltsPerCacheLine*GA.numEdges);
+  if (type != 3 && type != 1) {
+  parallel_for(long i=0; i < GA.numEdges; ++i){
+    butterflies_u[eltsPerCacheLine*i] = 0;
+  }
+  }
+
   t_malloc.reportTotal("preprocess (malloc)"); timer t_time;
   t_time.start();
 
   long* wedge_idxs = type == 5 ? nullptr : countWedgesScan(GA, use_v, true);
-  CountESpace cs = CountESpace(type, nu);
+  CountESpace cs = CountESpace(type, GA.numEdges, false);
 
-  if (type == 5) CountEOrigCompactParallel(eti, butterflies, GA, use_v, max_array_size);
+  if (type == 5) CountEOrigCompactParallel(eti, butterflies, butterflies_u, GA, use_v, max_array_size);
   else {
     // TODO clean up utils, do overflow stuff (double check youtube needs it)
     // TODO check correctness against each other
     // TODO why is hash so slow
     if (max_wedges >= num_wedges) {
-      if (type == 0) CountESort(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+      if (type == 0) CountESort(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti);
       else if (type == 1) CountESortCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
-      else if (type == 2) CountEHash(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+      else if (type == 2) CountEHash(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti);
       else if (type == 3) CountEHashCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
-      else if (type == 4) CountEHist(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+      else if (type == 4) CountEHist(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti);
     }
     else {
       intT curr_idx = 0;
       while(curr_idx < nu) {
-	if (type == 0) curr_idx = CountESort(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+	if (type == 0) curr_idx = CountESort(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti, curr_idx);
 	else if (type == 1) curr_idx = CountESortCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
-	else if (type == 2) curr_idx = CountEHash(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+	else if (type == 2) curr_idx = CountEHash(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti, curr_idx);
 	else if (type == 3) curr_idx = CountEHashCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
-	else if (type == 4) curr_idx = CountEHist(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
+	else if (type == 4) curr_idx = CountEHist(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti, curr_idx);
 	cs.clear();
       }
     }
@@ -747,5 +754,16 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
 
   if (type != 5) free(wedge_idxs);
   if (type != 5) t_time.reportTotal("counting");
+
+  if (type !=3 && type != 1) {
+  timer t_convert;
+  t_convert.start();
+  parallel_for(long i=0; i < GA.numEdges; ++i) {
+    butterflies[eltsPerCacheLine*eti[i]] += butterflies_u[eltsPerCacheLine*i];
+  }
+  free(butterflies_u);
+  t_convert.reportTotal("convert");
+  }
+
   return butterflies;
 }

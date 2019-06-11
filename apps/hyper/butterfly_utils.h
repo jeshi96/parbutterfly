@@ -970,7 +970,7 @@ long* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
 }
 
 struct CountESpace {
-  long type; long nu;
+  long type; long nu; bool rank;
   // for sort: 0, 1
   _seq<UWedge> wedges_seq_uw;
   // for sort: 1
@@ -986,7 +986,7 @@ struct CountESpace {
   sparseAdditiveSet<long, long> butterflies_hash;
 
 
-CountESpace(long _type, long _nu) : type(_type), nu(_nu) {
+CountESpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
   using T = pair<long,long>;
   using X = tuple<uintE,long>;
   using E = pair<long, uintE>;
@@ -994,7 +994,7 @@ CountESpace(long _type, long _nu) : type(_type), nu(_nu) {
     wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
     if (type == 3) {
       wedges_seq_intp = _seq<T>(newA(T, nu), nu);
-      //butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
+      butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
     }
   }
   else if (type == 4) {
@@ -1011,13 +1011,13 @@ CountESpace(long _type, long _nu) : type(_type), nu(_nu) {
 
   void clear() {
     if (type == 2 || type == 3 || type == 4) wedges_hash.clear();
-    //if (type == 3) butterflies_hash.clear();
+    if (type == 3) butterflies_hash.clear();
   }
 
   void del() {
     if (type == 2 || type == 3) {
       wedges_hash.del();
-      if (type == 3) { wedges_seq_intp.del(); }//butterflies_hash.del(); }
+      if (type == 3) { wedges_seq_intp.del(); butterflies_hash.del(); }
     }
     else if (type == 4) {
       wedges_seq_int.del();
