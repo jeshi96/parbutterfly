@@ -973,8 +973,11 @@ struct CountESpace {
   long type; long nu; bool rank;
   // for sort: 0, 1
   _seq<UWedge> wedges_seq_uw;
-  // for sort: 1
+  // for sort: 1; for hist: 6
   _seq<tuple<uintE,long>> butterflies_seq_intt;
+  // for hist: 6
+  pbbsa::sequence<tuple<uintE, long>> tmp_uint;
+  pbbsa::sequence<tuple<uintE, long>> out_uint;
   // for hist: 4
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
@@ -997,11 +1000,16 @@ CountESpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank
       butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
     }
   }
-  else if (type == 4) {
+  else if (type == 4 || type == 6) {
     tmp = pbbsa::sequence<tuple<long, uintE>>();
     out = pbbsa::sequence<tuple<long, uintE>>();
     wedges_seq_int = _seq<long>(newA(long, nu), nu);
     wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
+    if (type == 6) {
+      butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+      tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
+      out_uint = pbbsa::sequence<tuple<uintE, long>>();
+    }
   }
   else if (type == 0 || type == 1) {
     if (type == 1) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
@@ -1010,7 +1018,7 @@ CountESpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank
 }
 
   void clear() {
-    if (type == 2 || type == 3 || type == 4) wedges_hash.clear();
+    if (type == 2 || type == 3 || type == 4 || type == 6) wedges_hash.clear();
     if (type == 3) butterflies_hash.clear();
   }
 
@@ -1019,9 +1027,10 @@ CountESpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank
       wedges_hash.del();
       if (type == 3) { wedges_seq_intp.del(); butterflies_hash.del(); }
     }
-    else if (type == 4) {
+    else if (type == 4 || type == 6) {
       wedges_seq_int.del();
       wedges_hash.del();
+      if (type == 6) butterflies_seq_intt.del();
     }
     else if (type == 0 || type == 1) {
       if (type == 1) butterflies_seq_intt.del();
