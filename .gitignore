@@ -58,6 +58,10 @@ apps/hyper/._butterfly_utils.h
 apps/hyper/._butterfly_count.h
 apps/hyper/._butterfly_ecount.h
 apps/hyper/._butterfly_peel.h
+apps/hyper/._butterfly_epeel.h
+apps/hyper/._butterfly_putils.h
+apps/hyper/._parse_bb.py
+apps/hyper/._run_bb
 apps/hyper/.vscode/
 ._nucleus-master
 lib/.vscode/

@@ -203,7 +203,7 @@ intT CountEHist(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
     //granular_for (j, 0, u_deg, (u_deg > 1000), {
-    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
+    parallel_for(intT j=0;j<u_deg;j++) {
 	uintE v = edgesU[u_offset+j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1] - v_offset;
@@ -247,7 +247,8 @@ intT CountEHist(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
+    //granular_for (j, 0, u_deg, (u_deg > 1000), {
+    parallel_for(intT j=0;j<u_deg;j++) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
@@ -265,7 +266,7 @@ intT CountEHist(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 	  else break;
 	  }
 	}
-    }
+    }//);
   }
 
   return next_idx;
@@ -298,10 +299,11 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   // store these counts in another array so we can store in CE manner
   parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
     long num = freq_arr[i+1] - freq_arr[i] - 1;
+    //granular_for (j, freq_arr[i], freq_arr[i+1], (freq_arr[i+1]-freq_arr[i] > 1000), {
     parallel_for(intT j=freq_arr[i]; j<freq_arr[i+1];++j){ //JS: test granular_for
-	cs.butterflies_seq_intt.A[2*j] = make_tuple(eti[offsetsU[wedges[j].v1] + wedges[j].j], num);
-	cs.butterflies_seq_intt.A[2*j+1] = make_tuple(offsetsV[wedges[j].u] + wedges[j].k, num);
-    }
+	cs.butterflies_seq_intt.A[(long)2*j] = make_tuple(eti[offsetsU[wedges[j].v1] + wedges[j].j], num);
+	cs.butterflies_seq_intt.A[(long)2*j+1] = make_tuple(offsetsV[wedges[j].u] + wedges[j].k, num);
+    }//);
   }
   //rehashWedgesTimer.stop();
   //retrieveCountsTimer.start();
@@ -309,7 +311,7 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   free(freq_arr);
 
   // now, we need to collate by our indices
-  auto b_freq_pair = getFreqs(cs.butterflies_seq_intt.A, num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
+  auto b_freq_pair = getFreqs(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
   const intT eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=1; i < b_freq_pair.second; ++i) {
