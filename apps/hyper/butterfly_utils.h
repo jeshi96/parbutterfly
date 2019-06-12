@@ -201,17 +201,17 @@ writeAddSet(sparseAdditiveSet<E> _set) : set(_set) {}
   }
 };
 
-template<class E, class K>
+template<class K, class E>
   E getAdd (E curr, tuple<K,E> v) {
   return curr + get<1>(v);
 }
 
-template<class E, class K>
+template<class K, class E>
   tuple<K,E> getAddReduce (tuple<K,E> curr, tuple<K,E> v) {
   return make_tuple(get<0>(curr),get<1>(curr) + get<1>(v));
 }
 
-template<class E, class K>
+template<class K, class E>
   pair<K,E> getAddReducePair (pair<K,E> curr, pair<K,E> v) {
   return make_pair(v.first, curr.second + v.second);
 }
@@ -1076,7 +1076,7 @@ CountSpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank)
     tmp = pbbsa::sequence<tuple<long, uintE>>();
     out = pbbsa::sequence<tuple<long, uintE>>();
     wedges_seq_int = _seq<long>(newA(long, nu), nu);
-    if (type == 4 && rank) {
+    if (rank) {
       wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
       wedges_seq_intp = _seq<E>(newA(E, nu), nu);
     }
@@ -1098,7 +1098,7 @@ CountSpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank)
       wedges_hash.clear();
       if (type == 3) butterflies_hash.clear();
     }
-    else if (type == 4 && rank) wedges_hash.clear();
+    else if ((type == 4 || type == 6) && rank) wedges_hash.clear();
 
   }
 
@@ -1109,7 +1109,7 @@ CountSpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank)
     }
     else if (type == 4 || type == 6) {
       wedges_seq_int.del();
-      if (type == 4 && rank){
+      if (rank){
         wedges_hash.del(); wedges_seq_intp.del();
       }
       if (type == 6) butterflies_seq_intt.del();

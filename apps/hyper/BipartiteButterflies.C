@@ -301,11 +301,11 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else t.reportTotal("Par");
 
   
-    /*long num_idxs = use_v ? GA.nu : GA.nv;
+    long num_idxs = use_v ? GA.nu : GA.nv;
     long b = 0;
     for (long i=0; i < num_idxs; ++i) {b += butterflies[eltsPerCacheLine*i];}
     b = b / 2;
-    cout << "number of butterflies: " << b << "\n";*/
+    cout << "number of butterflies: " << b << "\n";
   
     //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 0, 0);
     //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
@@ -339,6 +339,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty == 0) t3.reportTotal("E Sort:");
     else if (ty==1) t3.reportTotal("E SortCE:");
     else if (ty==4) t3.reportTotal("E Hist:");
+    else if (ty==6) t3.reportTotal("E HistCE:");
     else t3.reportTotal("E Par:");
 
     const intT eltsPerCacheLine = 64/sizeof(long);
