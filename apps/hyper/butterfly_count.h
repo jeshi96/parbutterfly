@@ -370,7 +370,7 @@ intT CountHistCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   pair<long, intT> wedges_pair  = getWedges<long>(cs.wedges_seq_int, GA, UWedgeIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
   intT next_idx = wedges_pair.second;
   long num_wedges_list = wedges_pair.first;
-/* 
+
   pbbsa::sequence<long> wedges_seq = pbbsa::sequence<long>(cs.wedges_seq_int.A, wedges_pair.first);
 
   tuple<size_t,X*> wedges_tuple = pbbsa::sparse_histogram<long, uintE>(wedges_seq, ((GA.n*(GA.n+1)) << 1), cs.tmp, cs.out);
@@ -385,13 +385,13 @@ intT CountHistCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 
   size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
 
-  if (cs.butterflies_seq_intt.n < 2*num_wedges_seq+num_wedges_list) {
+  if (cs.butterflies_seq_intt.n < num_wedges_list) {
     free(cs.butterflies_seq_intt.A);
-    cs.butterflies_seq_intt.A = newA(T, 2*num_wedges_seq+num_wedges_list);
-    cs.butterflies_seq_intt.n = 2*num_wedges_seq+num_wedges_list;
+    cs.butterflies_seq_intt.A = newA(T, num_wedges_list);
+    cs.butterflies_seq_intt.n = num_wedges_list;
   }
 
-  parallel_for(long i=0; i < 2*num_wedges_seq+num_wedges_list; ++i) {
+  parallel_for(long i=0; i < num_wedges_list; ++i) {
     cs.butterflies_seq_intt.A[i] = make_tuple(UINT_E_MAX, 0);
   }
 
@@ -401,9 +401,10 @@ intT CountHistCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
     if (num_butterflies > 1 && (wedge_freq_pair.first & 0b1)) {
       uintE u2 = ((wedge_freq_pair.first >> 1) % (GA.n));
       uintE u = ((wedge_freq_pair.first >> 1) / (GA.n));
+      long wedge_idx = wedge_idxs[u] - wedge_idxs[curr_idx];
       num_butterflies = (num_butterflies * (num_butterflies - 1))/2;
-      cs.butterflies_seq_intt.A[2*i] = make_tuple(u, num_butterflies);
-      cs.butterflies_seq_intt.A[2*i+1] = make_tuple(u2, num_butterflies);
+      cs.butterflies_seq_intt.A[wedge_idx] = make_tuple(u, num_butterflies);
+      cs.butterflies_seq_intt.A[wedge_idx+1] = make_tuple(u2, num_butterflies);
     }
   }
 
@@ -424,7 +425,7 @@ intT CountHistCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 	      long to_find = (((long) i) *GA.n + (long) u2) << 1;
 	      long num_butterflies = cs.wedges_hash.find(to_find).second;
 	      if (num_butterflies > 1) {
-          cs.butterflies_seq_intt.A[2*num_wedges_seq+wedge_idx+idx] = make_tuple(v, num_butterflies-1);
+          cs.butterflies_seq_intt.A[wedge_idx+idx] = make_tuple(v, num_butterflies-1);
         }
         ++idx;
 	    }
@@ -435,7 +436,7 @@ intT CountHistCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
     }
   }
 
-  pbbsa::sequence<T> wedge_freqs_i_seq = pbbsa::sequence<T>(cs.butterflies_seq_intt.A,2*num_wedges_seq+num_wedges_list);
+  pbbsa::sequence<T> wedge_freqs_i_seq = pbbsa::sequence<T>(cs.butterflies_seq_intt.A,num_wedges_list);
   tuple<size_t, T*> butterflies_tuple = 
     pbbsa::sparse_histogram_f<uintE,long>(wedge_freqs_i_seq,GA.n,getAdd<uintE,long>, getAddReduce<uintE,long>, cs.tmp_uint, cs.out_uint);
   T* butterflies_l = get<1>(butterflies_tuple);
@@ -443,7 +444,7 @@ intT CountHistCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 
   parallel_for (long i=0; i < butterflies_n; ++i) {
     if (get<0>(butterflies_l[i]) != UINT_E_MAX) butterflies[eltsPerCacheLine*get<0>(butterflies_l[i])] += get<1>(butterflies_l[i]);
-  }*/
+  }
   return next_idx;
 }
 
