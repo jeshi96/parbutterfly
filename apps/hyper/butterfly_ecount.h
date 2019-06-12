@@ -299,11 +299,10 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   // store these counts in another array so we can store in CE manner
   parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
     long num = freq_arr[i+1] - freq_arr[i] - 1;
-    //granular_for (j, freq_arr[i], freq_arr[i+1], (freq_arr[i+1]-freq_arr[i] > 1000), {
-    parallel_for(intT j=freq_arr[i]; j<freq_arr[i+1];++j){ //JS: test granular_for
+    granular_for (j, freq_arr[i], freq_arr[i+1], (freq_arr[i+1]-freq_arr[i] > 1000), {
 	cs.butterflies_seq_intt.A[(long)2*j] = make_tuple(eti[offsetsU[wedges[j].v1] + wedges[j].j], num);
 	cs.butterflies_seq_intt.A[(long)2*j+1] = make_tuple(offsetsV[wedges[j].u] + wedges[j].k, num);
-    }//);
+    });
   }
   //rehashWedgesTimer.stop();
   //retrieveCountsTimer.start();
@@ -348,11 +347,10 @@ intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
     long num = freq_arr[i+1] - freq_arr[i] - 1;
     if (num > 0) {
-    parallel_for(intT j=freq_arr[i];j<freq_arr[i+1];j++){ //JS: test granular_for
+    granular_for (j, freq_arr[i], freq_arr[i+1], (freq_arr[i+1]-freq_arr[i] > 1000), {
 	writeAdd(&butterflies_u[eltsPerCacheLine*(offsetsU[wedges[j].v1] + wedges[j].j)], num);
-  //writeAdd(&butterflies[eltsPerCacheLine*(eti[offsetsU[wedges[j].v1] + wedges[j].j])], num);
 	writeAdd(&butterflies[eltsPerCacheLine*(offsetsV[wedges[j].u] + wedges[j].k)], num);
-    }
+    });
     }
   }
   //rehashWedgesTimer.stop();
@@ -434,12 +432,12 @@ intT CountESort(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
     long wedge_idx = freq_pair.first[i];
 
     if (num_butterflies > 1) {
-      parallel_for(intT j=freq_pair.first[i]; j<freq_pair.first[i+1]; ++j) { //JS: test granular_for
+      granular_for (j, freq_pair.first[i], freq_pair.first[i+1], (freq_pair.first[i+1]-freq_pair.first[i] > 1000), {
 	  // GA.offsets[wedges[j].u]+wedges[j].k --> this is v_offset + k
         // GA.offsets[wedges[j].v1]+wedges[j].j --> this is u_offset + j
 	  writeAdd(&butterflies[eltsPerCacheLine*(GA.offsets[wedges[j].u]+wedges[j].k)], num_butterflies - 1);
 	  writeAdd(&butterflies[eltsPerCacheLine*(GA.offsets[wedges[j].v1]+wedges[j].j)], num_butterflies - 1);
-      }
+      });
     }
   }
 
@@ -459,7 +457,7 @@ intT CountEHash(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
+    parallel_for(intT j=0;j<u_deg;j++) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
