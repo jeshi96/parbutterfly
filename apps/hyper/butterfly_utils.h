@@ -1445,7 +1445,7 @@ uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
   parallel_for(intT i=0; i < nu; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
-    parallel_for (intT j = 0; j < u_deg; ++j) { //JS: test granular_for
+    granular_for(j,0,u_deg,u_deg>1000,{ // (intT j = 0; j < u_deg; ++j) { //JS: test granular_for
       
       uintE v = edgesU[u_offset + j];
       intT v_offset = offsetsV[v];
@@ -1455,7 +1455,7 @@ uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
       auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
       size_t find_idx = pbbs::binary_search(idx_map, i, lte); 
       eti[u_offset+j] = v_offset + find_idx;
-    }
+      });
   }
 
   return eti;

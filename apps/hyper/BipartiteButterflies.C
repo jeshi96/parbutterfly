@@ -358,7 +358,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
     timer t3,t4;
     t4.start();
-    auto eti = edgeToIdxs(GA, use_v); //JS: this seems like it could be optimized
+    auto eti = edgeToIdxs(GA, use_v);
     t4.reportTotal("edgeToIdxs");
     
     t3.start();
@@ -389,7 +389,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     if(!nopeel) {
       timer t2;
       t2.start();
-      auto ite = idxsToEdge(GA, use_v);  //JS: this seems like it could be optimized
+      auto ite = idxsToEdge(GA, use_v);
       auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
       free(ite);	    
       t2.stop();
