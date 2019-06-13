@@ -261,7 +261,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==1) t3.reportTotal("E SortCE:");
     else if (ty==4) t3.reportTotal("E Hist:");
     else if (ty==6) t3.reportTotal("E HistCE:");
-    else t3.reportTotal("E Par:");
+    else if (ty == 5) t3.reportTotal("E Par:");
+    else if (ty == 8) t3.reportTotal("E WedgePar:");
 
     const intT eltsPerCacheLine = 64/sizeof(long);
 

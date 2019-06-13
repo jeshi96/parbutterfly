@@ -610,6 +610,89 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 //********************************************************************************************
 //********************************************************************************************
 
+void CountEOrigCompactParallel_WedgeAware(bipartiteCSR& GA, long* butterflies, long* butterflies_u, bool use_v, long max_array_size, long* wedgesPrefixSum) {
+  timer t1,t2,t3,t4;//,t5;
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+  
+
+  long stepSize = min<long>(getWorkers() * 60, max_array_size/nu); //15 tunable parameter
+
+  t1.start();
+  //cout << "Original Parallel Wedge-Aware" << endl;
+  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
+
+  uintE* wedges = newA(uintE, nu*stepSize);
+  uintE* used = newA(uintE, nu*stepSize);
+  t1.reportTotal("preprocess (malloc)");
+  t3.start();
+  granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  t3.reportTotal("preprocess (initialize)");
+
+  //t5.start();
+  //long* wedgesPrefixSum = computeWorkPrefixSum(GA,use_v);
+  //t5.reportTotal("preprocess (work prefix sum)");
+
+  t2.start();
+  
+  for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
+    std::function<void(intT,intT)> recursive_lambda =
+      [&]
+      (intT start, intT end){
+      if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
+	for (intT i = start; i < end; i++){
+	  intT used_idx = 0;
+      long shift = nu*(i-step*stepSize);
+      intT u_offset  = offsetsU[i];
+      intT u_deg = offsetsU[i+1]-u_offset;
+      for (long j=0; j < u_deg; ++j ) { //JS: test granular_for
+	uintE v = edgesU[u_offset+j];
+	intT v_offset = offsetsV[v];
+	intT v_deg = offsetsV[v+1]-offsetsV[v];
+	for (long k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = edgesV[v_offset+k];
+	  if (u2_idx < i) {
+	    wedges[shift+u2_idx]++;
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = u2_idx;
+	  }
+	  else break;
+	}
+      }
+      for(long j=0; j < u_deg; ++j) { //JS: test granular_for
+        uintE v = edgesU[u_offset+j];
+        intT v_offset = offsetsV[v];
+        intT v_deg = offsetsV[v+1] - v_offset;
+        for(intT k=0; k < v_deg; ++k) {
+          uintE u2_idx = edgesV[v_offset+k];
+          if (u2_idx < i) {
+	    writeAdd(&butterflies_u[eltsPerCacheLine*(u_offset + j)], (long) wedges[shift+u2_idx]-1);
+	    writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)], (long) wedges[shift+u2_idx]-1);
+          }
+          else break;
+        }
+      }
+
+      for(long j=0; j < used_idx; ++j) { wedges[used[shift+j]+shift] = 0; }
+	}
+      } else {
+	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	recursive_lambda(start + ((end-start)>>1), end);
+      }
+    }; 
+    recursive_lambda(step*stepSize,min((step+1)*stepSize,nu));
+  }
+  t2.reportTotal("counting (main loop)");
+  
+  free(wedges);
+  free(used);
+  //free(wedgesPrefixSum);
+}
+
 void CountEOrigCompactParallel(uintE* eti, long* butterflies, long* butterflies_u, bipartiteCSR& GA, bool use_v, long max_array_size) {
   timer t1,t2,t3;
   //cout << "Original Parallel for Edges" << endl;
@@ -676,6 +759,90 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, long* butterflies_
   
   free(wedges);
   free(used);
+}
+
+void CountEOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long max_array_size, long* wedgesPrefixSum) {
+  timer t1,t2,t3,t4;//,t5;
+
+  long stepSize = min<long>(getWorkers() * 20, max_array_size/GA.n); //15 tunable parameter
+
+  t1.start();
+  //cout << "Original Parallel Wedge-Aware" << endl;
+  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
+
+  uintE* wedges = newA(uintE, GA.n*stepSize);
+  uintE* used = newA(uintE, GA.n*stepSize);
+  t1.reportTotal("preprocess (malloc)");
+  t3.start();
+  granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  t3.reportTotal("preprocess (initialize)");
+
+  //t5.start();
+  //long* wedgesPrefixSum = computeWorkPrefixSum(GA,use_v);
+  //t5.reportTotal("preprocess (work prefix sum)");
+
+  t2.start();
+  
+  for(intT step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
+    std::function<void(intT,intT)> recursive_lambda =
+      [&]
+      (intT start, intT end){
+      if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
+	for (intT i = start; i < end; i++){
+      intT used_idx = 0;
+      long shift = GA.n*(i-step*stepSize);
+      intT u_offset  = GA.offsets[i];
+      intT u_deg = GA.offsets[i+1]-u_offset;
+      for (intT j=0; j < u_deg; ++j ) { //JS: test granular_for
+	uintE v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1]-v_offset;
+	if (v <= i) break; 
+	for (intT k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+	  if (u2_idx > i) {
+	    wedges[shift+u2_idx]++;
+	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = GA.edges[v_offset+k];
+	  }
+	  else break;
+	}
+      }
+
+      for (long j=0; j < u_deg; ++j ) { //JS: test granular_for
+	uintE v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1]-v_offset;
+	if (v <= i) break; 
+	for (long k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+	  if (u2_idx > i) { //TODO combine into one graph
+	    if (wedges[shift+u2_idx] > 1) {
+	      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], (long)(wedges[shift+u2_idx]-1));
+	      writeAdd(&butterflies[eltsPerCacheLine*(u_offset+j)], (long)(wedges[shift+u2_idx]-1));
+	    }
+	  }
+	  else break;
+	}
+      }
+
+      for(long j=0; j < used_idx; ++j) {
+        uintE u2_idx = used[shift+j] >> 1;
+        wedges[shift+u2_idx] = 0;
+      }
+	}
+      } else {
+	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	recursive_lambda(start + ((end-start)>>1), end);
+      }
+    }; 
+    recursive_lambda(step*stepSize,min((step+1)*stepSize,GA.n));
+  }
+  t2.reportTotal("counting (main loop)");
+  
+  free(wedges);
+  free(used);
+  //free(wedgesPrefixSum);
 }
 
 void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_size) {
@@ -770,6 +937,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   CountESpace cs = CountESpace(type, GA.numEdges, true);
 
   if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
+  else if (type == 8) CountEOrigCompactParallel_WedgeAware(g, rank_butterflies, max_array_size, wedge_idxs);
   else {
     if (max_wedges >= num_wedges) {
       if (type == 0) CountESort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
@@ -801,7 +969,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   //CountWorkEfficientParallel(g, rank_butterflies2);
   //for(long i=0; i < g.n; ++i) {assert(rank_butterflies2[eltsPerCacheLine*i] == rank_butterflies[eltsPerCacheLine*i]);}
 
-  if (type != 11) t_time2.reportTotal("counting");
+  if (type != 11 && type != 8) t_time2.reportTotal("counting");
 
   timer t_convert;
   t_convert.start();
@@ -872,6 +1040,7 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   CountESpace cs = CountESpace(type, GA.numEdges, false);
 
   if (type == 5) CountEOrigCompactParallel(eti, butterflies, butterflies_u, GA, use_v, max_array_size);
+  else if (type == 8) CountEOrigCompactParallel_WedgeAware(GA, butterflies, butterflies_u, use_v, max_array_size, wedge_idxs);
   else {
     // TODO clean up utils, do overflow stuff (double check youtube needs it)
     // TODO check correctness against each other
@@ -900,7 +1069,7 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   cs.del();
 
   if (type != 5) free(wedge_idxs);
-  if (type != 5) t_time.reportTotal("counting");
+  if (type != 5 && type != 8) t_time.reportTotal("counting");
 
   if (type !=3 && type != 1 && type != 6) {
   timer t_convert;
