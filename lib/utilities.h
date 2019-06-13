@@ -33,30 +33,11 @@
 
 #include "macros.h"
 
-#define newA(__E, __n) (__E*)malloc((__n) * sizeof(__E))
-#define COMMA , // to fix
-
-// scan/filter macros; used by sequence implementations
-#define _SCAN_LOG_BSIZE 10
-#define _SCAN_BSIZE (1 << _SCAN_LOG_BSIZE)
-#define _F_BSIZE (2 * _SCAN_BSIZE)
-
 namespace pbbsa {
-constexpr const size_t kSequentialForThreshold = 2048;
-}  // namespace pbbs
-
-
-#include <cilk/cilk.h>
-#include <cilk/cilk_api.h>
-#define parallel_for cilk_for
-#define parallel_for_1 cilk_for
-#define parallel_for_16 _Pragma("cilk_grainsize = 16") cilk_for
-#define parallel_for_256 _Pragma("cilk_grainsize = 256") cilk_for
-
-namespace pbbsa {
-size_t nworkers() { return __cilkrts_get_nworkers(); }
-static int getWorkers() { return __cilkrts_get_nworkers(); }
-static void setWorkers(int n) {
+  constexpr const size_t kSequentialForThreshold = 2048;
+  size_t nworkers() { return __cilkrts_get_nworkers(); }
+  static int getWorkers() { return __cilkrts_get_nworkers(); }
+  static void setWorkers(int n) {
   __cilkrts_end_cilk();
   std::stringstream ss;
   ss << n;
