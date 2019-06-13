@@ -97,110 +97,6 @@ void CountOrigCompactSerial(bipartiteCSR& GA, bool use_v) {
   cout << "num: " << results/2 << "\n";
 }
 
-//JS: to do: integrate into framework so that ranked versions and edge counting (both ranked/unranked) work as well 
-void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long max_array_size) {
-  timer t1,t2,t3,t4,t5;
-  const long nv = use_v ? GA.nv : GA.nu;
-  const long nu = use_v ? GA.nu : GA.nv;
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
-  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-  const intT eltsPerCacheLine = 64/sizeof(long);
-
-  long stepSize = min<long>(getWorkers() * 60, max_array_size/nu); //15 tunable parameter
-  
-  t4.start();
-  //long* results = newA(long,eltsPerCacheLine*stepSize); //one entry per cache line
-  //granular_for(i,0,stepSize,stepSize > 10000, {results[eltsPerCacheLine*i] = 0;});
-  
-  long* butterflies = newA(long,nu*eltsPerCacheLine);
-  granular_for(i,0,nu,nu > 10000, { butterflies[i*eltsPerCacheLine] = 0; });
-  t4.reportTotal("init butterflies");
-  
-
-  t1.start();
-  cout << "Original Parallel Wedge-Aware" << endl;
-  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
-  
-
-
-
-
-  uintE* wedges = newA(uintE, nu*stepSize);
-  uintE* used = newA(uintE, nu*stepSize);
-  t1.reportTotal("preprocess (malloc)");
-  t3.start();
-  granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
-
-  
-  t3.reportTotal("preprocess (initialize)");
-
-  t5.start();
-  long* wedgesPrefixSum = computeWorkPrefixSum(GA,use_v);
-  t5.reportTotal("work prefix sum");
-
-  t2.start();
-  
-  for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
-    std::function<void(intT,intT)> recursive_lambda =
-      [&]
-      (intT start, intT end){
-      if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
-	for (intT i = start; i < end; i++){
-	  intT used_idx = 0;
-	  long shift = nu*(i-step*stepSize);
-	  intT u_offset  = offsetsU[i];
-	  intT u_deg = offsetsU[i+1]-u_offset;
-	  for (intT j=0; j < u_deg; ++j ) {
-	    uintE v = edgesU[u_offset+j];
-	    intT v_offset = offsetsV[v];
-	    intT v_deg = offsetsV[v+1]-offsetsV[v];
-	    for (intT k=0; k < v_deg; ++k) {
-	      uintE u2_idx = edgesV[v_offset+k];
-	      if (u2_idx < i) {
-		//writeAdd(&butterflies[i*eltsPerCacheLine], (long)wedges[u2_idx+shift]);
-		//writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long) wedges[u2_idx+shift]);
-		//results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
-		wedges[shift+u2_idx]++;
-		if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = u2_idx;
-	      }
-	      else break;
-	    }
-	  }
-	  for(intT j=0; j < used_idx; ++j) {
-	    uintE u2_idx = used[shift+j];
-	    writeAdd(&butterflies[i*eltsPerCacheLine],  (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-	    writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-	    wedges[u2_idx+shift] = 0;
-	  }
-	}
-      } else {
-	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
-	recursive_lambda(start + ((end-start)>>1), end);
-      }
-    }; 
-    recursive_lambda(step*stepSize,min((step+1)*stepSize,nu));
-  }
-  t2.reportTotal("main loop");
-  
-  free(wedges);
-  free(used);
-  free(wedgesPrefixSum);
-      
-  auto butterflies_extract_f = [&] (const long i) -> const long {
-    return butterflies[i*eltsPerCacheLine];
-  };
-
-  long total = sequence::reduce<long>((long)0,(long)nu,addF<long>(),butterflies_extract_f);
-  
-  //for(long i=0;i<nu;i++) total += butterflies[i*eltsPerCacheLine];
-  //for(long i=0;i<stepSize;i++) total += results[i*eltsPerCacheLine];
-  free(butterflies);
-  //free(results);
-  cout << "num: " << total/2 << "\n";
-}
-
 void CountWorkEfficientSerial(graphCSR& GA) {
   cout << "Work-efficient Serial (make sure running with CILK_NWORKERS=1)" << endl;
   timer t1,t2;
@@ -292,13 +188,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   
   //TODO seq code integrate w/count
   if (te == 0) {
-  
-    if (ty == 8) {
-
-      CountOrigCompactParallel_WedgeAware(GA,use_v,max_array_size);
-
-    }
-    else if (ty == 9) CountOrigCompactSerial(GA,use_v);
+    if (ty == 9) CountOrigCompactSerial(GA,use_v);
     else if (ty == 12) {
       timer t_rank;
       t_rank.start();
@@ -309,7 +199,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       CountWorkEfficientSerial(g);
     }
 
-    if (ty == 8 || ty == 9 || ty == 12) return;
+    if (ty == 9 || ty == 12) return;
     const intT eltsPerCacheLine = 64/sizeof(long);
 
     timer t;
@@ -323,7 +213,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==3) t.reportTotal("HashCE:");
     else if (ty==4) t.reportTotal("Hist:");
     else if (ty==6) t.reportTotal("HistCE:");
-    else t.reportTotal("Par");
+    else if (ty==7) t.reportTotal("Par");
+    else if (ty==8) t.reportTotal("WedgePar");
 
   
     long num_idxs = use_v ? GA.nu : GA.nv;
