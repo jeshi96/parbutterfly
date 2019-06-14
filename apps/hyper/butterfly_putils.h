@@ -34,18 +34,29 @@ struct PeelESpace {
   sparseAdditiveSet<long, long> update_hash;
   _seq<uintE> wedges_seq_int;
   _seq<uintE> used_seq_int;
+  _seq<long> update_v_idx_seq_int;
+  _seq<long> update_u_idx_seq_int;
+  _seq<long> used_u_seq_int;
 PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
   using X = tuple<uintE,long>;
-  update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  if (type != 3) update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
   if (type == 0) update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
   else if (type == 1 || type == 2) {
     wedges_seq_tup = _seq<X>(newA(X, nu), nu);
     wedges_seq_tup_fil = _seq<X>(newA(X, nu), nu);
   }
-  else {
+  else if (type == 3) {
     wedges_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
     granular_for(i,0,n_side*stepSize,n_side*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
     used_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
+  }
+  else if (type == 4){
+    wedges_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
+    granular_for(i,0,n_side*stepSize,n_side*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
+    used_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
+    update_v_idx_seq_int = _seq<long>(newA(long, stepSize+1), stepSize+1);
+    update_u_idx_seq_int = _seq<long>(newA(long, stepSize+1), stepSize+1);
+    used_u_seq_int = _seq<long>(newA(long, n_side), n_side);
   }
 }
   void resize_update(size_t size) {
@@ -61,10 +72,11 @@ PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu
   }
 
   void del() {
-  	update_seq_int.del();
+  	if (type != 3) update_seq_int.del();
     if (type == 0) update_hash.del();
     else if (type == 1 || type == 2) { wedges_seq_tup.del(); wedges_seq_tup_fil.del(); }
-    else {wedges_seq_int.del(); used_seq_int.del();}
+    else if (type == 3) {wedges_seq_int.del(); used_seq_int.del();}
+    else if (type == 4) {wedges_seq_int.del(); used_seq_int.del(); update_v_idx_seq_int.del(); update_u_idx_seq_int.del(); used_u_seq_int.del();}
   }
 };
 
@@ -77,7 +89,7 @@ struct PeelSpace {
   _seq<long> wedges_seq_long;
   _seq<uintE> used_seq_int;
   _seq<uintE> update_seq_int;
-  _seq<uintE> update_idx_seq_int;
+  _seq<long> update_idx_seq_int;
   sparseAdditiveSet<long, long> update_hash;
   sparseAdditiveSet<long, long>* wedges_hash;
   sparseAdditiveSet<long, long>** wedges_hash_list;
@@ -114,7 +126,7 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
     //t1.reportTotal("time for init wedges");
     used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
-    update_idx_seq_int = _seq<uintE>(newA(uintE, stepSize+1), stepSize+1);
+    update_idx_seq_int = _seq<long>(newA(long, stepSize+1), stepSize+1);
   }
 }
   void resize_update(size_t size) {
@@ -555,14 +567,11 @@ tuple<long, intT, long*> getNextIntersectWedgeIdx_seq(uintE* eti, uintE* ite, Se
 }
 
 template<class Sequence>
-tuple<long, intT, long*> getNextIntersectWedgeIdx(uintE* eti, uintE* ite, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, 
-  long max_wedges, intT curr_idx) {
+long* getIntersectWedgeIdxs(uintE* ite, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, intT curr_idx=0) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  if (num_I - curr_idx < 10000) return getNextIntersectWedgeIdx_seq(eti, ite, I, num_I, GA, use_v, max_wedges, curr_idx);
   long* idxs = newA(long, num_I - curr_idx + 1);
   idxs[num_I-curr_idx] = 0;
   parallel_for(intT i=curr_idx; i < num_I; ++i) {
@@ -582,6 +591,14 @@ tuple<long, intT, long*> getNextIntersectWedgeIdx(uintE* eti, uintE* ite, Sequen
     }
   }
   sequence::plusScan(idxs, idxs, num_I - curr_idx + 1);
+  return idxs;
+}
+
+template<class Sequence>
+tuple<long, intT, long*> getNextIntersectWedgeIdx(uintE* eti, uintE* ite, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, 
+  long max_wedges, intT curr_idx) {
+  if (num_I - curr_idx < 10000) return getNextIntersectWedgeIdx_seq(eti, ite, I, num_I, GA, use_v, max_wedges, curr_idx);
+  long* idxs = getIntersectWedgeIdxs(ite,I,num_I,GA,use_v,curr_idx);
 
   auto idx_map = make_in_imap<long>(num_I - curr_idx, [&] (size_t i) { return idxs[i+1]; });
   auto lte = [] (const long& l, const long& r) { return l <= r; };

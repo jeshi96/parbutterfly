@@ -271,8 +271,6 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     };
     
     long total = sequence::reduce<long>((long)0,(long)GA.numEdges,addF<long>(),butterflies_extract_f);
-
-    //for (long i=0; i < GA.numEdges; ++i) {b += ebutterflies[eltsPerCacheLine*i];}
     cout << "number of edge butterflies: " << total/4 << "\n";
 
     //uintE* butterflies2 = CountE(eti, GA, use_v, num_wedges, max_wedges, 0, 0);
@@ -300,7 +298,9 @@ int parallel_main(int argc, char* argv[]) {
   commandLine P(argc,argv," <inFile>");
   char* iFile = P.getArgument(0);
   long rounds = P.getOptionLongValue("-r",3);
-
+  long te = P.getOptionLongValue("-e",0);
+  bool nopeel = P.getOptionValue("-nopeel");
+  if (te == 0 || nopeel) {
   bipartiteCSR G = readBipartite(iFile);
 
   Compute(G,P);
@@ -308,5 +308,17 @@ int parallel_main(int argc, char* argv[]) {
     Compute(G,P);
   }
   G.del();
+  }
+  else {
+  bipartiteCSR G = readBipartite(iFile);
+
+  Compute(G,P);
+  G.del();
+  for(int r=0;r<rounds;r++) {
+    G = readBipartite(iFile);
+    Compute(G,P);
+    G.del();
+  }
+  }
 }
 

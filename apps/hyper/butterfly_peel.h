@@ -449,14 +449,14 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
 
   uintE* wedges = wedges_seq.A;
   uintE* used = used_seq.A;
-  uintE* update_idx = ps.update_idx_seq_int.A;
+  long* update_idx = ps.update_idx_seq_int.A;
 
   const intT eltsPerCacheLine = 64/sizeof(long);
 
-  for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
-    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
+  for(long step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
+    parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
       intT used_idx = 0;
-      intT shift = nu*(i-step*stepSize);
+      long shift = nu*(i-step*stepSize);
       intT u_idx = active.vtx(i);
       intT u_offset  = offsetsU[u_idx];
       intT u_deg = offsetsU[u_idx+1]-u_offset;
@@ -485,11 +485,12 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
     sequence::plusScan(update_idx,update_idx,use_stepSize+1);
     ps.resize_update(update_idx[use_stepSize]);
     auto update_seq = ps.update_seq_int.A;
-    parallel_for(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
-      intT shift = nu*(i-step*stepSize);
-      parallel_for(long j=0; j < update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize]; ++j) {
+    parallel_for(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
+      long shift = nu*(i-step*stepSize);
+      granular_for(j,0,update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize],update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize] > 10000, { 
+      //parallel_for(long j=0; j < update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize]; ++j) {
         update_seq[update_idx[i-step*stepSize]+j] = used[shift+j];
-      }
+      });
     }
     updateBuckets(D, b, k2, butterflies, (stepSize < 1000), nu, update_seq, update_idx[use_stepSize]);
   }
@@ -553,6 +554,7 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
   while (finished != nu) {
     auto bkt = b.next_bucket();
     auto active = bkt.identifiers;
+    if (active.size() == 0) {active.del(); continue;}
     long k = bkt.id;
     finished += active.size();
     //totalRounds++;
