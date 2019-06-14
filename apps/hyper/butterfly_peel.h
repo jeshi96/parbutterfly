@@ -433,7 +433,8 @@ pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies
   return make_pair(next_idx, num_updates);
 }
 
-pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v) {
+pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v,
+array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -448,15 +449,13 @@ pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* b
 
   uintE* wedges = wedges_seq.A;
   uintE* used = used_seq.A;
+  uintE* update_idx = newA(uintE, stepSize+1);
 
-  //granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
-
-  
   const intT eltsPerCacheLine = 64/sizeof(long);
   granular_for(i,0,nu,nu > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
   for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
-    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){//parallel_for_1
+    parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
       intT used_idx = 0;
       intT shift = nu*(i-step*stepSize);
       intT u_idx = active.vtx(i);
@@ -469,29 +468,33 @@ pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* b
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = edgesV[v_offset+k];
 	  if (u2_idx != u_idx) {
-	    //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
 	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
 	    // alternatively, at end before clear do this
 	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) {used[shift+used_idx++] = shift+u2_idx; if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);}//update_dense[u2_idx]=true;}
-	  }
-	  //else break;
+	    if (wedges[shift+u2_idx] == 1) {
+        used[shift+used_idx++] = u2_idx; //if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);
+      }
+    }
 	}
       }
-      granular_for(j,0,used_idx,used_idx > 10000, { wedges[used[shift+j]] = 0; });
-      //      for(intT j=0; j < used_idx; ++j) { 
-      /*uintE num = wedges[used[shift+j]];
-      	num = num * (num-1) / 2;
-      	writeAdd(&butterflies[eltsPerCacheLine*(used[shift+j]-shift)], -1*num);*/
-      //  	wedges[used[shift+j]] = 0; 
-      //      }
+      granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
+      update_idx[i-step*stepSize] = used_idx;
     }
+    // used[shift+j] for relevant j as indicated by update contain all of the indices to be updated; must call update here
+    long use_stepSize = active.size() < (step+1)*stepSize ? active.size() - step*stepSize : stepSize;
+    update_idx[use_stepSize] = 0;
+    sequence::plusScan(update_idx,update_idx,use_stepSize+1);
+    ps.resize_update(update_idx[use_stepSize]);
+    auto update_seq = ps.update_seq_int.A;
+    parallel_for(intT i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
+      intT shift = nu*(i-step*stepSize);
+      parallel_for(long j=0; j < update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize]; ++j) {
+        update_seq[update_idx[i-step*stepSize]+j] = used[shift+j];
+      }
+    }
+    updateBuckets(D, b, k2, butterflies, (active.size() < 1000), nu, update_seq, update_idx[use_stepSize]);
   }
-  auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
-  auto f_in = make_in_imap<bool>(nu, f);
-  auto out = pbbs::pack_index<uintE>(f_in);
-  out.alloc = false;
-  return make_pair(out.s, out.size());
+  free(update_idx);
 }
 
 //***************************************************************************************************
@@ -502,9 +505,7 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* 
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
   if (type == 3) {
-    auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v);
-    updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
-    free(ret.first);
+    PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v, D, b, k);
     return;
   }
   

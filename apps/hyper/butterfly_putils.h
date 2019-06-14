@@ -88,7 +88,9 @@ struct PeelSpace {
 PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
   using E = pair<long, long>;
   using X = pair<uintE,long>;
-  update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  if (type != 3) update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  else update_seq_int = _seq<uintE>(newA(uintE, stepSize), stepSize);
+
   if (type == 0) {
     using T = sparseAdditiveSet<long, long>*;
     wedges_hash = new sparseAdditiveSet<long, long>(1,1, LONG_MAX, LONG_MAX);
