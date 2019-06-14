@@ -442,7 +442,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  long stepSize = active.size() < MAX_STEP_SIZE ? active.size() : MAX_STEP_SIZE; //tunable parameter
+  long stepSize = active.size() < ps.stepSize ? active.size() : ps.stepSize; //tunable parameter
 
   auto wedges_seq = ps.wedges_seq_int;
   auto used_seq = ps.used_seq_int;
@@ -536,7 +536,7 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies,
   }
 }
 
-array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_wedges, long type=0, size_t num_buckets=128) {
+array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_wedges, long type, long max_array_size, size_t num_buckets=128) {
   // Butterflies are assumed to be stored on U
   const long nu = use_v ? GA.nu : GA.nv;
   
@@ -546,7 +546,8 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
 
   auto b = make_buckets(nu, D, increasing, num_buckets); // TODO may also have to fix buckets to use long
 
-  PeelSpace ps = PeelSpace(type, nu, MAX_STEP_SIZE);
+  long stepSize = min<long>(getWorkers() * 60, max_array_size/nu);
+  PeelSpace ps = PeelSpace(type, nu, stepSize);
 
   size_t finished = 0;
   //long nonZeroRounds = 0;

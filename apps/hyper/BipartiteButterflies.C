@@ -232,7 +232,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     if(!nopeel) {
       timer t2;
       t2.start();
-      auto cores = Peel(GA, use_v, butterflies, max_wedges, tp);
+      auto cores = Peel(GA, use_v, butterflies, max_wedges, tp, max_array_size);
       t2.stop();
       if (tp ==0) t2.reportTotal("Hash Peel:");
       else if (tp==1) t2.reportTotal("Sort Peel:");
