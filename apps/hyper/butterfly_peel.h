@@ -496,6 +496,85 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   }
 }
 
+pair<uintE*, long> PeelOrigParallel_WedgeAware(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  long stepSize = active.size() < ps.stepSize ? active.size() : ps.stepSize; //tunable parameter
+
+  auto wedges_seq = ps.wedges_seq_int;
+  auto used_seq = ps.used_seq_int;
+
+  uintE* wedges = wedges_seq.A;
+  uintE* used = used_seq.A;
+  long* update_idx = ps.update_idx_seq_int.A;
+
+  auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
+  long* wedgesPrefixSum = getActiveWedgeIdxs(active_map,active.size(),GA,use_v);
+
+  const intT eltsPerCacheLine = 64/sizeof(long);
+
+  for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
+    std::function<void(intT,intT)> recursive_lambda =
+      [&]
+      (intT start, intT end){
+      if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
+	for (intT i = start; i < end; i++){
+      intT used_idx = 0;
+      long shift = nu*(i-step*stepSize);
+      intT u_idx = active.vtx(i);
+      intT u_offset  = offsetsU[u_idx];
+      intT u_deg = offsetsU[u_idx+1]-u_offset;
+      for (intT j=0; j < u_deg; ++j ) {
+	uintE v = edgesU[u_offset+j];
+	intT v_offset = offsetsV[v];
+	intT v_deg = offsetsV[v+1]-offsetsV[v];
+	for (intT k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = edgesV[v_offset+k];
+	  if (u2_idx != u_idx) {
+	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
+	    // alternatively, at end before clear do this
+	    wedges[shift+u2_idx]++;
+	    if (wedges[shift+u2_idx] == 1) {
+        used[shift+used_idx++] = u2_idx; //if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);
+      }
+    }
+	}
+      }
+      granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
+      update_idx[i-step*stepSize] = used_idx;
+    }
+
+    } else {
+	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	recursive_lambda(start + ((end-start)>>1), end);
+      }
+    }; 
+    recursive_lambda(step*stepSize,min((step+1)*stepSize,active.size()));
+    
+// used[shift+j] for relevant j as indicated by update contain all of the indices to be updated; must call update here
+    long use_stepSize = active.size() < (step+1)*stepSize ? active.size() - step*stepSize : stepSize;
+    update_idx[use_stepSize] = 0;
+    sequence::plusScan(update_idx,update_idx,use_stepSize+1);
+    ps.resize_update(update_idx[use_stepSize]);
+    auto update_seq = ps.update_seq_int.A;
+    parallel_for(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
+      long shift = nu*(i-step*stepSize);
+      granular_for(j,0,update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize],update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize] > 10000, { 
+      //parallel_for(long j=0; j < update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize]; ++j) {
+        update_seq[update_idx[i-step*stepSize]+j] = used[shift+j];
+      });
+    }
+    updateBuckets(D, b, k2, butterflies, (stepSize < 1000), nu, update_seq, update_idx[use_stepSize]);
+  }
+  free(wedgesPrefixSum);
+}
+
 //***************************************************************************************************
 //***************************************************************************************************
 
@@ -505,6 +584,10 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies,
   bool is_seq = (active.size() < 1000);
   if (type == 3) {
     PeelOrigParallel(ps, active, butterflies, GA, use_v, D, b, k);
+    return;
+  }
+  else if (type == 5) {
+    PeelOrigParallel_WedgeAware(ps, active, butterflies, GA, use_v, D, b, k);
     return;
   }
   

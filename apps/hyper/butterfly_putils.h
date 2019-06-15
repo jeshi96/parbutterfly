@@ -352,15 +352,11 @@ pair<long,intT> getNextActiveWedgeIdx_seq(Sequence I, intT num_I, bipartiteCSR& 
   return make_pair(num_wedges, num_I);
 }
 
-// TODO based on half can also optimize this stuff? but will be hard to parallelize later so maybe not
-//JS: there looks to be some inefficiency here. we should have gotten the prefix sum of wedges for all vertices at the beginning, so we don't need to recompute it here. binary search can use a doubling search instead, starting at the last index until getting the right range, then binary search inside.
 template<class Sequence>
-pair<long, intT> getNextActiveWedgeIdx(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
+long* getActiveWedgeIdxs(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, intT curr_idx=0) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  if (num_I - curr_idx < 10000) return getNextActiveWedgeIdx_seq(I, num_I, GA, use_v, max_wedges, curr_idx);
   long* idxs = newA(long, num_I - curr_idx + 1);
   idxs[num_I-curr_idx] = 0;
   parallel_for(intT i=curr_idx; i < num_I; ++i) {
@@ -375,6 +371,19 @@ pair<long, intT> getNextActiveWedgeIdx(Sequence I, intT num_I, bipartiteCSR& GA,
     }
   }
   sequence::plusScan(idxs, idxs, num_I - curr_idx + 1);
+  return idxs;
+}
+
+// TODO based on half can also optimize this stuff? but will be hard to parallelize later so maybe not
+//JS: there looks to be some inefficiency here. we should have gotten the prefix sum of wedges for all vertices at the beginning, so we don't need to recompute it here. binary search can use a doubling search instead, starting at the last index until getting the right range, then binary search inside.
+template<class Sequence>
+pair<long, intT> getNextActiveWedgeIdx(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  if (num_I - curr_idx < 10000) return getNextActiveWedgeIdx_seq(I, num_I, GA, use_v, max_wedges, curr_idx);
+  long* idxs = getActiveWedgeIdxs(I, num_I, GA, use_v, curr_idx);
 
   auto idx_map = make_in_imap<long>(num_I - curr_idx, [&] (size_t i) { return idxs[i+1]; });
   auto lte = [] (const long& l, const long& r) { return l <= r; };
