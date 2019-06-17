@@ -433,7 +433,7 @@ pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies
   return make_pair(next_idx, num_updates);
 }
 
-pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
 array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -496,7 +496,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   }
 }
 
-pair<uintE*, long> PeelOrigParallel_WedgeAware(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+void PeelOrigParallel_WedgeAware(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
 array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;

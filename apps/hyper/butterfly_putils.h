@@ -39,13 +39,13 @@ struct PeelESpace {
   _seq<long> used_u_seq_int;
 PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
   using X = tuple<uintE,long>;
-  if (type != 3) update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  if (type != 3 && type != 5) update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
   if (type == 0) update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
   else if (type == 1 || type == 2) {
     wedges_seq_tup = _seq<X>(newA(X, nu), nu);
     wedges_seq_tup_fil = _seq<X>(newA(X, nu), nu);
   }
-  else if (type == 3) {
+  else if (type == 3 || type == 5) {
     wedges_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
     granular_for(i,0,n_side*stepSize,n_side*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
     used_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
@@ -72,10 +72,10 @@ PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu
   }
 
   void del() {
-  	if (type != 3) update_seq_int.del();
+  	if (type != 3 && type != 5) update_seq_int.del();
     if (type == 0) update_hash.del();
     else if (type == 1 || type == 2) { wedges_seq_tup.del(); wedges_seq_tup_fil.del(); }
-    else if (type == 3) {wedges_seq_int.del(); used_seq_int.del();}
+    else if (type == 3 || type == 5) {wedges_seq_int.del(); used_seq_int.del();}
     else if (type == 4) {wedges_seq_int.del(); used_seq_int.del(); update_v_idx_seq_int.del(); update_u_idx_seq_int.del(); used_u_seq_int.del();}
   }
 };

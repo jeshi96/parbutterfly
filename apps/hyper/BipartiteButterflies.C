@@ -237,7 +237,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       if (tp ==0) t2.reportTotal("Hash Peel:");
       else if (tp==1) t2.reportTotal("Sort Peel:");
       else if (tp==2) t2.reportTotal("Hist Peel:");
-      else t2.reportTotal("Par Peel:");
+      else if (tp == 3) t2.reportTotal("Par Peel:");
+      else if (tp == 5) t2.reportTotal("WedgePar Peel:");
 
       /*long mc = 0;
       for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
@@ -286,7 +287,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       if (tp ==0) t2.reportTotal("Hash E Peel:");
       else if (tp==1) t2.reportTotal("Sort E Peel:");
       else if (tp == 2) t2.reportTotal("Hist E Peel:");
-      else t2.reportTotal("Par E Peel:");
+      else if (tp == 3) t2.reportTotal("Par E Peel:");
+      else if (tp == 4) t2.reportTotal("NoUpdatePar E Peel:");
+      else if (tp == 5) t2.reportTotal("WedgePar E Peel:");
     }
     free(eti);
 
