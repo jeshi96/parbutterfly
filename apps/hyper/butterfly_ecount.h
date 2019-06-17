@@ -1005,7 +1005,10 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   if (tw !=0) {
     timer t_rank;
     t_rank.start();
-    auto rank_tup = tw == 1 ? getCoCoreRanks(GA) : getApproxCoCoreRanks(GA);
+    tuple<uintE*,uintE*,uintE*> rank_tup;
+    if (tw == 1) rank_tup = getCoCoreRanks(GA)
+    else if (tw == 2) rank_tup = getApproxCoCoreRanks(GA);
+    else if (tw == 3) rank_tup = getDegRanks(GA);
 
     long num_ccwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
 					       rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));

@@ -197,7 +197,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     if (ty==0) t.reportTotal("Sort:");
     else if (ty==2) t.reportTotal("Hash:");
     else if (ty==4) t.reportTotal("Hist:");
-    else if (ty==7) t.reportTotal("Par");
+    else if (ty==7 || ty == 11) t.reportTotal("Par");
     else if (ty==8) t.reportTotal("WedgePar");
     cout << "number of butterflies: " << num_butterflies << "\n";
     return;
@@ -230,7 +230,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==3) t.reportTotal("HashCE:");
     else if (ty==4) t.reportTotal("Hist:");
     else if (ty==6) t.reportTotal("HistCE:");
-    else if (ty==7) t.reportTotal("Par");
+    else if (ty==7 || ty == 11) t.reportTotal("Par");
     else if (ty==8) t.reportTotal("WedgePar");
 
   
@@ -279,7 +279,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==1) t3.reportTotal("E SortCE:");
     else if (ty==4) t3.reportTotal("E Hist:");
     else if (ty==6) t3.reportTotal("E HistCE:");
-    else if (ty == 5) t3.reportTotal("E Par:");
+    else if (ty == 5 || ty == 11) t3.reportTotal("E Par:");
     else if (ty == 8) t3.reportTotal("E WedgePar:");
 
     const intT eltsPerCacheLine = 64/sizeof(long);

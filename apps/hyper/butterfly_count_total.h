@@ -512,7 +512,10 @@ long CountTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     t_rank.start();
     //auto rank_tup = getDegRanks(GA);
     // auto rank_tup = getCoreRanks(GA);
-    auto rank_tup = tw == 1 ? getCoCoreRanks(GA) : getApproxCoCoreRanks(GA);
+    tuple<uintE*,uintE*,uintE*> rank_tup;
+    if (tw == 1) rank_tup = getCoCoreRanks(GA)
+    else if (tw == 2) rank_tup = getApproxCoCoreRanks(GA);
+    else if (tw == 3) rank_tup = getDegRanks(GA);
 
     //long num_rwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
     //  rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));
@@ -537,7 +540,7 @@ long CountTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     cout << "Side wedges: " << num_wedges << "\n";
     cout << "Co Core wedges: " << num_ccwedges << "\n"; */
 
-    if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2) return CountRankTotal(GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+    if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2 || tw == 3) return CountRankTotal(GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
     free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
   }
   const intT eltsPerCacheLine = 64/sizeof(long);
