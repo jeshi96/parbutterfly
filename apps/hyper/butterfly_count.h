@@ -295,7 +295,6 @@ intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   return next_idx;
 }
 
-// TODO modularize this stuff better
 intT CountHash(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges,
 	       long* wedge_idxs, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
@@ -303,8 +302,8 @@ intT CountHash(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, lo
   const intT eltsPerCacheLine = 64/sizeof(long);
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
-  //cout << next_idx << endl;
-  size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp); //TODO should be long num?
+
+  size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
 
   // Retrieve count on each key; that number choose 2 is the number of butterflies  
   parallel_for (long i=0; i < num_wedges_seq; ++i) {
@@ -596,7 +595,6 @@ intT CountHistCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 //********************************************************************************************
 //********************************************************************************************
 
-//JS: to do: integrate into framework so that ranked versions and edge counting (both ranked/unranked) work as well 
 void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* butterflies, long max_array_size, long* wedgesPrefixSum) {
   timer t1,t2,t3,t4;//,t5;
   const long nv = use_v ? GA.nv : GA.nu;

@@ -31,6 +31,7 @@
 #include "butterfly_ecount.h"
 #include "butterfly_peel.h"
 #include "butterfly_epeel.h"
+#include "butterfly_count_total.h"
 
 #define clean_errno() (errno == 0 ? "None" : strerror(errno))
 #define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
@@ -172,6 +173,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long te = P.getOptionLongValue("-e",0);
   long tw = P.getOptionLongValue("-w",0);
   bool nopeel = P.getOptionValue("-nopeel");
+  bool total = P.getOptionValue("-total");
   
   // # of max wedges
   long max_wedges = P.getOptionLongValue("-m",2577500000);
@@ -185,8 +187,23 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   bool use_v = get<0>(use_v_tuple);
   long num_wedges = get<1>(use_v_tuple);
   t1.reportTotal("preprocess (wedge counts)");
-  
-  //TODO seq code integrate w/count
+
+  if (total) {
+    timer t;
+    t.start();
+    long num_butterflies = CountTotal(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
+    t.stop();
+
+    if (ty==0) t.reportTotal("Sort:");
+    else if (ty==2) t.reportTotal("Hash:");
+    else if (ty==4) t.reportTotal("Hist:");
+    else if (ty==7) t.reportTotal("Par");
+    else if (ty==8) t.reportTotal("WedgePar");
+    cout << "number of butterflies: " << num_butterflies << "\n";
+    return;
+  }
+
+ //TODO seq code integrate w/count
   if (te == 0) {
     if (ty == 9) CountOrigCompactSerial(GA,use_v);
     else if (ty == 12) {
