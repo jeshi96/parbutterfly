@@ -611,7 +611,7 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 //********************************************************************************************
 
 void CountEOrigCompactParallel_WedgeAware(bipartiteCSR& GA, long* butterflies, long* butterflies_u, bool use_v, long max_array_size, long* wedgesPrefixSum) {
-  timer t1,t2,t3,t4;//,t5;
+
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -621,25 +621,27 @@ void CountEOrigCompactParallel_WedgeAware(bipartiteCSR& GA, long* butterflies, l
   
 
   long stepSize = min<long>(getWorkers() * 60, max_array_size/nu); //15 tunable parameter
-
+//#ifdef VERBOSE
+  timer t1,t2,t3,t4;//,t5;
   t1.start();
+//#endif
   //cout << "Original Parallel Wedge-Aware" << endl;
   //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
 
   uintE* wedges = newA(uintE, nu*stepSize);
   uintE* used = newA(uintE, nu*stepSize);
+  t1.stop();
+#ifdef VERBOSE
   t1.reportTotal("preprocess (malloc)");
+#endif
   t3.start();
   granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
+  t3.stop();
+#ifdef VERBOSE
   t3.reportTotal("preprocess (initialize)");
-
-  //t5.start();
-  //long* wedgesPrefixSum = computeWorkPrefixSum(GA,use_v);
-  //t5.reportTotal("preprocess (work prefix sum)");
-
   t2.start();
-  
+#endif
   for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
     std::function<void(intT,intT)> recursive_lambda =
       [&]
@@ -686,7 +688,9 @@ void CountEOrigCompactParallel_WedgeAware(bipartiteCSR& GA, long* butterflies, l
     }; 
     recursive_lambda(step*stepSize,min((step+1)*stepSize,nu));
   }
+#ifdef VERBOSE
   t2.reportTotal("counting (main loop)");
+#endif
   
   free(wedges);
   free(used);
@@ -694,9 +698,11 @@ void CountEOrigCompactParallel_WedgeAware(bipartiteCSR& GA, long* butterflies, l
 }
 
 void CountEOrigCompactParallel(uintE* eti, long* butterflies, long* butterflies_u, bipartiteCSR& GA, bool use_v, long max_array_size) {
+//#ifdef VERBOSE
   timer t1,t2,t3;
   //cout << "Original Parallel for Edges" << endl;
   t1.start();
+//#endif
   
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -710,14 +716,19 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, long* butterflies_
   uintE* wedges = newA(uintE, nu*stepSize);
   uintE* used = newA(uintE, nu*stepSize);
   //cout << nu*stepSize << endl;
+  t1.stop();
+#ifdef VERBOSE
   t1.reportTotal("preprocess (malloc)");
+#endif
   t3.start();
   granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
-  
+  t3.stop();
+#ifdef VERBOSE
   t3.reportTotal("preprocess (initialize)");
 
   t2.start();
+#endif
 
   for(long step = 0; step < (nu+stepSize-1)/stepSize; step++) {
     parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,nu); ++i){
@@ -755,34 +766,38 @@ void CountEOrigCompactParallel(uintE* eti, long* butterflies, long* butterflies_
       for(long j=0; j < used_idx; ++j) { wedges[used[shift+j]+shift] = 0; }
     }
   }
+#ifdef VERBOSE
   t2.reportTotal("counting (main loop)");
+#endif
   
   free(wedges);
   free(used);
 }
 
 void CountEOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long max_array_size, long* wedgesPrefixSum) {
-  timer t1,t2,t3,t4;//,t5;
-
   long stepSize = min<long>(getWorkers() * 20, max_array_size/GA.n); //15 tunable parameter
-
+//#ifdef VERBOSE
+  timer t1,t2,t3,t4;//,t5;
   t1.start();
+//#endif
   //cout << "Original Parallel Wedge-Aware" << endl;
   //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
 
   uintE* wedges = newA(uintE, GA.n*stepSize);
   uintE* used = newA(uintE, GA.n*stepSize);
+  t1.stop();
+#ifdef VERBOSE
   t1.reportTotal("preprocess (malloc)");
+#endif
   t3.start();
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
+  t3.stop();
+#ifdef VERBOSE
   t3.reportTotal("preprocess (initialize)");
 
-  //t5.start();
-  //long* wedgesPrefixSum = computeWorkPrefixSum(GA,use_v);
-  //t5.reportTotal("preprocess (work prefix sum)");
-
   t2.start();
+#endif
   
   for(intT step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
     std::function<void(intT,intT)> recursive_lambda =
@@ -838,7 +853,9 @@ void CountEOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long 
     }; 
     recursive_lambda(step*stepSize,min((step+1)*stepSize,GA.n));
   }
+#ifdef VERBOSE
   t2.reportTotal("counting (main loop)");
+#endif
   
   free(wedges);
   free(used);
@@ -846,21 +863,28 @@ void CountEOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long 
 }
 
 void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_size) {
+//#ifdef VERBOSE
   timer t1,t2,t3;
   //cout << "Original Work-efficient Parallel for Edges" << endl;
   t1.start();
+//#endif
 
   long stepSize = min<long>(getWorkers() * 7.5, max_array_size/GA.n); //15 tunable parameter
   uintE* wedges = newA(uintE, GA.n*stepSize);
   uintE* used = newA(uintE, GA.n*stepSize);
+  t1.stop();
+#ifdef VERBOSE
   t1.reportTotal("preprocess (malloc)");
+#endif
   t3.start();
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
   const intT eltsPerCacheLine = 64/sizeof(long);
-
+  t3.stop();
+#ifdef VERBOSE
   t3.reportTotal("preprocess (initialize)");
 
   t2.start();
+#endif
 
   for(long step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
     parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,GA.n); ++i){
@@ -906,7 +930,9 @@ void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
       }
     }
   }
+#ifdef VERBOSE
   t2.reportTotal("counting (main loop)");
+#endif
   
   free(wedges);
   free(used);
@@ -914,29 +940,36 @@ void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 
 long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size, long type,
 		 uintE* ranks, uintE* rankV, uintE* rankU) {
+#ifdef VERBOSE
   timer t_rank;
   t_rank.start();
+#endif
   auto g_pair = rankGraphEdges(GA, use_v, ranks, rankV, rankU);
   auto g = g_pair.first;
   auto edge_converter = g_pair.second;
   free(ranks); free(rankU); free(rankV); 
+#ifdef VERBOSE
   t_rank.reportTotal("ranking");
 
   timer t_time, t_time2;
   t_time.start();
+#endif
 
   const intT eltsPerCacheLine = 64/sizeof(long);
   long numEdges = g.offsets[g.n]; //TODO check is this g.numEdges*2
   long* rank_butterflies = newA(long,eltsPerCacheLine*numEdges);
+#ifdef VERBOSE
   t_time.reportTotal("preprocess (malloc)");
 
   t_time2.start();
+#endif
   granular_for(i,0,numEdges,numEdges > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
   long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
   CountESpace cs = CountESpace(type, GA.numEdges, true);
-
+#ifdef VERBOSE
   if (type == 8) t_time2.reportTotal("counting (scan)");
+#endif
 
   if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
   else if (type == 8) CountEOrigCompactParallel_WedgeAware(g, rank_butterflies, max_array_size, wedge_idxs);
@@ -970,12 +1003,13 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   //granular_for(i,0,g.n,g.n > 10000, { rank_butterflies2[eltsPerCacheLine*i] = 0; });
   //CountWorkEfficientParallel(g, rank_butterflies2);
   //for(long i=0; i < g.n; ++i) {assert(rank_butterflies2[eltsPerCacheLine*i] == rank_butterflies[eltsPerCacheLine*i]);}
-
+#ifdef VERBOSE
   if (type != 11 && type != 8) t_time2.reportTotal("counting");
+
 
   timer t_convert;
   t_convert.start();
-
+#endif
   long* butterflies = newA(long, eltsPerCacheLine*GA.numEdges);
   granular_for(i,0,GA.numEdges,GA.numEdges > 10000, { butterflies[eltsPerCacheLine * i] = 0; });
 
@@ -992,8 +1026,9 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   free(rank_butterflies);
   free(edge_converter);
   g.del();
-
+#ifdef VERBOSE
   t_convert.reportTotal("convert");
+#endif
 
   return butterflies;
 }
@@ -1003,10 +1038,12 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
 
   const intT eltsPerCacheLine = 64/sizeof(long);
   if (tw !=0) {
+#ifdef VERBOSE
     timer t_rank;
     t_rank.start();
+#endif
     tuple<uintE*,uintE*,uintE*> rank_tup;
-    if (tw == 1) rank_tup = getCoCoreRanks(GA)
+    if (tw == 1) rank_tup = getCoCoreRanks(GA);
     else if (tw == 2) rank_tup = getApproxCoCoreRanks(GA);
     else if (tw == 3) rank_tup = getDegRanks(GA);
 
@@ -1014,18 +1051,19 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
 					       rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));
     num_ccwedges += sequence::reduce<long>((long) 0, GA.nv, addF<long>(),
 					   rankWedgeF<long>(GA.offsetsV, GA.edgesV, get<1>(rank_tup), get<2>(rank_tup)));
-  
+#ifdef VERBOSE
     t_rank.reportTotal("ranking");
+#endif
 
     //cout << "Side wedges: " << num_wedges << "\n";
     //cout << "Co Core wedges: " << num_ccwedges << "\n";
 
-    if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2) return CountERank(eti, GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+    if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2 || tw == 3) return CountERank(eti, GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
     free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
   }
-
+#ifdef VERBOSE
   timer t_malloc; t_malloc.start();
-
+#endif
   long* butterflies = newA(long, eltsPerCacheLine*GA.numEdges);
   parallel_for(long i=0; i < GA.numEdges; ++i){
     butterflies[eltsPerCacheLine*i] = 0;
@@ -1037,15 +1075,15 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
     butterflies_u[eltsPerCacheLine*i] = 0;
   }
   }
-
+#ifdef VERBOSE
   t_malloc.reportTotal("preprocess (malloc)"); timer t_time;
   t_time.start();
-
+#endif
   long* wedge_idxs = type == 5 ? nullptr : countWedgesScan(GA, use_v, true);
   CountESpace cs = CountESpace(type, GA.numEdges, false);
-
+#ifdef VERBOSE
   if (type == 8) t_time.reportTotal("counting (scan)");
-
+#endif
   if (type == 5) CountEOrigCompactParallel(eti, butterflies, butterflies_u, GA, use_v, max_array_size);
   else if (type == 8) CountEOrigCompactParallel_WedgeAware(GA, butterflies, butterflies_u, use_v, max_array_size, wedge_idxs);
   else {
@@ -1076,16 +1114,21 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   cs.del();
 
   if (type != 5) free(wedge_idxs);
+#ifdef VERBOSE
   if (type != 5 && type != 8) t_time.reportTotal("counting");
-
+#endif
   if (type !=3 && type != 1 && type != 6) {
+#ifdef VERBOSE
   timer t_convert;
   t_convert.start();
+#endif
   parallel_for(long i=0; i < GA.numEdges; ++i) {
     butterflies[eltsPerCacheLine*eti[i]] += butterflies_u[eltsPerCacheLine*i];
   }
   free(butterflies_u);
+#ifdef VERBOSE
   t_convert.reportTotal("convert");
+#endif
   }
 
   return butterflies;
