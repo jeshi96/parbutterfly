@@ -919,6 +919,8 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
 
   long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
 
+  if (type == 8) t_time.reportTotal("counting (scan)");
+
 
   if (type == 11) CountWorkEfficientParallel(g, rank_butterflies, max_array_size);
   else if (type == 8) CountOrigCompactParallel_WedgeAware(g, rank_butterflies, max_array_size, wedge_idxs);
@@ -1028,6 +1030,8 @@ t_malloc.start();
 
   long* wedge_idxs = (type == 7 || type == 11) ? nullptr : countWedgesScan(GA, use_v, true);
   CountSpace cs = CountSpace(type, nu, false);
+
+  if (type == 8) t_time.reportTotal("counting (scan)");
 
 
   if (type == 7) CountOrigCompactParallel(GA, use_v, butterflies, max_array_size);

@@ -936,6 +936,8 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
   CountESpace cs = CountESpace(type, GA.numEdges, true);
 
+  if (type == 8) t_time2.reportTotal("counting (scan)");
+
   if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
   else if (type == 8) CountEOrigCompactParallel_WedgeAware(g, rank_butterflies, max_array_size, wedge_idxs);
   else {
@@ -1038,6 +1040,8 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
 
   long* wedge_idxs = type == 5 ? nullptr : countWedgesScan(GA, use_v, true);
   CountESpace cs = CountESpace(type, GA.numEdges, false);
+
+  if (type == 8) t_time.reportTotal("counting (scan)");
 
   if (type == 5) CountEOrigCompactParallel(eti, butterflies, butterflies_u, GA, use_v, max_array_size);
   else if (type == 8) CountEOrigCompactParallel_WedgeAware(GA, butterflies, butterflies_u, use_v, max_array_size, wedge_idxs);

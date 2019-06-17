@@ -470,10 +470,12 @@ long CountRankTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedg
 
   long num_butterflies = 0;
 
+  if (type == 8) t_time.reportTotal("counting (scan)");
+
   if (type == 11) num_butterflies = CountWorkEfficientParallelTotal(g, max_array_size);
   else if (type == 8) num_butterflies = CountOrigCompactParallel_WedgeAwareTotal(g, max_array_size, wedge_idxs);
   else {
-    CountSpace cs = CountSpace(type, g.n, true);
+    CountSpace cs = CountSpace(type, g.n, false);
     if (max_wedges >= num_wedges) {
       if (type == 0) num_butterflies = CountSortTotal(cs, g, num_wedges, max_wedges, wedge_idxs).second;
       else if (type == 2) num_butterflies = CountHashTotal(cs, g, num_wedges, max_wedges, wedge_idxs).second;
@@ -546,6 +548,8 @@ long CountTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   long* wedge_idxs = (type == 7 || type == 11) ? nullptr : countWedgesScan(GA, use_v, true);
   CountSpace cs = CountSpace(type, nu, false);
   long num_butterflies = 0;
+
+  if (type == 8) t_time.reportTotal("counting (scan)");
 
 
   if (type == 7) num_butterflies = CountOrigCompactParallelTotal(GA, use_v, max_array_size);
