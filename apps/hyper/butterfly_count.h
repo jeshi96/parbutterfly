@@ -1027,8 +1027,10 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   t_malloc.start();
 #endif
   const intT eltsPerCacheLine = 64/sizeof(long);
-  long* rank_butterflies = newA(long,eltsPerCacheLine*g.n);
-  granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
+  long* rank_butterflies = (type == 12) ? nullptr : newA(long,eltsPerCacheLine*g.n);
+  if (type != 12) {
+    granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
+  }
 #ifdef VERBOSE
   t_malloc.reportTotal("preprocess (malloc)");
 
@@ -1071,7 +1073,7 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     cs.del();
   }
   g.del();
-  if (type == 12) return nullptr;
+  if (type == 12) {free(rankU); free(rankV); return nullptr;}
   if (type != 11) free(wedge_idxs);
 
   //uintE* rank_butterflies2 = newA(uintE,eltsPerCacheLine*g.n);
