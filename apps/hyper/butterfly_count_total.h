@@ -274,7 +274,7 @@ long CountOrigCompactParallel_WedgeAwareTotal(graphCSR& GA, long max_array_size,
   long* results = newA(long, stepSize*eltsPerCacheLine);
   t1.stop();
 #ifdef VERBOSE
-  t1.reportTotal("preprocess (malloc)")
+  t1.reportTotal("preprocess (malloc)");
 #endif
   t3.start();
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
