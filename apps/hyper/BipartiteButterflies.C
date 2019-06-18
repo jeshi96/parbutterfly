@@ -99,73 +99,6 @@ void CountOrigCompactSerial(bipartiteCSR& GA, bool use_v) {
   cout << "num: " << results/2 << "\n";
 }
 
-void CountWorkEfficientSerial(graphCSR& GA) {
-  cout << "Work-efficient Serial (make sure running with CILK_NWORKERS=1)" << endl;
-  timer t1,t2;
-  t1.start();
-  uintE* wedges = newA(uintE, GA.n);
-  uintE* used = newA(uintE, GA.n);
-  long* butterflies = newA(long,GA.n);
-  for(long i=0;i<GA.n;i++) {
-    wedges[i] = 0;
-    butterflies[i] = 0;
-  }
-  t1.reportTotal("preprocess");
-  t2.start();
-  for(long i=0; i < GA.n; ++i){
-    intT used_idx = 0;
-    intT u_offset  = GA.offsets[i];
-    intT u_deg = GA.offsets[i+1]-u_offset;
-    for (intT j=0; j < u_deg; ++j ) {
-      uintE v = GA.edges[u_offset+j] >> 1;
-      intT v_offset = GA.offsets[v];
-      intT v_deg = GA.offsets[v+1]-v_offset;
-      if (v <= i) break;
-      for (intT k=0; k < v_deg; ++k) { 
-	uintE u2_idx = GA.edges[v_offset+k] >> 1;
-	if (u2_idx > i) { //TODO combine into one graph
-	  if (GA.edges[v_offset+k] & 0b1) {
-	    butterflies[i] += wedges[u2_idx];
-	    butterflies[u2_idx] += wedges[u2_idx];
-	  }
-	  //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
-	  wedges[u2_idx]++;
-	  if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
-	}
-	else break;
-      }
-    }
-
-    for (long j=0; j < u_deg; ++j ) {
-      uintE v = GA.edges[u_offset+j] >> 1;
-      intT v_offset = GA.offsets[v];
-      intT v_deg = GA.offsets[v+1]-v_offset;
-      if (v <= i) break;
-      if (!(GA.edges[u_offset+j] & 0b1)) continue;
-      for (long k=0; k < v_deg; ++k) { 
-	uintE u2_idx = GA.edges[v_offset+k] >> 1;
-	if (u2_idx > i) { //TODO combine into one graph
-	  if (wedges[u2_idx] > 1) butterflies[v] += wedges[u2_idx]-1;
-	}
-	else break;
-      }
-    }
-
-    for(long j=0; j < used_idx; ++j) {
-      wedges[used[j]] = 0;
-    }
-  }
-
-  t2.reportTotal("main loop");
-  
-  free(wedges);
-  free(used);
-  long total = 0;
-  for(long i=0;i<GA.n;i++) total += butterflies[i];
-  free(butterflies);
-  cout << "num: " << total/2 << "\n";
-}
-
 // Note: must be invoked with symmetricVertex
 void Compute(bipartiteCSR& GA, commandLine P) {
   // Method type for counting + peeling
@@ -189,6 +122,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long num_wedges = get<1>(use_v_tuple);
   t1.reportTotal("preprocess (wedge counts)");
 
+  // if you only want total counts
   if (total) {
     timer t;
     t.start();
@@ -206,18 +140,10 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
  //TODO seq code integrate w/count
   if (te == 0) {
+    // 12 for work efficient serial
     if (ty == 9) CountOrigCompactSerial(GA,use_v);
-    else if (ty == 12) {
-      timer t_rank;
-      t_rank.start();
-      auto rank_tup = getDegRanks(GA);
-      auto g = rankGraph(GA, use_v, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
-      free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
-      t_rank.reportTotal("ranking");
-      CountWorkEfficientSerial(g);
-    }
 
-    if (ty == 9 || ty == 12) return;
+    if (ty == 9) return;
     const intT eltsPerCacheLine = 64/sizeof(long);
 
     timer t;
@@ -233,6 +159,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==6) t.reportTotal("HistCE:");
     else if (ty==7 || ty == 11) t.reportTotal("Par");
     else if (ty==8) t.reportTotal("WedgePar");
+    else if (ty==12) t.reportTotal("Serial");
+
+    if (ty==12) return;
 
   
     long num_idxs = use_v ? GA.nu : GA.nv;
