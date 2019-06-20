@@ -65,3 +65,4 @@ apps/hyper/._run_bb
 apps/hyper/.vscode/
 ._nucleus-master
 lib/.vscode/
+apps/hyper/out.*

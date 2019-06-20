@@ -161,7 +161,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==8) t.reportTotal("WedgePar");
     else if (ty==12) t.reportTotal("Serial");
 
-    if (ty==12) return;
+    //if (ty==12) return;
 
   
     long num_idxs = use_v ? GA.nu : GA.nv;

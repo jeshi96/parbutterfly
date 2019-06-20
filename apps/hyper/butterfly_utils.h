@@ -288,6 +288,17 @@ tuple<uintE*, uintE*, uintE*> getRanks(bipartiteCSR& G, F samplesort_f) {
   return make_tuple(ranks, rankV, rankU);
 }
 
+tuple<uintE*, uintE*, uintE*> getApproxDegRanks(bipartiteCSR& G) {
+  auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
+    uintE deg_a = (a >= G.nv) ? G.offsetsU[a-G.nv+1]-G.offsetsU[a-G.nv] : G.offsetsV[a+1]-G.offsetsV[a];
+    uintE deg_b = (b >= G.nv) ? G.offsetsU[b-G.nv+1]-G.offsetsU[b-G.nv] : G.offsetsV[b+1]-G.offsetsV[b];
+    uintE log_deg_a = deg_a <= 0 ? 0 : (uintE) floor(log2(deg_a)) + 1;
+    uintE log_deg_b = deg_b <= 0 ? 0 : (uintE) floor(log2(deg_b)) + 1;
+    return log_deg_a > log_deg_b;
+  };
+  return getRanks(G, samplesort_f);
+}
+
 tuple<uintE*, uintE*, uintE*> getDegRanks(bipartiteCSR& G) {
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     uintE deg_a = (a >= G.nv) ? G.offsetsU[a-G.nv+1]-G.offsetsU[a-G.nv] : G.offsetsV[a+1]-G.offsetsV[a];

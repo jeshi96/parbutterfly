@@ -966,7 +966,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   granular_for(i,0,numEdges,numEdges > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
   long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
-  CountESpace cs = CountESpace(type, GA.numEdges, true);
+  CountESpace cs = CountESpace(type, numEdges, true);
 #ifdef VERBOSE
   if (type == 8) t_time2.reportTotal("counting (scan)");
 #endif
@@ -1046,6 +1046,7 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
     if (tw == 1) rank_tup = getCoCoreRanks(GA);
     else if (tw == 2) rank_tup = getApproxCoCoreRanks(GA);
     else if (tw == 3) rank_tup = getDegRanks(GA);
+    else if (tw == 4) rank_tup = getApproxDegRanks(GA);
 
     long num_ccwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
 					       rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));

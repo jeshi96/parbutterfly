@@ -555,6 +555,7 @@ long CountTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     if (tw == 1) rank_tup = getCoCoreRanks(GA);
     else if (tw == 2) rank_tup = getApproxCoCoreRanks(GA);
     else if (tw == 3) rank_tup = getDegRanks(GA);
+    else if (tw == 4) rank_tup = getApproxDegRanks(GA);
 
     //long num_rwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
     //  rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));

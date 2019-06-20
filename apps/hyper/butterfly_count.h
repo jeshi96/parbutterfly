@@ -932,13 +932,14 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 //********************************************************************************************
 //********************************************************************************************
 
-void CountWorkEfficientSerial(graphCSR& GA) {
+void CountWorkEfficientSerial(graphCSR& GA, long* butterflies) {
   //cout << "Work-efficient Serial (make sure running with CILK_NWORKERS=1)" << endl;
   timer t1,t2,t3;
   t1.start();
   uintE* wedges = newA(uintE, GA.n);
   uintE* used = newA(uintE, GA.n);
-  long* butterflies = newA(long,GA.n);
+  //long* butterflies = newA(long,GA.n);
+  const intT eltsPerCacheLine = 64/sizeof(long);
   t1.stop();
 #ifdef VERBOSE
   t1.reportTotal("preprocess (malloc)");
@@ -946,7 +947,7 @@ void CountWorkEfficientSerial(graphCSR& GA) {
   t3.start();
   for(long i=0;i<GA.n;i++) {
     wedges[i] = 0;
-    butterflies[i] = 0;
+    //butterflies[i] = 0;
   }
   t3.stop();
 #ifdef VERBOSE
@@ -967,8 +968,8 @@ void CountWorkEfficientSerial(graphCSR& GA) {
 	uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	if (u2_idx > i) { //TODO combine into one graph
 	  if (GA.edges[v_offset+k] & 0b1) {
-	    butterflies[i] += wedges[u2_idx];
-	    butterflies[u2_idx] += wedges[u2_idx];
+	    butterflies[eltsPerCacheLine*i] += wedges[u2_idx];
+	    butterflies[eltsPerCacheLine*u2_idx] += wedges[u2_idx];
 	  }
 	  //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
 	  wedges[u2_idx]++;
@@ -987,7 +988,7 @@ void CountWorkEfficientSerial(graphCSR& GA) {
       for (long k=0; k < v_deg; ++k) { 
 	uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	if (u2_idx > i) { //TODO combine into one graph
-	  if (wedges[u2_idx] > 1) butterflies[v] += wedges[u2_idx]-1;
+	  if (wedges[u2_idx] > 1) butterflies[eltsPerCacheLine*v] += wedges[u2_idx]-1;
 	}
 	else break;
       }
@@ -1004,9 +1005,9 @@ void CountWorkEfficientSerial(graphCSR& GA) {
   free(wedges);
   free(used);
 #ifdef VERBOSE
-  long total = 0;
-  for(long i=0;i<GA.n;i++) total += butterflies[i];
-  cout << "num butterflies: " << total/2 << "\n";
+  //long total = 0;
+  //for(long i=0;i<GA.n;i++) total += butterflies[i];
+  //cout << "num butterflies: " << total/2 << "\n";
 #endif
 }
 
@@ -1027,10 +1028,10 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   t_malloc.start();
 #endif
   const intT eltsPerCacheLine = 64/sizeof(long);
-  long* rank_butterflies = (type == 12) ? nullptr : newA(long,eltsPerCacheLine*g.n);
-  if (type != 12) {
+  long* rank_butterflies = newA(long,eltsPerCacheLine*g.n); //(type == 12) ? nullptr : 
+  //if (type != 12) {
     granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
-  }
+  //}
 #ifdef VERBOSE
   t_malloc.reportTotal("preprocess (malloc)");
 
@@ -1046,7 +1047,7 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
 
 
   if (type == 11) CountWorkEfficientParallel(g, rank_butterflies, max_array_size);
-  else if (type == 12) CountWorkEfficientSerial(g);
+  else if (type == 12) CountWorkEfficientSerial(g, rank_butterflies);
   else if (type == 8) CountOrigCompactParallel_WedgeAware(g, rank_butterflies, max_array_size, wedge_idxs);
   else {
     CountSpace cs = CountSpace(type, g.n, true);
@@ -1073,7 +1074,7 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     cs.del();
   }
   g.del();
-  if (type == 12) {free(rankU); free(rankV); return nullptr;}
+  //if (type == 12) {free(rankU); free(rankV); return nullptr;}
   if (type != 11) free(wedge_idxs);
 
   //uintE* rank_butterflies2 = newA(uintE,eltsPerCacheLine*g.n);
@@ -1118,6 +1119,7 @@ long* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long
     if (tw == 1) rank_tup = getCoCoreRanks(GA);
     else if (tw == 2) rank_tup = getApproxCoCoreRanks(GA);
     else if (tw == 3) rank_tup = getDegRanks(GA);
+    else if (tw == 4) rank_tup = getApproxDegRanks(GA);
 
     //long num_rwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
     //  rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));
