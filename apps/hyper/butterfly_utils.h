@@ -88,7 +88,7 @@ struct UVPSecond { uintE operator() (const UVertexPair& x) {return x.v2;}};
 struct UWFirst { uintE operator() (const UWedge& x) {return x.v1;}};
 struct UWSecond { uintE operator() (const UWedge& x) {return x.v2;}};
 template<class T, class X>
-  struct tupleFirst {T operator() (tuple<T,X> a,) {return get<0>(a);} };
+  struct tupleFirst {T operator() (tuple<T,X> a) {return get<0>(a);} };
 
 // Equality for VertexPair and UVertexPair
 struct UVertexPairEq { inline bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };

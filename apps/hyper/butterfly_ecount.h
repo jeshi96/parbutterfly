@@ -433,8 +433,8 @@ intT CountESort(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 
   // Retrieve frequency counts for all wedges with the same key
   // First, retrieve a list of indices where consecutive wedges have different keys
-  radix::parallelIntegerSort(wedges, num_wedges_f, UWFirst());
-  radix::parallelIntegerSort(wedges, num_wedges_f, UWSecond());
+  radix::parallelIntegerSort(wedges, num_wedges_curr, UWFirst());
+  radix::parallelIntegerSort(wedges, num_wedges_curr, UWSecond());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
 
   const intT eltsPerCacheLine = 64/sizeof(long);
