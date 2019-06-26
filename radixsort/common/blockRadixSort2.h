@@ -274,7 +274,7 @@ namespace intSort2 {
   template <class X, class T, class F>
   void blockSort(T *A, sizeT n, F f) {
   X temp;
-  X maxV = radix::findMax(A, n, f, temp);
+  X maxV = findMax(A, n, f, temp);
   iSort(A, n, maxV+1,  f); 
   }
 };
