@@ -20,8 +20,8 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#ifndef A_RADIX_INCLUDED
-#define A_RADIX_INCLUDED
+#ifndef IA_RADIX_INCLUDED
+#define IA_RADIX_INCLUDED
 
 #include <iostream>
 #include <math.h>
@@ -275,7 +275,50 @@ namespace intSort {
     iSort(A, (unsigned long*) NULL, n, m, true, f);
   }
 
+    template <class E, class F, class K>
+  K findMaxHelper(E* A, sizeT n, F f, sizeT P, K t){
+ 
+  K* temp = (K*)malloc(sizeof(E) * (P + 1));
+  parallel_for(unsigned long i = 0; i <P; i ++) {
+    unsigned long start = i * (long)n / P;
+    unsigned long end = ((long)(i + 1) * n) / P;
+    K local_max = 0;
+    for(;start < end; start++){
+      K current = f(A[start]);
+      if(current > local_max) {
+				local_max = current; 
+      }
+
+    }
+    temp[i] = local_max; 
+  }
+
+  K global_max = temp[0]; 
+
+  for(int i = 0; i < P; i++) {
+      if(temp[i] > global_max) {
+				global_max = temp[i]; 
+      }
+  }
+
+	return global_max;
 }
+
+
+template <class E, class F, class K>
+K findMax(E* A, sizeT n, F f, K temp){
+	K maxV = findMaxHelper(A, n, f, (sizeT)1000*getWorkers(), temp);
+  return maxV; 
+}
+
+  template <class X, class T, class F>
+  void blockSort(T *A, sizeT n, F f) {
+  X temp;
+  X maxV = findMax(A, n, f, temp);
+  iSort(A, n, maxV+1,  f); 
+  }
+
+};
 
 static void integerSort(uintT *A, long n) {
   long maxV = sequence::reduce(A, n, utils::maxF<uintT>());
