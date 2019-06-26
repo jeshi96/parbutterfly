@@ -274,7 +274,7 @@ namespace intSort {
   void iSortBottomUp(E *A, long n, long m, F f) {
     iSort(A, (unsigned long*) NULL, n, m, true, f);
   }
-};
+}
 
 template <class X, class T, class F>
 void blockIntegerSort(T *A, sizeT n, F f) {
