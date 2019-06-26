@@ -42,6 +42,7 @@
 #include <common_sort.h>
 
 #include <sequence.h>
+namespace radix{
 using namespace std;
 
     template <class E, class F>
@@ -192,5 +193,5 @@ template <class T1, class T2>
 void parallelIntegerSort(pair<T1, T2> *A, sizeT n) {
 	parallelIntegerSort(A, n, utils::firstF<T1, T2>());
 }
-
+}
 #endif

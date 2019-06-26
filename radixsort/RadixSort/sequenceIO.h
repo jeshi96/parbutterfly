@@ -32,7 +32,7 @@
 #include "sequence.h"
 #include <sys/mman.h>
 #include <errno.h>
-
+namespace radix{
 namespace benchIO {
   using namespace std;
   typedef pair<intT,intT> intPair;
@@ -158,5 +158,5 @@ namespace benchIO {
   }
 
 };
-
+}
 #endif // _SEQUENCE_IO

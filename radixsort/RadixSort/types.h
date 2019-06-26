@@ -9,7 +9,7 @@
 #include <tuple>
 #include <utility>
 #include <iostream>
-
+namespace radix{
 namespace detail {
     template<typename count_type, typename It, typename OutIt, typename ExtractKey>
 
@@ -123,3 +123,4 @@ namespace detail {
 }
 
 
+}

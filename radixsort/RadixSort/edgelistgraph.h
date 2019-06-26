@@ -13,7 +13,7 @@
 #include <../common/blockRadixSort2.h>
 #include <algorithm>
 using namespace std;
-
+namespace radix{
 #define MAX_PARALLEL_EDGES (MAXP * BUCKETS + BUCKETS + 5)
 
 class EdgeListGraph{
@@ -265,5 +265,5 @@ template<class T>
 
 };
 
-
+}
 #endif

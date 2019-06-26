@@ -7,7 +7,7 @@
 #include <radix_configs.h>
 #include <algorithm>
 using namespace std;
-
+namespace radix{
 struct Triangle {
 
     int from;
@@ -89,6 +89,6 @@ void executeTriangle(E *A, Triangle  *triangle) {
     }
 
 }
-
+}
 #endif
 

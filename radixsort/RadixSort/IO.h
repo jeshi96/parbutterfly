@@ -29,7 +29,7 @@
 #include <cstring>
 #include "sequence.h"
 #include "parallel.h"
-
+namespace radix{
 namespace benchIO {
   using namespace std;
 
@@ -215,5 +215,5 @@ namespace benchIO {
     return _seq<intT>(A,n);
   }
 };
-
+}
 #endif // _BENCH_IO

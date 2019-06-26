@@ -2,7 +2,7 @@
 #define _S_EDGE_INCLUDED
 
 #include <stdio.h>
-
+namespace radix{
 class Edge {
     public:
     sizeT amount;
@@ -58,4 +58,5 @@ class Edge {
         return true;
     }
 };
+}
 #endif

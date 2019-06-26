@@ -30,7 +30,7 @@
 // For fast popcount
 #include <immintrin.h>
 #include <x86intrin.h>
-
+namespace radix{
 using namespace std;
 
 #define _BSIZE 2048
@@ -605,5 +605,6 @@ namespace sequence {
     return m;
   }
 
+}
 }
 #endif // _A_SEQUENCE_INCLUDED

@@ -52,8 +52,8 @@ intT CountSort(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, lo
 
   // Retrieve frequency counts for all wedges with the same key
   // First, retrieve a list of indices where consecutive wedges have different keys
-  parallelIntegerSort(wedges, num_wedges_curr, UVPFirst());
-  parallelIntegerSort(wedges, num_wedges_curr, UVPSecond());
+  radix::parallelIntegerSort(wedges, num_wedges_curr, UVPFirst());
+  radix::parallelIntegerSort(wedges, num_wedges_curr, UVPSecond());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UVertexPairCmp(), UVertexPairEq(), LONG_MAX, nonMaxLongF());
 
   countButterfliesSort(butterflies, wedges, freq_pair.first, freq_pair.second);
@@ -69,8 +69,8 @@ intT CountSortCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 
   // Retrieve frequency counts for all wedges with the same key
   // We need to first collate by v1, v2
-  parallelIntegerSort(wedges, num_wedges_f, UVPFirst());
-  parallelIntegerSort(wedges, num_wedges_f, UVPSecond());
+  radix::parallelIntegerSort(wedges, num_wedges_f, UVPFirst());
+  radix::parallelIntegerSort(wedges, num_wedges_f, UVPSecond());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UVertexPairCmp(), UVertexPairEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
 
@@ -95,7 +95,7 @@ intT CountSortCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   free(freq_arr);
 
   // now, we need to collate by our indices
-  parallelIntegerSort(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleFirst<uintE,long>());
+  radix::parallelIntegerSort(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleFirst<uintE,long>());
   pair<long*, long> b_freq_pair = getFreqs<long>(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
   const intT eltsPerCacheLine = 64/sizeof(long);
@@ -122,8 +122,8 @@ intT CountSortCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 
   // Retrieve frequency counts for all wedges with the same key
   // We need to first collate
-  parallelIntegerSort(wedges, num_wedges_f, UWFirst());
-  parallelIntegerSort(wedges, num_wedges_f, UWSecond());
+  radix::parallelIntegerSort(wedges, num_wedges_f, UWFirst());
+  radix::parallelIntegerSort(wedges, num_wedges_f, UWSecond());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
 
@@ -154,7 +154,7 @@ intT CountSortCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   free(freq_arr);
 
   // now, we need to collate by our indices
-  parallelIntegerSort(cs.butterflies_seq_intt.A, num_wedges_f, tupleFirst<uintE,long>());
+  radix::parallelIntegerSort(cs.butterflies_seq_intt.A, num_wedges_f, tupleFirst<uintE,long>());
   auto b_freq_pair = getFreqs<long>(cs.butterflies_seq_intt.A, num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
 
@@ -180,8 +180,8 @@ intT CountSort(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 
   // Retrieve frequency counts for all wedges with the same key
   // First, retrieve a list of indices where consecutive wedges have different keys
-  parallelIntegerSort(wedges, num_wedges_curr, UWFirst());
-  parallelIntegerSort(wedges, num_wedges_curr, UWSecond());
+  radix::parallelIntegerSort(wedges, num_wedges_curr, UWFirst());
+  radix::parallelIntegerSort(wedges, num_wedges_curr, UWSecond());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
 
   const intT eltsPerCacheLine = 64/sizeof(long);

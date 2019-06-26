@@ -6,6 +6,7 @@
 #include <radix_configs.h>
 
 using namespace std;
+namespace radix{
 typedef unsigned char uint8_t;
 
 void getPrefixSum(vector<uint8_t> &input, vector<uint8_t> &res) {
@@ -101,5 +102,6 @@ void printPrefixSum(vector<sizeT> ps) {
     }
 #endif
     printf("\n");
+}
 }
 #endif

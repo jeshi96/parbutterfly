@@ -2,7 +2,7 @@
 #define _S_MISC_INCLUDED
 
 
-
+namespace radix{
 template <class E>
 void swap_E(E *x, E* y) {
     E temp = *x;
@@ -50,5 +50,5 @@ void printArray(E * A, int start, int n, F f, G g){
 };
 
 
-
+}
 #endif

@@ -2,7 +2,7 @@
 #define _S_COMMONSORT_INCLUDED
 #include <misc.h>
 #include <radix_configs.h>
-
+namespace radix{
 template< class _Type>
 //gcc can't inline this funciton for some reson 
 inline void _swap(_Type &a, _Type&b)  {
@@ -261,5 +261,5 @@ template <class E, class F, class bint>
 
 }
 
-
+}
 #endif

@@ -17,7 +17,7 @@
 
 
 using namespace std;
-
+namespace radix{
 template <class E, class F>  
 void radixSortOneLevel(E* A, sizeT n, int doneOffset, F f, sizeT processors, int depth);
 
@@ -191,5 +191,6 @@ bool multiBitSwapBasedSort(E *A, sizeT n, int buckets, sizeT K, long *internalCo
     delete blocks;
 #endif
     return false;
+}
 }
 #endif

@@ -34,7 +34,7 @@ pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
   auto ret = getIntersectWedges(eti, ite, current, ps, active_map, active.size(), GA, use_v, max_wedges, curr_idx);
   //ps.wedges_seq_tup_fil contains edge idx, val pairs; ret.first is size of this, ret.second is next idx
   // just need to hist up, update butterflies, return num updates
-  parallelIntegerSort(ps.wedges_seq_tup_fil.A, ret.first, tupleFirst<uintE,long>());
+  radix::parallelIntegerSort(ps.wedges_seq_tup_fil.A, ret.first, tupleFirst<uintE,long>());
   auto b_freq_pair = getFreqs<long>(ps.wedges_seq_tup_fil.A, ret.first, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
   ps.resize_update(b_freq_pair.second-1);

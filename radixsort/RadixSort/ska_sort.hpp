@@ -12,7 +12,7 @@
 #include <iostream>
 #include <radix_configs.h>
 #include <types.h>
-
+namespace radix{
 static constexpr size_t invalidMetaDataShift = 1000;
 //template <class sizeT>
 struct  metaData  {
@@ -902,4 +902,5 @@ template<typename It, typename OutIt>
 bool ska_sort_copy(It begin, It end, OutIt buffer_begin)
 {
     return ska_sort_copy(begin, end, buffer_begin, detail::IdentityFunctor());
+}
 }

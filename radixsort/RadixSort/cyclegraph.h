@@ -11,7 +11,7 @@
 #include <radix_configs.h>
 
 using namespace std;
-
+namespace radix{
 #define MAX_PARALLEL_EDGES (MAXP * BUCKETS + BUCKETS + 5)
 
 
@@ -200,6 +200,7 @@ class CyclePlan {
 
 
 };
+}
 #endif
 
 #endif

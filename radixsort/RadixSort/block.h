@@ -4,7 +4,7 @@
 #include <radix_configs.h>
 #include <ska_sort.hpp> 
 
-
+namespace radix{
 class SimpleBlock{
 public:
     sizeT start;
@@ -33,7 +33,7 @@ public:
 				block->bucketEnds[i] = block->counts[i] + block->bucketEnds[i-1];
 			}
    }
-
+}
 
 
 #endif
