@@ -279,7 +279,7 @@ namespace intSort {
 template <class X, class T, class F>
 static void blockIntegerSort(T *A, sizeT n, F f) {
   X temp;
-  X maxV = blockFindMax(A, n, f, temp);
+  X maxV = findMax(A, n, f, temp);
   intSort::iSort(A, n, maxV+1,  f); 
 }
 
