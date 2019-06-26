@@ -170,10 +170,10 @@ K findMax(E* A, sizeT n, F f, K temp){
 	K maxV = findMaxHelper(A, n, f, (sizeT)1000*getWorkers(), temp);
   return maxV; 
 }
-template <class T, class F>
+template <class X, class T, class F>
 static void parallelIntegerSort(T *A, sizeT n, F f) {
-  T temp;
-  T maxV = findMax(A, n, f, temp);
+  X temp;
+  X maxV = findMax(A, n, f, temp);
   iSort(A, n, maxV+1,  f); 
 }
 

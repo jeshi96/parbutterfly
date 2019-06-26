@@ -123,8 +123,8 @@ long countSeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active) {
 pair<tuple<uintE,long>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs) {
   using X = tuple<uintE,long>;
   // Sort seagulls (considering both active + non-active endpoints), and retrieve frequency counts
-  radix::parallelIntegerSort(seagulls, num_sgs, UVPFirst());
-  radix::parallelIntegerSort(seagulls, num_sgs, UVPSecond());
+  radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPFirst());
+  radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPSecond());
   pair<long*, long> freq_pair = getFreqs<long>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), LONG_MAX, nonMaxLongF());
   long num_sg_freqs = freq_pair.second - 1;
   X* sg_freqs = newA(X, num_sg_freqs);
@@ -147,15 +147,15 @@ pair<tuple<uintE,long>*, long> getSeagullFreqs(const long nu, UVertexPair* seagu
 }
 
 pair<tuple<uintE,long>*, long> getSeagullFreqs_seq(const long nu, UVertexPair* seagulls, long num_sgs) {
-  radix::parallelIntegerSort(seagulls, num_sgs, UVPFirst());
-  radix::parallelIntegerSort(seagulls, num_sgs, UVPSecond());
+  radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPFirst());
+  radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPSecond());
   return getFreqs_seq<long,uintE>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), true,
 				  UVertexPairV2(), choose2(), reflCount<UVertexPair>());
 }
 
 long getUpdates_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, long* butterflies) {
   using X = tuple<uintE,long>;
-  radix::parallelIntegerSort(sg_freqs, num_sg_freqs, tupleFirst<uintE,long>());
+  radix::parallelIntegerSort<uintE>(sg_freqs, num_sg_freqs, tupleFirst<uintE,long>());
   pair<X*, long> b_freq_pair = getFreqs_seq<long,uintE>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), false,
 							uintETupleGet0(), refl<long>(), uintECount());
   long num_updates = b_freq_pair.second;
@@ -194,7 +194,7 @@ long getUpdates(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, l
   // Now, collate all butterflies to be removed with the same non-active endpoint
   // Do this by sorting on the non-active endpoint, and summing the frequencies
   // TODO MAKE SURE THIS IS RIGHT LOL
-  radix::parallelIntegerSort(sg_freqs, num_sg_freqs, tupleFirst<uintE,long>());
+  radix::parallelIntegerSort<uintE>(sg_freqs, num_sg_freqs, tupleFirst<uintE,long>());
   auto b_freq_pair = getFreqs<long>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF(), false);
   long num_updates = b_freq_pair.second - 1;
   //uintE* update = newA(uintE, num_updates);
