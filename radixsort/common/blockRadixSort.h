@@ -29,6 +29,7 @@
 #include "sequence.h"
 #include "utils.h"
 #include "transpose.h"
+#include "radixSort.h"
 using namespace std;
 namespace radix{
 namespace intSort {
@@ -274,6 +275,13 @@ namespace intSort {
     iSort(A, (unsigned long*) NULL, n, m, true, f);
   }
 };
+
+template <class X, class T, class F>
+static void blockIntegerSort(T *A, sizeT n, F f) {
+  X temp;
+  X maxV = blockFindMax(A, n, f, temp);
+  intSort::iSort(A, n, maxV+1,  f); 
+}
 
 static void integerSort(uintT *A, long n) {
   long maxV = sequence::reduce(A, n, utils::maxF<uintT>());
