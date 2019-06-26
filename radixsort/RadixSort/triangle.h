@@ -2,9 +2,9 @@
 #define _S_TRIANGLE_INCLUDED
 
 #include <stdio.h>
-#include <edge.h>
-#include <prefixsum.h>
-#include <radix_configs.h>
+#include "edge.h"
+#include "prefixsum.h"
+#include "radix_configs.h"
 #include <algorithm>
 using namespace std;
 namespace radix{
@@ -69,7 +69,7 @@ void serialExecuteTriangle(E *A, Triangle  *triangle) {
 
 template <class E>
 void parallelExecuteTriangle(E *A, Triangle  *triangle) {
-	parallel_for_swap(sizeT index = 0; index < triangle->amount; index ++) {
+	parallel_for(sizeT index = 0; index < triangle->amount; index ++) {
 			sizeT from = triangle->offset2 + index; 
 			sizeT to = triangle->offset1 + index; 
 	    E temp = A[from];

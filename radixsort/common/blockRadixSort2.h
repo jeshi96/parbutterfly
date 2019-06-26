@@ -30,7 +30,7 @@
 #include "utils.h"
 #include "transpose.h"
 using namespace std;
-
+namespace radix{
 namespace intSort2 {
 
   // Cannot be greater than 8 without changing definition of bIndexT
@@ -270,6 +270,6 @@ namespace intSort2 {
     iSort(A, (unsigned long*) NULL, n, m, true, f);
   }
 };
-
+}
 #endif
 

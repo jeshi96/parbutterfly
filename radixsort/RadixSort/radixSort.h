@@ -32,16 +32,16 @@
 #include <cmath>
 #include <cstdio>
 #include "utils.h"
-#include <radix_configs.h>
+#include "radix_configs.h"
 #include "parallel.h"
 #include <vector>
 #include <utility>
 
-#include <regionsSort.h>
-#include <misc.h>
-#include <common_sort.h>
+#include "regionsSort.h"
+#include "misc.h"
+#include "common_sort.h"
 
-#include <sequence.h>
+#include "sequence.h"
 namespace radix{
 using namespace std;
 

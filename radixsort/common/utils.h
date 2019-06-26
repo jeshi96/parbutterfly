@@ -25,7 +25,7 @@
 #include <iostream>
 #include <algorithm>
 #include "parallel.h"
-
+namespace radix{
 #if defined(__APPLE__)
 #define PTCMPXCH "  cmpxchgl %2,%1\n"
 #else
@@ -296,5 +296,5 @@ template <class E1, class E2>
   struct secondF {E2 operator() (std::pair<E1,E2> a) {return a.second;} };
 
 }
-
+}
 #endif // _BENCH_UTILS_INCLUDED

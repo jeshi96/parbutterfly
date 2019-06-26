@@ -29,7 +29,7 @@
 #include <cstring>
 #include "IO.h"
 #include "sequence.h"
-
+namespace radix{
 namespace benchIO {
   using namespace std;
   typedef pair<intT,intT> intPair;
@@ -133,5 +133,5 @@ namespace benchIO {
   }
 
 };
-
+}
 #endif // _SEQUENCE_IO

@@ -1,6 +1,6 @@
 #ifndef _PARALLEL_H
 #define _PARALLEL_H
-
+namespace radix{
 // cilkarts cilk++
 #if defined(CILK)
 #include <cilk.h>
@@ -88,5 +88,5 @@ typedef unsigned int uintT;
 #define INT_T_MAX INT_MAX
 #define UINT_T_MAX UINT_MAX
 #endif
-
+}
 #endif // _PARALLEL_H
