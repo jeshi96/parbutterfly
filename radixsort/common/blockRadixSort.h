@@ -274,13 +274,14 @@ namespace intSort {
   void iSortBottomUp(E *A, long n, long m, F f) {
     iSort(A, (unsigned long*) NULL, n, m, true, f);
   }
-}
 
-template <class X, class T, class F>
-void blockIntegerSort(T *A, sizeT n, F f) {
+  template <class X, class T, class F>
+  void blockSort(T *A, sizeT n, F f) {
   X temp;
-  X maxV = findMax(A, n, f, temp);
-  intSort::iSort(A, n, maxV+1,  f); 
+  X maxV = radix::findMax(A, n, f, temp);
+  iSort(A, n, maxV+1,  f); 
+  }
+
 }
 
 static void integerSort(uintT *A, long n) {
