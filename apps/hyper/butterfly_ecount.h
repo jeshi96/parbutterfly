@@ -16,7 +16,7 @@
 #include "../../lib/histogram.h"
 //#include "../../lib/gbbs-histogram.h"
 #include "../../radixsort/common/blockRadixSort.h"
-#include "../../radixsort/RadixSort/radixSort.h"
+//#include "../../radixsort/RadixSort/radixSort.h"
 
 #include "butterfly_utils.h"
 
@@ -295,8 +295,8 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 
   // Retrieve frequency counts for all wedges with the same key
   // We need to first collate by v1, v2
-  radix::intSort::blockIntegerSort<uintE>(wedges, num_wedges_f, UWFirst());
-  radix::intSort::blockIntegerSort<uintE>(wedges, num_wedges_f, UWSecond());
+  radix::blockIntegerSort<uintE>(wedges, num_wedges_f, UWFirst());
+  radix::blockIntegerSort<uintE>(wedges, num_wedges_f, UWSecond());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
 
