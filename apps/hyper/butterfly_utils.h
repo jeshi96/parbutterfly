@@ -83,6 +83,13 @@ struct UVertexPairCmp {
   }
 };
 
+struct UVPFirst { uintE operator() (const UVertexPair& x) {return x.v1;}};
+struct UVPSecond { uintE operator() (const UVertexPair& x) {return x.v2;}};
+struct UWFirst { uintE operator() (const UWedge& x) {return x.v1;}};
+struct UWSecond { uintE operator() (const UWedge& x) {return x.v2;}};
+template<class T, class X>
+  struct tupleFirst {T operator() (tuple<T,X> a,) {return get<0>(a);} };
+
 // Equality for VertexPair and UVertexPair
 struct UVertexPairEq { inline bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 
@@ -845,11 +852,12 @@ pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
  * 
  *  Returns: Array and length of array with frequency counts (as described above)
  */
+// TODO turn cmp into extract
 struct nonMaxLongF{bool operator() (long &a) {return (a != LONG_MAX);}};
 template <class L, class T, class Cmp, class Eq, class F>
   pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool sort=true) {
   // Sort objects
-  if (sort) sampleSort(objs, num, cmp);
+  //if (sort) parallelIntegerSort(objs, num, cmp); //sampleSort(objs, num, cmp);
 
   L* freqs = newA(L, num + 1);
   freqs[0] = 0;
@@ -869,7 +877,7 @@ template <class L, class T, class Cmp, class Eq, class F>
 template <class L, class S, class T, class Cmp, class Eq, class OpT, class OpuintE, class OpCount>
   pair<tuple<S,L>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
 				       OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
-  if(sort) sampleSort(objs, num, cmp);
+  //if(sort) parallelIntegerSort(objs, num, cmp); //sampleSort(objs, num, cmp);
 
   using X = tuple<S,L>;
   X* freqs = newA(X, num);
