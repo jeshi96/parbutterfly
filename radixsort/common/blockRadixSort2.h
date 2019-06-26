@@ -29,6 +29,7 @@
 #include "sequence.h"
 #include "utils.h"
 #include "transpose.h"
+#include "radixSort.h"
 using namespace std;
 namespace radix{
 namespace intSort2 {
