@@ -17,7 +17,7 @@ inline void insertionSortSimilarToSTLnoSelfAssignment( _Type* a, unsigned long a
 
 	for ( unsigned long i = 1; i < a_size; i++ )
 	{
-		if ( a[ i ] < a[ i - 1 ] )		// no need to do (j > 0) compare for the first iteration
+		if ( extract(a[ i ]) < extract(a[ i - 1 ]) )		// no need to do (j > 0) compare for the first iteration
 		{
 			_Type currentElement = a[ i ];
       auto compare = extract(currentElement); 
