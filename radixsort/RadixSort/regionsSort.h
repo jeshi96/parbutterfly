@@ -2,18 +2,18 @@
 #define _S_GRAPHBASED_INCLUDED
 #include <math.h>
 #ifdef CYCLE
-#include <cyclegraph.h>
+#include "cyclegraph.h"
 #else
-#include <edgelistgraph.h>
+#include "edgelistgraph.h"
 #endif
-#include <triangle.h>
-#include <edge.h>
-#include <block.h>
+#include "triangle.h"
+#include "edge.h"
+#include "block.h"
 
 #include <atomic>
 #include <thread>
-#include <radix_configs.h>
-#include <ska_sort.hpp> 
+#include "radix_configs.h"
+#include "ska_sort.hpp" 
 
 
 using namespace std;

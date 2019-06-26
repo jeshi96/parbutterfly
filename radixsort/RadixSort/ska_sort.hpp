@@ -10,8 +10,8 @@
 #include <tuple>
 #include <utility>
 #include <iostream>
-#include <radix_configs.h>
-#include <types.h>
+#include "radix_configs.h"
+#include "types.h"
 namespace radix{
 static constexpr size_t invalidMetaDataShift = 1000;
 //template <class sizeT>

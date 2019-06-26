@@ -1,9 +1,9 @@
 #ifndef _S_PREFIXSUM_INCLUDED
 #define _S_PREFIXSUM_INCLUDED
 
-#include <edge.h>
+#include "edge.h"
 #include <vector>
-#include <radix_configs.h>
+#include "radix_configs.h"
 
 using namespace std;
 namespace radix{
@@ -38,7 +38,7 @@ void getSerialPrefixSum( Edge  ** input,sizeT *res, int size) {
 
 
 void getParallelPrefixSum( Edge  ** input,sizeT *res, int size) {
-    parallel_for_swap(int i = 0; i < size; i ++) {
+    parallel_for(int i = 0; i < size; i ++) {
         res[i] = input[i]->amount;
     }
     long total = sequence::plusScan(res, res, size);
@@ -56,7 +56,7 @@ void getSerialPrefixSumReal( Edge  * input,sizeT *res, int size) {
 }
 
 void getParallelPrefixSumReal( Edge  * input,sizeT *res, int size) {
-    parallel_for_swap(int i = 0; i < size; i ++) {
+    parallel_for(int i = 0; i < size; i ++) {
         res[i] = input[i].amount;
     }
     sizeT total = sequence::plusScan(res, res, size);

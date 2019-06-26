@@ -24,7 +24,7 @@
 #define A_TRANSPOSE_INCLUDED
 
 #include "parallel.h"
-
+namespace radix{
 #define _TRANS_THRESHHOLD 64
 
 template <class E, class intT>
@@ -99,5 +99,5 @@ struct blockTrans {
   }
 
 } ;
-
+}
 #endif // A_TRANSPOSE_INCLUDED
