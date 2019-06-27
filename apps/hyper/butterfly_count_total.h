@@ -31,8 +31,9 @@ pair<intT,long> CountSortTotal(CountSpace& cs, bipartiteCSR& GA, bool use_v, lon
 
   // Retrieve frequency counts for all wedges with the same key
   // First, retrieve a list of indices where consecutive wedges have different keys
-  radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UVPFirst());
-  radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UVPSecond());
+  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UVPFirst());
+  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UVPSecond());
+  sampleSort(wedges, num_wedges_curr, UVertexPairCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UVertexPairCmp(), UVertexPairEq(), LONG_MAX, nonMaxLongF());
 
   long* butterflies = newA(long, freq_pair.second-1);
@@ -58,8 +59,9 @@ pair<intT,long> CountSortTotal(CountSpace& cs, graphCSR& GA, long num_wedges, lo
 
   // Retrieve frequency counts for all wedges with the same key
   // First, retrieve a list of indices where consecutive wedges have different keys
-  radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWFirst());
-  radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWSecond());
+  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWFirst());
+  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWSecond());
+  sampleSort(wedges, num_wedges_curr, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   long* butterflies = newA(long, freq_pair.second-1);
 
