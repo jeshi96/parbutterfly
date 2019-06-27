@@ -40,15 +40,15 @@ namespace intSort {
 #define MAX_RADIX 8
 #endif
 
-#ifndef BUCKETS
-#define BUCKETS 256    // 1 << MAX_RADIX
+#ifndef IA_RADIX_BUCKETS
+#define IA_RADIX_BUCKETS 256    // 1 << MAX_RADIX
 #endif
   // a type that must hold MAX_RADIX bits
   typedef unsigned char bIndexT;
 
   template <class E, class F, class bint>
   void radixBlock(E* A, E* B, bIndexT *Tmp, 
-		  bint counts[BUCKETS], bint offsets[BUCKETS],
+		  bint counts[IA_RADIX_BUCKETS], bint offsets[IA_RADIX_BUCKETS],
 		  bint Boffset, long n, long m, F extract) {
 
     for (long i = 0; i < m; i++)  counts[i] = 0;
@@ -68,7 +68,7 @@ namespace intSort {
   }
 
   template <class E, class F, class bint>
-  void radixStepSerial(E* A, E* B, bIndexT *Tmp, bint buckets[BUCKETS],
+  void radixStepSerial(E* A, E* B, bIndexT *Tmp, bint buckets[IA_RADIX_BUCKETS],
 		       long n, long m, F extract) {
     radixBlock(A, B, Tmp, buckets, buckets, (bint)0, n, m, extract);
     for (long i=0; i < n; i++) A[i] = B[i];
@@ -86,12 +86,12 @@ namespace intSort {
   // extract is a function that extract the appropriate bits from A
   //  it must return a non-negative integer less than m
   template <class E, class F, class bint>
-    void radixStep(E* A, E* B, bIndexT *Tmp, bint (*BK)[BUCKETS],
+    void radixStep(E* A, E* B, bIndexT *Tmp, bint (*BK)[IA_RADIX_BUCKETS],
 		   long numBK, long n, long m, bool top, F extract) {
 
     // need 3 bucket sets per block
     long expand = (sizeof(E)<=4) ? 64 : 32;
-    long blocks = min(numBK/3,(1+n/(BUCKETS*expand)));
+    long blocks = min(numBK/3,(1+n/(IA_RADIX_BUCKETS*expand)));
 
     if (blocks < 2) {
       radixStepSerial(A, B, Tmp, BK[0], n, m, extract);
@@ -134,7 +134,7 @@ namespace intSort {
 
   // Radix sort with low order bits first
   template <class E, class F, class bint>
-    void radixLoopBottomUp(E *A, E *B, bIndexT *Tmp, bint (*BK)[BUCKETS],
+    void radixLoopBottomUp(E *A, E *B, bIndexT *Tmp, bint (*BK)[IA_RADIX_BUCKETS],
 			   long numBK, long n, long bits, bool top, F f) {
       long rounds = 1+(bits-1)/MAX_RADIX;
       long rbits = 1+(bits-1)/rounds;
@@ -149,21 +149,21 @@ namespace intSort {
 
   // Radix sort with high order bits first
   template <class E, class F, class bint>
-    void radixLoopTopDown(E *A, E *B, bIndexT *Tmp, bint (*BK)[BUCKETS],
+    void radixLoopTopDown(E *A, E *B, bIndexT *Tmp, bint (*BK)[IA_RADIX_BUCKETS],
 			  long numBK, long n, long bits, F f) {
     if (n == 0) return;
     if (bits <= MAX_RADIX) {
       radixStep(A, B, Tmp, BK, numBK, n, ((long) 1) << bits, true, 
 		eBits<E,F>(bits,0,f));
-    } else if (numBK >= BUCKETS+1) {
-      radixStep(A, B, Tmp, BK, numBK, n, (long) BUCKETS, true,
+    } else if (numBK >= IA_RADIX_BUCKETS+1) {
+      radixStep(A, B, Tmp, BK, numBK, n, (long) IA_RADIX_BUCKETS, true,
 		eBits<E,F>(MAX_RADIX,bits-MAX_RADIX,f));
       bint* offsets = BK[0];
-      long remain = numBK - BUCKETS - 1;
+      long remain = numBK - IA_RADIX_BUCKETS - 1;
       float y = remain / (float) n;
-      parallel_for (int i = 0; i < BUCKETS; i++) {
+      parallel_for (int i = 0; i < IA_RADIX_BUCKETS; i++) {
 	long segOffset = offsets[i];
-	long segNextOffset = (i == BUCKETS-1) ? n : offsets[i+1];
+	long segNextOffset = (i == IA_RADIX_BUCKETS-1) ? n : offsets[i+1];
 	long segLen = segNextOffset - segOffset;
 	long blocksOffset = ((long) floor(segOffset * y)) + i + 1;
 	long blocksNextOffset = ((long) floor(segNextOffset * y)) + i + 2;
@@ -180,8 +180,8 @@ namespace intSort {
   template <class E>
   long iSortSpace(long n) {
     long esize = (n >= INT_MAX) ? sizeof(long) : sizeof(int);
-    long numBK = 1+n/(BUCKETS*8);
-    return sizeof(E)*n + esize*n + esize*BUCKETS*numBK;
+    long numBK = 1+n/(IA_RADIX_BUCKETS*8);
+    return sizeof(E)*n + esize*n + esize*IA_RADIX_BUCKETS*numBK;
   }
 
   // Sorts the array A, which is of length n. 
@@ -193,18 +193,18 @@ namespace intSort {
   template <class bint, class E, class F, class oint>
   void iSortX(E *A, oint* bucketOffsets, long n, long m, bool bottomUp, 
 	      char* tmpSpace, F f) {
-    typedef bint bucketsT[BUCKETS];
+    typedef bint bucketsT[IA_RADIX_BUCKETS];
     long esize = (n >= INT_MAX) ? sizeof(long) : sizeof(int);
 
     long bits = utils::log2Up(m);
-    long numBK = 1+n/(BUCKETS*8);
+    long numBK = 1+n/(IA_RADIX_BUCKETS*8);
 
     // the temporary space is broken into 3 parts: B, Tmp and BK
     E *B = (E*) tmpSpace; 
     long Bsize =sizeof(E)*n;
 
     bucketsT *BK = (bucketsT*) (tmpSpace+Bsize);
-    long BKsize = esize*BUCKETS*numBK;
+    long BKsize = esize*IA_RADIX_BUCKETS*numBK;
     bIndexT *Tmp = (bIndexT*) (tmpSpace+Bsize+BKsize); // one byte per item
     
     if (bits <= MAX_RADIX) {
