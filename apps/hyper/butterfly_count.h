@@ -1090,7 +1090,7 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   }
   g.del();
   //if (type == 12) {free(rankU); free(rankV); return nullptr;}
-  if (type != 11) free(wedge_idxs);
+  if (type != 11 && type != 12) free(wedge_idxs);
 
   //uintE* rank_butterflies2 = newA(uintE,eltsPerCacheLine*g.n);
   //granular_for(i,0,g.n,g.n > 10000, { rank_butterflies2[eltsPerCacheLine*i] = 0; });

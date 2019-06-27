@@ -924,7 +924,7 @@ void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 	}
       }
 
-      for (long j=0; j < u_deg; ++j ) { //JS: test granular_for
+      for (long j=0; j < u_deg; ++j ) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
@@ -955,6 +955,84 @@ void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
   free(used);
 }
 
+void CountEWorkEfficientSerial(graphCSR& GA, long* butterflies) {
+  //cout << "Work-efficient Serial (make sure running with CILK_NWORKERS=1)" << endl;
+  timer t1,t2,t3;
+  t1.start();
+  uintE* wedges = newA(uintE, GA.n);
+  uintE* used = newA(uintE, GA.n);
+  //long* butterflies = newA(long,GA.n);
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  t1.stop();
+#ifdef VERBOSE
+  t1.reportTotal("preprocess (malloc)");
+#endif
+  t3.start();
+  for(long i=0;i<GA.n;i++) {
+    wedges[i] = 0;
+    //butterflies[i] = 0;
+  }
+  t3.stop();
+#ifdef VERBOSE
+  t3.reportTotal("preprocess (initialize)");
+  t2.start();
+#endif
+
+  for(long i=0; i < GA.n; ++i){
+    intT used_idx = 0;
+    intT u_offset  = GA.offsets[i];
+    intT u_deg = GA.offsets[i+1]-u_offset;
+    for (intT j=0; j < u_deg; ++j ) {
+      uintE v = GA.edges[u_offset+j] >> 1;
+      intT v_offset = GA.offsets[v];
+      intT v_deg = GA.offsets[v+1]-v_offset;
+      if (v <= i) break;
+      for (intT k=0; k < v_deg; ++k) { 
+	uintE u2_idx = GA.edges[v_offset+k] >> 1;
+	if (u2_idx > i) {
+	  //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
+	  wedges[u2_idx]++;
+	  if (wedges[u2_idx] == 1) used[used_idx++] = GA.edges[v_offset+k];
+	}
+	else break;
+      }
+    }
+
+          for (long j=0; j < u_deg; ++j ) {
+	uintE v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1]-v_offset;
+	if (v <= i) break; 
+	for (long k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+	  if (u2_idx > i) { //TODO combine into one graph
+	    if (wedges[shift+u2_idx] > 1) {
+	      butterflies[eltsPerCacheLine*(v_offset+k)] += (long)(wedges[u2_idx]-1);
+	      butterflies[eltsPerCacheLine*(u_offset+j)] += (long)(wedges[u2_idx]-1);
+	    }
+	  }
+	  else break;
+	}
+      }
+
+    for(long j=0; j < used_idx; ++j) {
+      uintE u2_idx = used[j] >> 1;
+      wedges[u2_idx] = 0;
+    }
+  }
+#ifdef VERBOSE
+  t2.reportTotal("counting (main loop)");
+#endif
+  
+  free(wedges);
+  free(used);
+#ifdef VERBOSE
+  //long total = 0;
+  //for(long i=0;i<GA.n;i++) total += butterflies[i];
+  //cout << "num butterflies: " << total/2 << "\n";
+#endif
+}
+
 long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size, long type,
 		 uintE* ranks, uintE* rankV, uintE* rankU) {
 #ifdef VERBOSE
@@ -982,13 +1060,14 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
 #endif
   granular_for(i,0,numEdges,numEdges > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
-  long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
+  long* wedge_idxs = (type == 11 || type == 12) ? nullptr : countWedgesScan(g);
   CountESpace cs = CountESpace(type, numEdges, true);
 #ifdef VERBOSE
   if (type == 8) t_time2.reportTotal("counting (scan)");
 #endif
 
   if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
+  else if (type == 12) CountEWorkEfficientSerial(g, rank_butterflies);
   else if (type == 8) CountEOrigCompactParallel_WedgeAware(g, rank_butterflies, max_array_size, wedge_idxs);
   else {
     if (max_wedges >= num_wedges) {
@@ -1014,14 +1093,14 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   }
 
   cs.del();
-  if (type != 11) free(wedge_idxs);
+  if (type != 11 && type != 12) free(wedge_idxs);
 
   //uintE* rank_butterflies2 = newA(uintE,eltsPerCacheLine*g.n);
   //granular_for(i,0,g.n,g.n > 10000, { rank_butterflies2[eltsPerCacheLine*i] = 0; });
   //CountWorkEfficientParallel(g, rank_butterflies2);
   //for(long i=0; i < g.n; ++i) {assert(rank_butterflies2[eltsPerCacheLine*i] == rank_butterflies[eltsPerCacheLine*i]);}
 #ifdef VERBOSE
-  if (type != 11 && type != 8) t_time2.reportTotal("counting");
+  if (type != 11 && type != 8 && type != 12) t_time2.reportTotal("counting");
 
 
   timer t_convert;
