@@ -12,17 +12,17 @@
 
 using namespace std;
 namespace radix{
-#define MAX_PARALLEL_EDGES (MAXP * BUCKETS + BUCKETS + 5)
+#define MAX_PARALLEL_EDGES (MAXP * R_BUCKETS + R_BUCKETS + 5)
 
 
 class CycleGraph{
 
     public:
-    vector<Edge > graphFromEdges[BUCKETS];
+    vector<Edge > graphFromEdges[R_BUCKETS];
 
 
     CycleGraph() {
-        for(int bucket = 0; bucket < BUCKETS; bucket ++) {
+        for(int bucket = 0; bucket < R_BUCKETS; bucket ++) {
             graphFromEdges[bucket].clear();
         }
     }
@@ -52,7 +52,7 @@ class CycleGraph{
 class CyclePlan {
 	    public:
 	int length;
-	sizeT starts[BUCKETS];
+	sizeT starts[R_BUCKETS];
 	sizeT amount;
 	CyclePlan() {
 	    length = 0;
@@ -80,8 +80,8 @@ class CyclePlan {
     };
     class Cycle {
         public:
-        Edge  *path[BUCKETS];
-        int visited[BUCKETS];
+        Edge  *path[R_BUCKETS];
+        int visited[R_BUCKETS];
         int pathIndex;
         sizeT amount;        
         int cycle_start;
@@ -94,7 +94,7 @@ class CyclePlan {
 	    cycle_start = 0;
 	    cycle_length = 0;
 	    amount = 0;
-            for(int i = 0; i < BUCKETS; i++) {
+            for(int i = 0; i < R_BUCKETS; i++) {
                 visited[i] = -1;
             }
         }
@@ -141,8 +141,8 @@ class CyclePlan {
         int currentCountry = 0;
         sizeT currentRegionStart = 0;
         for(sizeT currentBlock = 0; currentBlock < P; currentBlock ++) {
-            for(int currentValue = 0; currentValue < BUCKETS; currentValue ++) {
-                while(currentCountry < BUCKETS) {
+            for(int currentValue = 0; currentValue < R_BUCKETS; currentValue ++) {
+                while(currentCountry < R_BUCKETS) {
                     if (blocks[currentBlock].bucketEnds[currentValue] <= countryEnds[currentCountry]) {
                     //if country is a superset of the current bucket inside current block.
                     //both sides of comparison are exclusive.

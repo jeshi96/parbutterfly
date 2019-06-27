@@ -14,18 +14,18 @@
 #include <algorithm>
 using namespace std;
 namespace radix{
-#define MAX_PARALLEL_EDGES (MAXP * BUCKETS + BUCKETS + 5)
+#define MAX_PARALLEL_EDGES (MAXP * R_BUCKETS + R_BUCKETS + 5)
 
 class EdgeListGraph{
 
     public:
-    vector< Edge > graphToEdges[BUCKETS];
-    vector< Edge > graphFromEdges[BUCKETS];
+    vector< Edge > graphToEdges[R_BUCKETS];
+    vector< Edge > graphFromEdges[R_BUCKETS];
     int * order;
     int * rank;
 
     EdgeListGraph(int P, int *rank, int *order) {
-        for(int bucket = 0; bucket < BUCKETS; bucket ++) {
+        for(int bucket = 0; bucket < R_BUCKETS; bucket ++) {
             graphToEdges[bucket].clear();
             graphFromEdges[bucket].clear();
         }
@@ -65,7 +65,7 @@ class EdgeListGraph{
         printf("Edges Counts\n");
         vector < Edge  *> parallelFromEdges;
         vector < Edge  *> parallelToEdges;
-        for(int node = 0; node < BUCKETS; node ++) {
+        for(int node = 0; node < R_BUCKETS; node ++) {
             printf("vector for node %d\n", node);
             this->getFromEdgesSubgraph(node, parallelFromEdges);
             this->getToEdgesSubgraph(node, parallelToEdges);
@@ -78,9 +78,9 @@ class EdgeListGraph{
         int currentCountry = 0;
         long currentRegionStart = 0;
         for(int currentBlock = 0; currentBlock < P; currentBlock ++) {
-            for(int currentValue = 0; currentValue < BUCKETS; currentValue ++) {
+            for(int currentValue = 0; currentValue < R_BUCKETS; currentValue ++) {
 
-                while(currentCountry < BUCKETS) {
+                while(currentCountry < R_BUCKETS) {
                     if (blocks[currentBlock].bucketEnds[currentValue] <= countryEnds[currentCountry]) {
                     //if country is a superset of the current bucket inside current block.
                     //both sides of comparison are exclusive.
@@ -203,8 +203,8 @@ template<class T>
 
 #ifdef EXTRACT_2CYCLES
 ///////////////////////EXTRACTING two-cycles START/////////////////////////
-	vector< Edge *> edgesPerNodeFrom[BUCKETS];
-	vector< Edge *> edgesPerNodeTo[BUCKETS];
+	vector< Edge *> edgesPerNodeFrom[R_BUCKETS];
+	vector< Edge *> edgesPerNodeTo[R_BUCKETS];
 	for(int i = 0; i < fromRegions.size(); i++) {
 	    edgesPerNodeFrom[fromRegions[i].to].push_back(&fromRegions[i]);
 	}
@@ -213,7 +213,7 @@ template<class T>
 	    edgesPerNodeTo[toRegions[i].from].push_back(&toRegions[i]);
 	}
        	
-	if(toRegions.size() < BUCKETS - (rank[node] + 1)) {
+	if(toRegions.size() < R_BUCKETS - (rank[node] + 1)) {
 	        for(int i = 0; i < toRegions.size(); i++) {
 		    int bucket = toRegions[i].from;
 		    *triangles_count = extractTriangles(edgesPerNodeFrom[bucket], edgesPerNodeTo[bucket], triangles, *triangles_count);
@@ -222,7 +222,7 @@ template<class T>
 		}
 
 	} else {
-		if(fromRegions.size() < BUCKETS - (rank[node] + 1)){
+		if(fromRegions.size() < R_BUCKETS - (rank[node] + 1)){
 			for(int i = 0; i < fromRegions.size(); i++) {
 			    int bucket = fromRegions[i].to;
 			    *triangles_count = extractTriangles(edgesPerNodeFrom[bucket], edgesPerNodeTo[bucket], triangles, *triangles_count);
@@ -231,7 +231,7 @@ template<class T>
 			}
 		}	
 		else {
-			for(int index = rank[node] + 1; index < BUCKETS; index ++) {
+			for(int index = rank[node] + 1; index < R_BUCKETS; index ++) {
 			    int bucket = order[index];
 			    *triangles_count = extractTriangles(edgesPerNodeFrom[bucket], edgesPerNodeTo[bucket], triangles, *triangles_count);
 			}
@@ -257,7 +257,7 @@ template<class T>
     }
 
     ~EdgeListGraph() {
-        for(int bucket = 0; bucket < BUCKETS; bucket ++) {
+        for(int bucket = 0; bucket < R_BUCKETS; bucket ++) {
             graphToEdges[bucket].clear();
             graphFromEdges[bucket].clear();
         }

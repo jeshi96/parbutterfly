@@ -21,7 +21,7 @@ typedef int sizeT;
 #endif
 
 
-#define BUCKETS (1 << MAX_RADIX)
+#define R_BUCKETS (1 << MAX_RADIX)
 #define MAXDEPTH (MAXBITS/MAX_RADIX)
 #define RANDOM_GRAPH 0
 

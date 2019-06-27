@@ -52,7 +52,7 @@ using namespace std;
       }
 
       int bits = MAX_RADIX;
-      int buckets = BUCKETS;
+      int buckets = R_BUCKETS;
 
       int start = max(doneOffset - bits, 0);
 
@@ -60,7 +60,7 @@ using namespace std;
       bool needToRecurse = true;
 
 
-      long localCounts[BUCKETS];
+      long localCounts[R_BUCKETS];
       needToRecurse = multiBitSwapBasedSort(A, n, buckets, K, localCounts, eBits<E, F>(doneOffset - start, start, f), f, depth, start);
    
       if(start <= 0)
@@ -68,7 +68,7 @@ using namespace std;
 
       if(needToRecurse) {
 				long sum = 0;
-        for(int i = 0; i < BUCKETS; i++) {
+        for(int i = 0; i < R_BUCKETS; i++) {
           radixSortOneLevel(A + sum, localCounts[i], start, f, (sizeT)1, depth + 1);
 					sum += localCounts[i];
 

@@ -52,7 +52,7 @@ bool multiBitSwapBasedSort(E *A, sizeT n, int buckets, sizeT K, long *internalCo
 		ska_sort(A, A + n, f,meta);
 		return meta.done;
         }else{
-		_RadixSort_Unsigned_PowerOf2Radix_1(A, internalCounts, (long)n, BUCKETS, extract);
+		_RadixSort_Unsigned_PowerOf2Radix_1(A, internalCounts, (long)n, R_BUCKETS, extract);
         }
          return true;
         #else 
@@ -71,36 +71,36 @@ bool multiBitSwapBasedSort(E *A, sizeT n, int buckets, sizeT K, long *internalCo
         sortSimpleBlock(A, &blocks[i], extract);
     }
 
-    parallel_for_1(int bucket = 0; bucket < BUCKETS; bucket ++) {
+    parallel_for_1(int bucket = 0; bucket < R_BUCKETS; bucket ++) {
         internalCounts[bucket] = 0;        
         for(sizeT i = 0; i < K; i ++) {
             internalCounts[bucket] += blocks[i].counts[bucket];
         }
     }
 
-    long countryEnds[BUCKETS];
+    long countryEnds[R_BUCKETS];
 
 		countryEnds[0] = internalCounts[0];
-		for(int i = 1; i < BUCKETS; i ++) {
+		for(int i = 1; i < R_BUCKETS; i ++) {
 			countryEnds[i] = internalCounts[i] + countryEnds[i-1];
 		}
 
-    int order[BUCKETS];
-    int rank[BUCKETS];
-    SortedBucket sbs[BUCKETS];
-    for(int i = 0; i < BUCKETS; i ++) {
+    int order[R_BUCKETS];
+    int rank[R_BUCKETS];
+    SortedBucket sbs[R_BUCKETS];
+    for(int i = 0; i < R_BUCKETS; i ++) {
         sbs[i].bucket = i;
         sbs[i].size = internalCounts[i];
     }
-    insertion_sort(sbs, BUCKETS, sortedBucketSize);
-    sizeT nextKs[BUCKETS]; 
+    insertion_sort(sbs, R_BUCKETS, sortedBucketSize);
+    sizeT nextKs[R_BUCKETS]; 
     int countNonZero = 0; 
     sizeT local = K; 
 
-    const long max_triangles = (K * BUCKETS + BUCKETS + 1) + BUCKETS; 
+    const long max_triangles = (K * R_BUCKETS + R_BUCKETS + 1) + R_BUCKETS; 
     Triangle  * triangles = new Triangle  [max_triangles];
 
-    for(int i = 0; i < BUCKETS; i ++) {
+    for(int i = 0; i < R_BUCKETS; i ++) {
         order[i] = sbs[i].bucket;
 				rank[order[i]] = i;
         sizeT count = internalCounts[order[i]]; 
@@ -113,8 +113,8 @@ bool multiBitSwapBasedSort(E *A, sizeT n, int buckets, sizeT K, long *internalCo
 
 #ifdef CYCLE
     CycleGraph cycleGraph;
-    cycleGraph.createCycleGraph(BUCKETS, K, blocks, countryEnds);
-    vector<CycleGraph::CyclePlan> cyclePlan(BUCKETS * K + BUCKETS + 1);
+    cycleGraph.createCycleGraph(R_BUCKETS, K, blocks, countryEnds);
+    vector<CycleGraph::CyclePlan> cyclePlan(R_BUCKETS * K + R_BUCKETS + 1);
 
     for(int index = 0; index < countNonZero; index ++) {
 	int node = order[index];
@@ -147,7 +147,7 @@ bool multiBitSwapBasedSort(E *A, sizeT n, int buckets, sizeT K, long *internalCo
 
 
     EdgeListGraph graph(K, rank, order);
-    graph.createParallelGraph(BUCKETS, K, blocks, countryEnds);
+    graph.createParallelGraph(R_BUCKETS, K, blocks, countryEnds);
 
     int triangles_count;
    

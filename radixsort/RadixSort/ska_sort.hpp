@@ -420,7 +420,7 @@ namespace detail
         static void american_flag_sort(It begin, It end, ExtractKey & extract_key, void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *), void * sort_data, struct  metaData meta)
         {
             const unsigned long Log2ofPowerOfTwoRadix = MAX_RADIX;
-            const unsigned long numberOfBins = BUCKETS;
+            const unsigned long numberOfBins = R_BUCKETS;
             const unsigned long mask = (1<<Log2ofPowerOfTwoRadix)-1;
             PartitionInfo partitions[numberOfBins];
 
@@ -527,7 +527,7 @@ namespace detail
         {
 
             const unsigned long PowerOfTwoRadix = MAX_RADIX;
-            const unsigned long numberOfBins = BUCKETS;
+            const unsigned long numberOfBins = R_BUCKETS;
             const size_t shiftRightAmount = getShift(meta.rawShift);
             const unsigned long mask = (1<<PowerOfTwoRadix)-1;
             unsigned long count[ numberOfBins ];
@@ -620,7 +620,7 @@ namespace detail
         static void ska_byte_sort(It begin, It end, ExtractKey & extract_key, void (*next_sort)(It, It, std::ptrdiff_t, ExtractKey &, void *), void * sort_data, struct  metaData meta, bool topLevel = true)
         {
             const unsigned long Log2ofPowerOfTwoRadix = MAX_RADIX;
-            const unsigned long numberOfBins = BUCKETS;
+            const unsigned long numberOfBins = R_BUCKETS;
             const unsigned long mask = (1<<Log2ofPowerOfTwoRadix)-1;
             #if MAX_RADIX <= 8
 
