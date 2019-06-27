@@ -1006,7 +1006,7 @@ void CountEWorkEfficientSerial(graphCSR& GA, long* butterflies) {
 	for (long k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	  if (u2_idx > i) { //TODO combine into one graph
-	    if (wedges[shift+u2_idx] > 1) {
+	    if (wedges[u2_idx] > 1) {
 	      butterflies[eltsPerCacheLine*(v_offset+k)] += (long)(wedges[u2_idx]-1);
 	      butterflies[eltsPerCacheLine*(u_offset+j)] += (long)(wedges[u2_idx]-1);
 	    }
