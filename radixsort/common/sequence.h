@@ -84,7 +84,7 @@ namespace sequence {
 
 #define nblocks(_n,_bsize) (1 + ((_n)-1)/(_bsize))
 
-#define granular_for(_i, _st, _ne, _thresh, _body) { \
+/*#define granular_for(_i, _st, _ne, _thresh, _body) { \
   if ((_ne - _st) > _thresh) { \
     {parallel_for(intT _i=_st; _i < _ne; _i++) { \
       _body \
@@ -94,7 +94,7 @@ namespace sequence {
       _body \
     }} \
   } \
-  }
+  }*/
 
 #define blocked_for(_i, _s, _e, _bsize, _body)  {	\
     intT _ss = _s;					\
