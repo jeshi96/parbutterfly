@@ -167,7 +167,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     long num_idxs = use_v ? GA.nu : GA.nv;
 
     auto butterflies_extract_f = [&] (const long i) -> const long {
-      return butterflies[i*eltsPerCacheLine];
+      return butterflies[eltsPerCacheLine*i];
     };
     
     long total = sequence::reduce<long>((long)0,(long)num_idxs,addF<long>(),butterflies_extract_f);
@@ -216,7 +216,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     const size_t eltsPerCacheLine = 64/sizeof(long);
 
     auto butterflies_extract_f = [&] (const long i) -> const long {
-      return ebutterflies[i*eltsPerCacheLine];
+      return ebutterflies[eltsPerCacheLine*i];
     };
     
     long total = sequence::reduce<long>((long)0,(long)GA.numEdges,addF<long>(),butterflies_extract_f);

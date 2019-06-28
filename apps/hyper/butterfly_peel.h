@@ -166,7 +166,7 @@ long getUpdates_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freq
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
   X* b_updates = b_freq_pair.first;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   for(long i=0; i<num_updates; ++i) {
     uintE u_idx = get<0>(b_updates[i]);
@@ -203,7 +203,7 @@ long getUpdates(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, l
   //uintE* update = newA(uintE, num_updates);
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   //uintE* update = newA(uintE, num_updates);
   parallel_for(long i=1; i < num_updates + 1; ++i) {
@@ -281,7 +281,7 @@ long getUpdatesHist_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_
   tuple<size_t,X*> b_hist_tuple = 
     pbbsa::sparse_histogram_f<uintE,long>(sg_freqs_seq,nu,getAdd<uintE,long>,getAddReduce<uintE,long>);
   X* b_freqs = get<1>(b_hist_tuple);
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   size_t num_updates = get<0>(b_hist_tuple);
   //uintE* update = newA(uintE, num_updates);
   ps.resize_update(num_updates);
@@ -311,7 +311,7 @@ long getUpdatesHist(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freq
   //uintE* update = newA(uintE, num_updates);
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   // Remove these butterflies from our array of butterfly counts, and change our frequency
   // array to be an update array on the new number of butterflies on our non-active endpoint
@@ -415,7 +415,7 @@ pair<intT, long> PeelHist_seq(PeelSpace& ps, vertexSubset& active, long* butterf
  */
 pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   // Retrieve all seagulls
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   intT next_idx = getActiveWedgesHash(ps, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
@@ -460,7 +460,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   uintE* used = used_seq.A;
   long* update_idx = ps.update_idx_seq_int.A;
 
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   for(long step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
     parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
@@ -526,7 +526,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   long* wedgesPrefixSum = getActiveWedgeIdxs(active_map,active.size(),GA,use_v);
 
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
     std::function<void(intT,intT)> recursive_lambda =
@@ -632,7 +632,7 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
   // Butterflies are assumed to be stored on U
   const long nu = use_v ? GA.nu : GA.nv;
   
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   auto D = array_imap<long>(nu, [&] (size_t i) { return butterflies[eltsPerCacheLine*i]; });
 

@@ -28,7 +28,7 @@ void countButterfliesSort(long* butterflies, UVertexPair* wedges, long* wedge_fr
   // these indices
   // Take the frequency count choose 2 to receive the number of butterflies on that key
   // Store butterfly counts with each vertex in U
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   parallel_for (long i = 0; i < num_wedge_freqs_f-1; ++i) {
     long num_butterflies = wedge_freqs_f[i+1] - wedge_freqs_f[i];
     long wedge_idx = wedge_freqs_f[i];
@@ -100,14 +100,14 @@ intT CountSortCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   radix::intSort::blockSort<uintE>(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleFirst<uintE,long>());
   pair<long*, long> b_freq_pair = getFreqs<long>(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   parallel_for(long i=1; i < b_freq_pair.second; ++i) {
     long num_freq = b_freq_arr[i] - b_freq_arr[i-1];
     // Reduce to sum the butterflies over the necessary range
     X reduce = sequence::reduce(&(cs.butterflies_seq_intt.A[b_freq_arr[i-1]]), num_freq, tupleAdd<uintE,long>());
     // These are our butterfly counts
-    butterflies[get<0>(reduce)*eltsPerCacheLine] += get<1>(reduce);
+    butterflies[eltsPerCacheLine*get<0>(reduce)] += get<1>(reduce);
   }
 
   free(b_freq_arr);
@@ -116,7 +116,7 @@ intT CountSortCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 }
 
 intT CountSortCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, intT curr_idx=0) {
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   pair<long, intT> wedges_pair  = getWedges<UWedge>(cs.wedges_seq_uw, GA, UWedgeCons(), max_wedges, curr_idx, num_wedges,
 						    wedge_idxs);
   UWedge* wedges = cs.wedges_seq_uw.A;
@@ -188,7 +188,7 @@ intT CountSort(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
   sampleSort(wedges, num_wedges_curr, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
 
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   parallel_for (long i = 0; i < freq_pair.second-1; ++i) {
     long num_butterflies = freq_pair.first[i+1] - freq_pair.first[i];
     long wedge_idx = freq_pair.first[i];
@@ -215,7 +215,7 @@ intT CountSort(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 //cs, g, num_wedges, use_v, nv, nu, butterflies, max_wedges, wedge_idxs, ranks
 intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
 	       intT curr_idx=0) {
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
 
@@ -263,7 +263,7 @@ intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 intT CountHashCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
 		 intT curr_idx=0) {
   using T = pair<uintE,long>;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
   size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
@@ -314,7 +314,7 @@ intT CountHash(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, lo
 	       long* wedge_idxs, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
 
@@ -341,7 +341,7 @@ intT CountHashCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 		 long* wedge_idxs, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
   //getWedgesFromHashTimer.start();
@@ -379,7 +379,7 @@ intT CountHistCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 	       intT curr_idx=0) {
   using X = tuple<long,uintE>;
   using T = tuple<uintE, long>;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   pair<long, intT> wedges_pair  = getWedges<long>(cs.wedges_seq_int, GA, UWedgeIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
   intT next_idx = wedges_pair.second;
@@ -465,7 +465,7 @@ intT CountHistCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
 	       intT curr_idx=0) {
   using X = tuple<long,uintE>;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   pair<long, intT> wedges_pair  = getWedges<long>(cs.wedges_seq_int, GA, UWedgeIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
   intT next_idx = wedges_pair.second;
@@ -526,7 +526,7 @@ intT CountHist(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 
 intT CountHist(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   using T = tuple<long,uintE>;
 
@@ -565,7 +565,7 @@ intT CountHist(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, lo
 intT CountHistCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
   const long nv = use_v ? GA.nv : GA.nu;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
  
   using T = tuple<long, uintE>;
   using X = tuple<uintE, long>;
@@ -618,7 +618,7 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* but
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   long stepSize = min<long>(getWorkers() * 60, max_array_size/nu); //15 tunable parameter
 
@@ -678,8 +678,8 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* but
 	  }
 	  for(intT j=0; j < used_idx; ++j) {
 	    uintE u2_idx = used[shift+j];
-	    writeAdd(&butterflies[i*eltsPerCacheLine],  (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-	    writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+	    writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+	    writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
 	    wedges[u2_idx+shift] = 0;
 	  }
 	}
@@ -726,7 +726,7 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, l
 #endif
   t3.start();
   granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   t3.stop();
 #ifdef VERBOSE
   t3.reportTotal("preprocess (initialize)");
@@ -758,8 +758,8 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, l
       }
       for(intT j=0; j < used_idx; ++j) {
         uintE u2_idx = used[shift+j];
-        writeAdd(&butterflies[i*eltsPerCacheLine],  (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-        writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+        writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+        writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
         wedges[u2_idx+shift] = 0;
       }
     }
@@ -776,7 +776,7 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, l
 //********************************************************************************************
 
 void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long max_array_size, long* wedgesPrefixSum) {
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   long stepSize = min<long>(getWorkers() * 40, max_array_size/GA.n); //15 tunable parameter
 //#ifdef VERBOSE
   timer t1,t2,t3,t4;//,t5;
@@ -843,8 +843,8 @@ void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long m
       for(long j=0; j < used_idx; ++j) {
         uintE u2_idx = used[shift+j] >> 1;
         if(used[shift+j] & 0b1) {
-	  writeAdd(&butterflies[i*eltsPerCacheLine],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-	  writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+	  writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+	  writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
         }
         wedges[shift+u2_idx] = 0;
       }
@@ -881,7 +881,7 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 #endif
   t3.start();
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   t3.stop();
 #ifdef VERBOSE
   t3.reportTotal("preprocess (initialize)");
@@ -927,8 +927,8 @@ long* CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
       for(long j=0; j < used_idx; ++j) {
         uintE u2_idx = used[shift+j] >> 1;
         if(used[shift+j] & 0b1) {
-	  writeAdd(&butterflies[i*eltsPerCacheLine],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-	  writeAdd(&butterflies[u2_idx*eltsPerCacheLine], (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+	  writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+	  writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
         }
         wedges[shift+u2_idx] = 0;
       }
@@ -954,7 +954,7 @@ void CountWorkEfficientSerial(graphCSR& GA, long* butterflies) {
   uintE* wedges = newA(uintE, GA.n);
   uintE* used = newA(uintE, GA.n);
   //long* butterflies = newA(long,GA.n);
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   t1.stop();
 #ifdef VERBOSE
   t1.reportTotal("preprocess (malloc)");
@@ -1042,7 +1042,7 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   timer t_malloc;
   t_malloc.start();
 #endif
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   long* rank_butterflies = newA(long,eltsPerCacheLine*g.n); //(type == 12) ? nullptr : 
   //if (type != 12) {
     granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
@@ -1168,7 +1168,7 @@ long* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long
 timer t_malloc;
 t_malloc.start();
 #endif
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   long* butterflies = newA(long, eltsPerCacheLine*nu);
   granular_for(i,0,nu,nu > 10000, { butterflies[eltsPerCacheLine * i] = 0; });
 #ifdef VERBOSE

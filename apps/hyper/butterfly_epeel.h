@@ -46,7 +46,7 @@ pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
     // Reduce to sum the butterflies over the necessary range
     X reduce = sequence::reduce(&(ps.wedges_seq_tup_fil.A[b_freq_arr[i-1]]), num_freq, tupleAdd<uintE, long>());
     // These are our butterfly counts
-    butterflies[get<0>(reduce)*eltsPerCacheLine] -= get<1>(reduce);
+    butterflies[eltsPerCacheLine*get<0>(reduce)] -= get<1>(reduce);
     update[i-1] = get<0>(reduce);
   }
 
