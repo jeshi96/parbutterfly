@@ -66,3 +66,5 @@ apps/hyper/.vscode/
 ._nucleus-master
 lib/.vscode/
 apps/hyper/out.*
+apps/hyper/a.out
+apps/hyper/._butterfly_count_total.h
