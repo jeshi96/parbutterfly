@@ -1033,6 +1033,77 @@ void CountEWorkEfficientSerial(graphCSR& GA, long* butterflies) {
 #endif
 }
 
+void CountESerial(uintE* eti, long* butterflies, bipartiteCSR& GA, bool use_v) {
+//#ifdef VERBOSE
+  timer t1,t2,t3;
+  t1.start();
+  
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  uintE* wedges = newA(uintE, nu);
+  uintE* used = newA(uintE, nu);
+  //cout << nu*stepSize << endl;
+  t1.stop();
+#ifdef VERBOSE
+  t1.reportTotal("preprocess (malloc)");
+#endif
+  t3.start();
+  for(long i=0;i<nu;i++) {
+    wedges[i] = 0;
+  }
+  const intT eltsPerCacheLine = 64/sizeof(long);
+  t3.stop();
+#ifdef VERBOSE
+  t3.reportTotal("preprocess (initialize)");
+
+  t2.start();
+#endif
+
+  for(long i=0; i < nu; ++i){
+    intT used_idx = 0;
+    intT u_offset  = offsetsU[i];
+    intT u_deg = offsetsU[i+1]-u_offset;
+    for (long j=0; j < u_deg; ++j ) {
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1]-offsetsV[v];
+      for (long k=0; k < v_deg; ++k) { 
+        uintE u2_idx = edgesV[v_offset+k];
+        if (u2_idx < i) {
+          wedges[u2_idx]++;
+          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+	      }
+	      else break;
+	    }
+    }
+    for(long j=0; j < u_deg; ++j) {
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
+      for(intT k=0; k < v_deg; ++k) {
+        uintE u2_idx = edgesV[v_offset+k];
+        if (u2_idx < i) {
+	        butterflies[eltsPerCacheLine*eti[u_offset + j]] += wedges[u2_idx]-1;
+	        butterflies[eltsPerCacheLine*(v_offset + k)] += wedges[u2_idx]-1;
+        }
+        else break;
+      }
+    }
+    for(long j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
+}
+#ifdef VERBOSE
+  t2.reportTotal("counting (main loop)");
+#endif
+  
+  free(wedges);
+  free(used);
+}
+
 long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size, long type,
 		 uintE* ranks, uintE* rankV, uintE* rankU) {
 #ifdef VERBOSE
@@ -1155,7 +1226,7 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
     //cout << "Side wedges: " << num_wedges << "\n";
     //cout << "Co Core wedges: " << num_ccwedges << "\n";
 
-    if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2 || tw == 3) return CountERank(eti, GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+    if (tw != 0) return CountERank(eti, GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
     free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
   }
 #ifdef VERBOSE
@@ -1166,8 +1237,8 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
     butterflies[eltsPerCacheLine*i] = 0;
   }
 
-  long* butterflies_u = (type == 3 || type == 1 || type == 6) ? nullptr : newA(long, eltsPerCacheLine*GA.numEdges);
-  if (type != 3 && type != 1 && type != 6) {
+  long* butterflies_u = (type == 3 || type == 1 || type == 6 || type == 12) ? nullptr : newA(long, eltsPerCacheLine*GA.numEdges);
+  if (type != 3 && type != 1 && type != 6 && type != 12) {
   parallel_for(long i=0; i < GA.numEdges; ++i){
     butterflies_u[eltsPerCacheLine*i] = 0;
   }
@@ -1182,6 +1253,7 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   if (type == 8) t_time.reportTotal("counting (scan)");
 #endif
   if (type == 5) CountEOrigCompactParallel(eti, butterflies, butterflies_u, GA, use_v, max_array_size);
+  else if (type == 12) CountESerial(eti, butterflies, GA, use_v);
   else if (type == 8) CountEOrigCompactParallel_WedgeAware(GA, butterflies, butterflies_u, use_v, max_array_size, wedge_idxs);
   else {
     // TODO clean up utils, do overflow stuff (double check youtube needs it)
@@ -1210,11 +1282,11 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   }
   cs.del();
 
-  if (type != 5) free(wedge_idxs);
+  if (type != 5 && type != 12) free(wedge_idxs);
 #ifdef VERBOSE
-  if (type != 5 && type != 8) t_time.reportTotal("counting");
+  if (type != 5 && type != 8 && type != 12) t_time.reportTotal("counting");
 #endif
-  if (type !=3 && type != 1 && type != 6) {
+  if (type !=3 && type != 1 && type != 6 && type != 12) {
 #ifdef VERBOSE
   timer t_convert;
   t_convert.start();
