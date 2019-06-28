@@ -28,7 +28,7 @@
 pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, 
 			   bool use_v, long max_wedges, intT curr_idx=0) {
   using X = tuple<uintE,long>;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   auto ret = getIntersectWedges(eti, ite, current, ps, active_map, active.size(), GA, use_v, max_wedges, curr_idx);
@@ -58,7 +58,7 @@ pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
 pair<intT, long> PeelEHist(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, 
 			   bool use_v, long max_wedges, intT curr_idx=0) {
   using X = tuple<uintE,long>;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   auto ret = getIntersectWedges(eti, ite, current, ps, active_map, active.size(), GA, use_v, max_wedges, curr_idx);
@@ -94,7 +94,7 @@ long PeelEHash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubs
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
 
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   granular_for(i, 0, num_updates, (num_updates>1000), {
       auto update_pair = update_seq.A[i];
       uintE idx = update_pair.first;
@@ -125,7 +125,7 @@ pair<uintE*, long> PeelEOrigParallel_WedgeAware(uintE* eti, uintE* ite, bool* cu
 
   //granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
 
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   granular_for(i,0,GA.numEdges,GA.numEdges > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
   parallel_for(intT i=0; i < active.size(); ++i){ current[active.vtx(i)] = 1; }
@@ -235,7 +235,7 @@ pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, Peel
 
   //granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
 
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
   granular_for(i,0,GA.numEdges,GA.numEdges > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
   parallel_for(intT i=0; i < active.size(); ++i){ current[active.vtx(i)] = 1; }
@@ -332,7 +332,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   uintE* wedges = wedges_seq.A;
   uintE* used = used_seq.A;
 
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   parallel_for(intT i=0; i < active.size(); ++i){ current[active.vtx(i)] = 1; }
 
@@ -490,7 +490,7 @@ array_imap<long> PeelE(uintE* eti, uintE* ite, bipartiteCSR& GA, bool use_v, lon
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
   
   using X = tuple<uintE,uintE>;
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
 
   auto D = array_imap<long>(GA.numEdges, [&] (size_t i) { return butterflies[eltsPerCacheLine*i]; });
 

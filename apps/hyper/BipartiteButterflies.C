@@ -144,7 +144,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     if (ty == 9) CountOrigCompactSerial(GA,use_v);
 
     if (ty == 9) return;
-    const intT eltsPerCacheLine = 64/sizeof(long);
+    const size_t eltsPerCacheLine = 64/sizeof(long);
 
     timer t;
     t.start();
@@ -211,8 +211,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==6) t3.reportTotal("E HistCE:");
     else if (ty == 5 || ty == 11) t3.reportTotal("E Par:");
     else if (ty == 8) t3.reportTotal("E WedgePar:");
+    else if (ty == 12) t3.reportTotal("E Serial:");
 
-    const intT eltsPerCacheLine = 64/sizeof(long);
+    const size_t eltsPerCacheLine = 64/sizeof(long);
 
     auto butterflies_extract_f = [&] (const long i) -> const long {
       return ebutterflies[i*eltsPerCacheLine];
