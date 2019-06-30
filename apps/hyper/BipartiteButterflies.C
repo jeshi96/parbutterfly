@@ -260,7 +260,7 @@ int parallel_main(int argc, char* argv[]) {
   long denom = P.getOptionLongValue("-d",25);
   long sparse = P.getOptionLongValue("-s",0); // 0 for not sparse, 1 for clr, 2 for edge
 
-  if (te == 0 || nopeel || sparse == 0) {
+  if ((te == 0 || nopeel) && sparse == 0) {
     bipartiteCSR G = readBipartite(iFile);
 
     Compute(G,P);
