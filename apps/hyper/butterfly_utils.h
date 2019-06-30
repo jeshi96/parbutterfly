@@ -233,6 +233,7 @@ struct bipartiteCSR {
   uintE *edgesV, *edgesU;
   long nv, nu, numEdges;
 
+bipartiteCSR () : {}
 bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
   offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
   {}
@@ -738,8 +739,8 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   uintT numColors = max<uintT>(1,denom);
   uintT* colorsV = newA(uintT,G.nv);
   uintT* colorsU = newA(uintT, G.nu);
-  parallel_for(long i=0;i<G.nv;i++) colorsV[i] = hashInt(seed+i) % numColors;
-  parallel_for(long i=0;i<G.nu;i++) colorsU[i] = hashInt(seed+i) % numColors;
+  parallel_for(long i=0;i<G.nv;i++) colorsV[i] = hashInt((ulong) seed+i) % numColors;
+  parallel_for(long i=0;i<G.nu;i++) colorsU[i] = hashInt((ulong) seed+i) % numColors;
 
   uintT* offsetsV = newA(uintT,G.nv+1);
   uintT* offsetsU = newA(uintT,G.nu+1);
