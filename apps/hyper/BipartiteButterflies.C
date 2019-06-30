@@ -113,6 +113,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long max_wedges = P.getOptionLongValue("-m",2577500000);
   long max_array_size = P.getOptionLongValue("-a",23090996160);
 
+  long denom = P.getOptionLongValue("-d",25);
+  long sparse = P.getOptionLongValue("-s",0); 
+
   cout << "count " << ty << ", " << "peel " << tp << ", " << "edge " << te << ", " << "rank " << tw << ", " << "peel " << nopeel << "\n";
 
   timer t1;
@@ -123,7 +126,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   t1.reportTotal("preprocess (wedge counts)");
 
   // if you only want total counts
-  if (total) {
+  if (total || sparse > 0) {
     timer t;
     t.start();
     long num_butterflies = CountTotal(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
@@ -134,7 +137,12 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==4) t.reportTotal("Hist:");
     else if (ty==7 || ty == 11) t.reportTotal("Par");
     else if (ty==8) t.reportTotal("WedgePar");
-    cout << "number of butterflies: " << num_butterflies << "\n";
+    if (sparse == 0)
+      cout << "number of butterflies: " << num_butterflies << "\n";
+    else if (sparse == 1) {
+      double num = (double) num_butterflies * (double) pow((double) 1/ (double) denom, 3);
+      cout << "number of butterflies: " << num << "\n";
+    }
     return;
   }
 
@@ -251,22 +259,36 @@ int parallel_main(int argc, char* argv[]) {
   long rounds = P.getOptionLongValue("-r",3);
   long te = P.getOptionLongValue("-e",0);
   bool nopeel = P.getOptionValue("-nopeel");
-  if (te == 0 || nopeel) {
-  bipartiteCSR G = readBipartite(iFile);
+  long denom = P.getOptionLongValue("-d",25);
+  long sparse = P.getOptionLongValue("-s",0); // 0 for not sparse, 1 for clr, 2 for edge
 
-  Compute(G,P);
-  for(int r=0;r<rounds;r++) {
+  if (te == 0 || nopeel || sparse == 0) {
+    bipartiteCSR G = readBipartite(iFile);
+
     Compute(G,P);
-  }
-  G.del();
+    for(int r=0;r<rounds;r++) {
+      Compute(G,P);
+    }
+    G.del();
   }
   else {
-  bipartiteCSR G = readBipartite(iFile);
-
+  bipartiteCSR G;
+  if (sparse == 0) G = readBipartite(iFile);
+  else if (sparse == 1) {
+    auto tmp = readBipartite(iFile);
+    G = clrSparseBipartite(tmp, denom, 0);
+    tmp.del();
+  }
   Compute(G,P);
   G.del();
+
   for(int r=0;r<rounds;r++) {
-    G = readBipartite(iFile);
+    if (sparse == 0) G = readBipartite(iFile);
+    else if (sparse == 1) {
+      auto tmp = readBipartite(iFile);
+      G = clrSparseBipartite(tmp, denom, r*(tmp.nv+tmp.nu));
+      tmp.del();
+    }
     Compute(G,P);
     G.del();
   }
