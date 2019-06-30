@@ -233,7 +233,7 @@ struct bipartiteCSR {
   uintE *edgesV, *edgesU;
   long nv, nu, numEdges;
 
-bipartiteCSR () : {}
+bipartiteCSR () {}
 bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
   offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
   {}
