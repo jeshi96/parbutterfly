@@ -723,7 +723,7 @@ struct clrF {
   uintE* edges; uintT offset; uintT color; uintT* colors;
   clrF(uintE* _edges, uintT _offset, uintT _color, uintT* _colors) : edges(_edges), offset(_offset), color(_color), colors(_colors) {}
   inline E operator() (const uintT& i) const {
-    return (E) (colors[edges[offset+i]] == color); 
+    return (E) (colors[edges[offset+i]] == color ? 1 : 0); 
   }
 };
 
@@ -735,6 +735,7 @@ struct isSameColor{
 };
 
 bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
+  cout << "test\n"; fflush(stdout);
   double p = 1/denom;
   uintT numColors = max<uintT>(1,denom);
   uintT* colorsV = newA(uintT,G.nv);
@@ -771,6 +772,7 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   }
   long mv = sequence::plusScan(offsetsV,offsetsV,G.nv+1);
   long mu = sequence::plusScan(offsetsU,offsetsU,G.nu+1);
+  cout << mv << ": test\n"; fflush(stdout);
   uintE* edgesV = newA(uintE,mv);
   uintE* edgesU = newA(uintE,mu);
   parallel_for(long i=0; i<G.nv; ++i) {
