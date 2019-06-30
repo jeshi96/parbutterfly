@@ -139,12 +139,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else if (ty==4) t.reportTotal("Hist:");
     else if (ty==7 || ty == 11) t.reportTotal("Par");
     else if (ty==8) t.reportTotal("WedgePar");
-    if (sparse == 0)
-      cout << "number of butterflies: " << num_butterflies << "\n";
-    else if (sparse == 1) {
-      double num = (double) num_butterflies * (double) pow((double) 1/ (double) denom, 3);
-      cout << "number of butterflies: " << (long) num << "\n";
-    }
+    if (sparse == 1) num_butterflies *= pow(denom, 3);
+    cout << "number of butterflies: " << num_butterflies << "\n";
     return;
   }
 
