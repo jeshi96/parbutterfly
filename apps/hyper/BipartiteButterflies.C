@@ -115,6 +115,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   long denom = P.getOptionLongValue("-d",25);
   long sparse = P.getOptionLongValue("-s",0); 
+  if (sparse > 0) {total=true;}
+  if (total) {nopeel = true;}
 
   cout << "count " << ty << ", " << "peel " << tp << ", " << "edge " << te << ", " << "rank " << tw << ", " << "peel " << nopeel << "\n";
 
@@ -126,7 +128,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   t1.reportTotal("preprocess (wedge counts)");
 
   // if you only want total counts
-  if (total || sparse > 0) {
+  if (total) {
     timer t;
     t.start();
     long num_butterflies = CountTotal(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
@@ -141,7 +143,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       cout << "number of butterflies: " << num_butterflies << "\n";
     else if (sparse == 1) {
       double num = (double) num_butterflies * (double) pow((double) 1/ (double) denom, 3);
-      cout << "number of butterflies: " << num << "\n";
+      cout << "number of butterflies: " << (long) num << "\n";
     }
     return;
   }
