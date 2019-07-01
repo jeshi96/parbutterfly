@@ -867,7 +867,7 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   num_vff = sequence::filter(offsetsV_f,offsetsV_ff,G.nv+1,nonMaxUintTF());
   num_uff = sequence::filter(offsetsU_f,offsetsU_ff,G.nu+1,nonMaxUintTF());
   free(offsetsV_f); free(offsetsU_f); free(offsetsV); free(offsetsU);
-  return bipartiteCSR(offsetsV_ff,offsetsU_ff,edgesV,edgesU,num_vff,num_uff,mv);
+  return bipartiteCSR(offsetsV_ff,offsetsU_ff,edgesV,edgesU,num_vff-1,num_uff-1,mv);
 }
 
 bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
