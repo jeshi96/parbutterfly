@@ -736,6 +736,8 @@ struct eF {
   }
 };
 
+struct nonMaxUintTF{bool operator() (uintT &a) {return (a != UINT_T_MAX);}};
+
 struct isSameColor{
   isSameColor(uintT mycolor, uintT *colors) : colors_(colors), me_(mycolor) {};
   bool operator () (uintT v) {return me_ == colors_[v];};
@@ -1073,7 +1075,7 @@ pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
  */
 // TODO turn cmp into extract
 struct nonMaxLongF{bool operator() (long &a) {return (a != LONG_MAX);}};
-struct nonMaxUintTF{bool operator() (uintT &a) {return (a != UINT_T_MAX);}};
+
 template <class L, class T, class Cmp, class Eq, class F>
   pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool sort=true) {
   // Sort objects
