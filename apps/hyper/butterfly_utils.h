@@ -849,28 +849,7 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   }
   free(colorsV); free(colorsU);
 
-  uintT* offsetsV_f = newA(uintT,G.nv+1);
-  uintT* offsetsU_f = newA(uintT,G.nu+1);
-  parallel_for(long i=0; i < G.nv; ++i) {
-    if (offsetsV[i] == offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; 
-    else offsetsV_f[i] = i;}
-  parallel_for(long i=0; i < G.nu; ++i) {if (offsetsU[i] == offsetsU[i+1]) offsetsU_f[i] = UINT_T_MAX; else offsetsU_f[i] = i;}
-  uintT* offsetsV_ff = newA(uintT,G.nv+1);
-  uintT* offsetsU_ff = newA(uintT,G.nu+1);
-  long num_vff = sequence::filter(offsetsV_f,offsetsV_ff,G.nv,nonMaxUintTF());
-  long num_uff = sequence::filter(offsetsU_f,offsetsU_ff,G.nu,nonMaxUintTF());
-  parallel_for(long i=0; i < num_vff; ++i) {offsetsV_f[offsetsV_ff[i]] = i;}
-  parallel_for(long i=0; i < num_uff; ++i) {offsetsU_f[offsetsU_ff[i]] = i;}
-  parallel_for(long i=0; i < mv; ++i) { edgesV[i] = offsetsU_f[edgesV[i]]; }
-  parallel_for(long i=0; i < mv; ++i) { edgesU[i] = offsetsV_f[edgesU[i]]; }
-
-  parallel_for(long i=0; i < G.nv; ++i) {if (offsetsV[i] == offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; else offsetsV_f[i] = offsetsV[i];}
-  parallel_for(long i=0; i < G.nu; ++i) {if (offsetsU[i] == offsetsU[i+1]) offsetsU_f[i] = UINT_T_MAX; else offsetsU_f[i] = offsetsV[i];}
-  offsetsV_f[G.nv] = offsetsV[G.nv]; offsetsU_f[G.nu] = offsetsU[G.nu];
-  num_vff = sequence::filter(offsetsV_f,offsetsV_ff,G.nv+1,nonMaxUintTF());
-  num_uff = sequence::filter(offsetsU_f,offsetsU_ff,G.nu+1,nonMaxUintTF());
-  free(offsetsV_f); free(offsetsU_f); free(offsetsV); free(offsetsU);
-  return bipartiteCSR(offsetsV_ff,offsetsU_ff,edgesV,edgesU,num_vff-1,num_uff-1,mv);
+  return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);
 }
 
 bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
