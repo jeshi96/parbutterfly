@@ -587,7 +587,7 @@ long CountTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     cout << "Side wedges: " << num_wedges << "\n";
     cout << "Co Core wedges: " << num_ccwedges << "\n"; */
 
-    if (num_ccwedges < num_wedges + 1000 || tw == 1 || tw == 2 || tw == 3) return CountRankTotal(GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
+    if (num_ccwedges < num_wedges + 1000 || tw >0) return CountRankTotal(GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
     free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
   }
   const size_t eltsPerCacheLine = 64/sizeof(long);

@@ -285,7 +285,7 @@ int parallel_main(int argc, char* argv[]) {
     if (sparse == 0) G = readBipartite(iFile);
     else{
       auto tmp = readBipartite(iFile);
-      G = sparse == 1 ? clrSparseBipartite(tmp, denom, r*(tmp.nv+tmp.nu)) : eSparseBipartite(tmp, denom, r*(tmp.nv+tmp.nu));
+      G = sparse == 1 ? clrSparseBipartite(tmp, denom, (r+1)*(tmp.nv+tmp.nu)) : eSparseBipartite(tmp, denom, (r+1)*(tmp.nv+tmp.nu));
       tmp.del();
     }
     Compute(G,P);
