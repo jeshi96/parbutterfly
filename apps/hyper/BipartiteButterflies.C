@@ -272,9 +272,9 @@ int parallel_main(int argc, char* argv[]) {
   else {
   bipartiteCSR G;
   if (sparse == 0) G = readBipartite(iFile);
-  else if (sparse == 1) {
+  else {
     auto tmp = readBipartite(iFile);
-    G = clrSparseBipartite(tmp, denom, 0);
+    G = sparse == 1 ? clrSparseBipartite(tmp, denom, 0) : eSparseBipartite(tmp, denom, 0);
     tmp.del();
   }
   Compute(G,P);
@@ -282,9 +282,9 @@ int parallel_main(int argc, char* argv[]) {
 
   for(int r=0;r<rounds;r++) {
     if (sparse == 0) G = readBipartite(iFile);
-    else if (sparse == 1) {
+    else{
       auto tmp = readBipartite(iFile);
-      G = clrSparseBipartite(tmp, denom, r*(tmp.nv+tmp.nu));
+      G = sparse == 1 ? clrSparseBipartite(tmp, denom, r*(tmp.nv+tmp.nu)) : eSparseBipartite(tmp, denom, r*(tmp.nv+tmp.nu));
       tmp.del();
     }
     Compute(G,P);

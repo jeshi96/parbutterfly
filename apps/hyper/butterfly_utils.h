@@ -727,12 +727,127 @@ struct clrF {
   }
 };
 
+template <class E>
+struct eF { 
+  uintT offset; uintE* colors;
+  clrF(uintT _offset, uintE* _colors) : offset(_offset), colors(_colors) {}
+  inline E operator() (const uintT& i) const {
+    return (E) (colors[offset+i] == 0 ? 1 : 0); 
+  }
+};
+
 struct isSameColor{
   isSameColor(uintT mycolor, uintT *colors) : colors_(colors), me_(mycolor) {};
   bool operator () (uintT v) {return me_ == colors_[v];};
   uintT me_;
   uintT *colors_;
 };
+
+struct isZeroF{
+  isZeroF(uintT offset, uintE *colors) : colors_(colors), me_(offset) {};
+  bool operator () (uintT v) {return colors[offset+v] == 0;};
+  uintT offset_;
+  uintT *colors_;
+};
+
+bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
+  uintE numColors = max<uintE>(1,denom);
+  uintE* colorsV = newA(uintE,G.numEdges);
+  uintE* colorsU = newA(uintE,G.numEdges);
+  parallel_for(long i=0; i < G.nv; ++i) {
+    uintT v_offset = G.offsetsV[i];
+    uintT v_deg = G.offsetsV[i+1] - v_offset;
+    parallel_for(long j=0; j < v_deg; ++j) {
+      uintT u = G.edgesV[v_offset + j];
+      long concat = i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+      concat ^= u + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+      //long concat = (i + u) * (i + u + 1) / 2 + i;
+      colorsV[v_offset + j] = hashInt((ulong) seed + concat) % numColors;
+    }
+  }
+  parallel_for(intT i=0; i < G.nu; ++i) {
+    intT u_offset = G.offsetsU[i];
+    intT u_deg = G.offsetsU[i+1] - u_offset;
+    granular_for(j,0,u_deg,u_deg>1000,{
+      uintE v = G.edgesU[u_offset + j];
+      intT v_offset = G.offsetsV[v];
+      intT v_deg = G.offsetsV[v+1] - v_offset;
+      // find k such that edgesV[v_offset + k] = i
+      auto idx_map = make_in_imap<uintE>(v_deg, [&] (size_t k) { return G.edgesV[v_offset + k]; });
+      auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
+      size_t find_idx = pbbs::binary_search(idx_map, i, lte);
+      colorsU[u_offset + j] = colorsV[v_offset + find_idx];
+      });
+  }
+  /*parallel_for(long u=0; u < G.nu; ++u) {
+    uintT u_offset = G.offsetsU[u];
+    uintT u_deg = G.offsetsU[u+1] - u_offset;
+    parallel_for(long j=0; j < u_deg; ++j) {
+      uintT i = G.edgesU[u_offset + j];
+      long concat = i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+      concat ^= u + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+      //long concat = (i + u) * (i + u + 1) / 2 + i;
+      colorsU[v_offset + j] = hashInt((ulong) seed + concat) % numColors;
+    }
+  }*/
+  uintT* offsetsV = newA(uintT,G.nv+1);
+  uintT* offsetsU = newA(uintT,G.nu+1);
+  offsetsV[G.nv] = 0; offsetsU[G.nu] = 0;
+  parallel_for(long i=0; i < G.nv; ++i) {
+    uintT v_offset = G.offsetsV[i];
+    uintT v_deg = G.offsetsV[i+1] - v_offset;
+    if (v_deg > 10000) offsetsV[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), eF<uintT>(v_offset, colorsV));
+    else {
+      offsetsV[i] = 0;
+      for(long j=0; j < v_deg; ++j) {
+        if (colorsV[v_offset + j] == 0) offsetsV[i]++;
+      }
+    }
+  }
+  parallel_for(long i=0; i < G.nu; ++i) {
+    uintT u_offset = G.offsetsU[i];
+    uintT u_deg = G.offsetsU[i+1] - v_offset;
+    if (u_deg > 10000) offsetsU[i] = sequence::reduce<uintT>((uintT) 0, u_deg, addF<uintT>(), eF<uintT>(u_offset, colorsU));
+    else {
+      offsetsU[i] = 0;
+      for(long j=0; j < u_deg; ++j) {
+        if (colorsU[u_offset + j] == 0) offsetsU[i]++;
+      }
+    }
+  }
+  long mv = sequence::plusScan(offsetsV,offsetsV,G.nv+1);
+  long mu = sequence::plusScan(offsetsU,offsetsU,G.nu+1);
+  uintE* edgesV = newA(uintE,mv);
+  uintE* edgesU = newA(uintE,mu);
+  parallel_for(long i=0; i<G.nv; ++i) {
+    uintT v_offset = G.offsetsV[i];
+    uintT v_deg = G.offsetsV[i+1] - v_offset;
+    uintT v_clr_offset = offsetsV[i];
+    if (v_deg > 10000) sequence::filter(&G.edgesV[v_offset],&edgesV[v_clr_offset],v_deg,isZeroF(v_offset, colorsV));
+    else {
+      long idx = 0;
+      for(long j=0; j < v_deg; ++j) {
+        uintE u = G.edgesU[v_offset + j];
+        if (colorsV[v_offset + j] == 0) {edgesV[v_clr_offset + idx] = u; idx++;}
+      }
+    }
+  }
+  parallel_for(long i=0; i<G.nu; ++i) {
+    uintT v_offset = G.offsetsU[i];
+    uintT v_deg = G.offsetsU[i+1] - v_offset;
+    uintT v_clr_offset = offsetsU[i];
+    if (v_deg > 10000) sequence::filter(&G.edgesU[v_offset],&edgesU[v_clr_offset],v_deg,isZeroF(v_offset, colorsU));
+    else {
+      long idx = 0;
+      for(long j=0; j < v_deg; ++j) {
+        uintE u = G.edgesU[v_offset + j];
+        if (colorsU[v_offset + j] == 0) {edgesU[v_clr_offset + idx] = u; idx++;}
+      }
+    }
+  }
+  free(colorsV); free(colorsU);
+  return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);
+}
 
 bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   double p = 1/denom;
