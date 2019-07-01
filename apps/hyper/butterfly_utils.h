@@ -748,30 +748,27 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   parallel_for(long i=0; i < G.nv; ++i) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
-    //if (v_deg > 10000) {
+    if (v_deg > 10000) {
       offsetsV[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), clrF<uintT>(G.edgesV, v_offset, colorsV[i], colorsU));
-      //}
-    /*else {
+    }
+    else {
       offsetsV[i] = 0;
       for(long j=0; j < v_deg; ++i) {
-        uintE u = G.edgesV[v_offset + j];
-        if (colorsU[u] == colorsV[i]) offsetsV[i]++;
+        if (colorsU[G.edgesV[v_offset + j]] == colorsV[i]) offsetsV[i]++;
       }
-    }*/
+    }
   }
   parallel_for(long i=0; i < G.nu; ++i) {
     uintT v_offset = G.offsetsU[i];
     uintT v_deg = G.offsetsU[i+1] - v_offset;
-    //if (v_deg > 10000) {
-      offsetsU[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), clrF<uintT>(G.edgesU, v_offset, colorsU[i], colorsV));
-     // }
-    /*else {
+    if (v_deg > 10000) offsetsU[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), clrF<uintT>(G.edgesU, v_offset, colorsU[i], colorsV));
+    else {
       offsetsU[i] = 0;
       for(long j=0; j < v_deg; ++i) {
         uintE u = G.edgesU[v_offset + j];
         if (colorsV[u] == colorsU[i]) offsetsU[i]++;
       }
-    }*/
+    }
   }
   long mv = sequence::plusScan(offsetsV,offsetsV,G.nv+1);
   long mu = sequence::plusScan(offsetsU,offsetsU,G.nu+1);
@@ -781,31 +778,29 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
     uintT v_clr_offset = offsetsV[i];
-    //if (v_deg > 10000) {
-      sequence::filter(&G.edgesV[v_offset],&edgesV[v_clr_offset],v_deg,isSameColor(colorsV[i],colorsU));
-      //}
-    /* else {
+    if (v_deg > 10000) sequence::filter(&G.edgesV[v_offset],&edgesV[v_clr_offset],v_deg,isSameColor(colorsV[i],colorsU));
+    else {
       long idx = 0;
       for(long j=0; j < v_deg; ++i) {
         uintE u = G.edgesV[v_offset + j];
         if (colorsU[u] == colorsV[i]) {edgesV[v_clr_offset + idx] = u; idx++;}
       }
-    }*/
+    }
   }
   parallel_for(long i=0; i<G.nu; ++i) {
     uintT v_offset = G.offsetsU[i];
     uintT v_deg = G.offsetsU[i+1] - v_offset;
     uintT v_clr_offset = offsetsU[i];
-    //if (v_deg > 10000) {
-      sequence::filter(&G.edgesU[v_offset],&edgesU[v_clr_offset],v_deg,isSameColor(colorsU[i],colorsV));//}
-    /*else {
+    if (v_deg > 10000) sequence::filter(&G.edgesU[v_offset],&edgesU[v_clr_offset],v_deg,isSameColor(colorsU[i],colorsV));
+    else {
       long idx = 0;
       for(long j=0; j < v_deg; ++i) {
         uintE u = G.edgesU[v_offset + j];
         if (colorsV[u] == colorsU[i]) {edgesU[v_clr_offset + idx] = u; idx++;}
       }
-    }*/
+    }
   }
+  free(colorsV); free(colorsU);
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);  
 }
 
