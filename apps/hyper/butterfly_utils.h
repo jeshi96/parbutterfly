@@ -829,7 +829,7 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     else {
       long idx = 0;
       for(long j=0; j < v_deg; ++j) {
-        uintE u = G.edgesU[v_offset + j];
+        uintE u = G.edgesV[v_offset + j];
         if (colorsV[v_offset + j] == 0) {edgesV[v_clr_offset + idx] = u; idx++;}
       }
     }
@@ -848,9 +848,12 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     }
   }
   free(colorsV); free(colorsU);
+
   uintT* offsetsV_f = newA(uintT,G.nv+1);
   uintT* offsetsU_f = newA(uintT,G.nu+1);
-  parallel_for(long i=0; i < G.nv; ++i) {if (offsetsV[i] == offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; else offsetsV_f[i] = i;}
+  parallel_for(long i=0; i < G.nv; ++i) {
+    if (offsetsV[i] == offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; 
+    else offsetsV_f[i] = i;}
   parallel_for(long i=0; i < G.nu; ++i) {if (offsetsU[i] == offsetsU[i+1]) offsetsU_f[i] = UINT_T_MAX; else offsetsU_f[i] = i;}
   uintT* offsetsV_ff = newA(uintT,G.nv+1);
   uintT* offsetsU_ff = newA(uintT,G.nu+1);
