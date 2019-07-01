@@ -748,12 +748,10 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   parallel_for(long i=0; i < G.nv; ++i) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
-    if (v_deg > 10000) {
-      offsetsV[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), clrF<uintT>(G.edgesV, v_offset, colorsV[i], colorsU));
-    }
+    if (v_deg > 10000) offsetsV[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), clrF<uintT>(G.edgesV, v_offset, colorsV[i], colorsU));
     else {
       offsetsV[i] = 0;
-      for(long j=0; j < v_deg; ++i) {
+      for(long j=0; j < v_deg; ++j) {
         if (colorsU[G.edgesV[v_offset + j]] == colorsV[i]) offsetsV[i]++;
       }
     }
@@ -764,7 +762,7 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     if (v_deg > 10000) offsetsU[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), clrF<uintT>(G.edgesU, v_offset, colorsU[i], colorsV));
     else {
       offsetsU[i] = 0;
-      for(long j=0; j < v_deg; ++i) {
+      for(long j=0; j < v_deg; ++j) {
         uintE u = G.edgesU[v_offset + j];
         if (colorsV[u] == colorsU[i]) offsetsU[i]++;
       }
@@ -781,7 +779,7 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     if (v_deg > 10000) sequence::filter(&G.edgesV[v_offset],&edgesV[v_clr_offset],v_deg,isSameColor(colorsV[i],colorsU));
     else {
       long idx = 0;
-      for(long j=0; j < v_deg; ++i) {
+      for(long j=0; j < v_deg; ++j) {
         uintE u = G.edgesV[v_offset + j];
         if (colorsU[u] == colorsV[i]) {edgesV[v_clr_offset + idx] = u; idx++;}
       }
@@ -794,7 +792,7 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     if (v_deg > 10000) sequence::filter(&G.edgesU[v_offset],&edgesU[v_clr_offset],v_deg,isSameColor(colorsU[i],colorsV));
     else {
       long idx = 0;
-      for(long j=0; j < v_deg; ++i) {
+      for(long j=0; j < v_deg; ++j) {
         uintE u = G.edgesU[v_offset + j];
         if (colorsV[u] == colorsU[i]) {edgesU[v_clr_offset + idx] = u; idx++;}
       }
