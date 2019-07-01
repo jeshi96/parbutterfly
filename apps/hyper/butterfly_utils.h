@@ -730,7 +730,7 @@ struct clrF {
 template <class E>
 struct eF { 
   uintT offset; uintE* colors;
-  clrF(uintT _offset, uintE* _colors) : offset(_offset), colors(_colors) {}
+  eF(uintT _offset, uintE* _colors) : offset(_offset), colors(_colors) {}
   inline E operator() (const uintT& i) const {
     return (E) (colors[offset+i] == 0 ? 1 : 0); 
   }
