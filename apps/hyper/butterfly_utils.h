@@ -744,8 +744,8 @@ struct isSameColor{
 };
 
 struct isZeroF{
-  isZeroF(uintT offset, uintE *colors) : colors_(colors), me_(offset) {};
-  bool operator () (uintT v) {return colors[offset+v] == 0;};
+  isZeroF(uintT offset, uintE *colors) : colors_(colors), offset_(offset) {};
+  bool operator () (uintT v) {return colors_[offset_+v] == 0;};
   uintT offset_;
   uintT *colors_;
 };
@@ -806,7 +806,7 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   }
   parallel_for(long i=0; i < G.nu; ++i) {
     uintT u_offset = G.offsetsU[i];
-    uintT u_deg = G.offsetsU[i+1] - v_offset;
+    uintT u_deg = G.offsetsU[i+1] - u_offset;
     if (u_deg > 10000) offsetsU[i] = sequence::reduce<uintT>((uintT) 0, u_deg, addF<uintT>(), eF<uintT>(u_offset, colorsU));
     else {
       offsetsU[i] = 0;
