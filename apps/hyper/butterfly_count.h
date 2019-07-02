@@ -158,7 +158,7 @@ intT CountSortCE(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   free(freq_arr);
 
   // now, we need to collate by our indices
-  radix::intSort::blockSort<uintE>(cs.butterflies_seq_intt.A, num_wedges_f, tupleFirst<uintE,long>());
+  radix::parallelIntegerSort<uintE>(cs.butterflies_seq_intt.A, num_wedges_f, tupleFirst<uintE,long>());
   auto b_freq_pair = getFreqs<long>(cs.butterflies_seq_intt.A, num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
 
