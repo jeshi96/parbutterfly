@@ -442,7 +442,7 @@ pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies
   return make_pair(next_idx, num_updates);
 }
 
-void PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v,
 array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -458,9 +458,10 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
 
   uintE* wedges = wedges_seq.A;
   uintE* used = used_seq.A;
-  long* update_idx = ps.update_idx_seq_int.A;
+  //long* update_idx = ps.update_idx_seq_int.A;
 
   const size_t eltsPerCacheLine = 64/sizeof(long);
+  granular_for(i,0,GA.numEdges,GA.numEdges > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
   for(long step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
     parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
@@ -480,16 +481,17 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
 	    // alternatively, at end before clear do this
 	    wedges[shift+u2_idx]++;
 	    if (wedges[shift+u2_idx] == 1) {
-        used[shift+used_idx++] = u2_idx; //if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);
+        used[shift+used_idx++] = u2_idx;
+        if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);
       }
     }
 	}
       }
       granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
-      update_idx[i-step*stepSize] = used_idx;
+      //update_idx[i-step*stepSize] = used_idx;
     }
     // used[shift+j] for relevant j as indicated by update contain all of the indices to be updated; must call update here
-    long use_stepSize = active.size() < (step+1)*stepSize ? active.size() - step*stepSize : stepSize;
+    /*long use_stepSize = active.size() < (step+1)*stepSize ? active.size() - step*stepSize : stepSize;
     update_idx[use_stepSize] = 0;
     sequence::plusScan(update_idx,update_idx,use_stepSize+1);
     ps.resize_update(update_idx[use_stepSize]);
@@ -501,11 +503,16 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
         update_seq[update_idx[i-step*stepSize]+j] = used[shift+j];
       });
     }
-    updateBuckets(D, b, k2, butterflies, (stepSize < 1000), nu, update_seq, update_idx[use_stepSize]);
+    updateBuckets(D, b, k2, butterflies, (stepSize < 1000), nu, update_seq, update_idx[use_stepSize]);*/
   }
+  auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
+  auto f_in = make_in_imap<bool>(nu, f);
+  auto out = pbbs::pack_index<uintE>(f_in);
+  out.alloc = false;
+  return make_pair(out.s, out.size());
 }
 
-void PeelOrigParallel_WedgeAware(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+pair<uintE*, long> PeelOrigParallel_WedgeAware(PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v,
 array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
@@ -521,12 +528,13 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
 
   uintE* wedges = wedges_seq.A;
   uintE* used = used_seq.A;
-  long* update_idx = ps.update_idx_seq_int.A;
+  //long* update_idx = ps.update_idx_seq_int.A;
 
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   long* wedgesPrefixSum = getActiveWedgeIdxs(active_map,active.size(),GA,use_v);
 
   const size_t eltsPerCacheLine = 64/sizeof(long);
+  granular_for(i,0,GA.numEdges,GA.numEdges > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
   for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
     std::function<void(intT,intT)> recursive_lambda =
@@ -550,13 +558,14 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
 	    // alternatively, at end before clear do this
 	    wedges[shift+u2_idx]++;
 	    if (wedges[shift+u2_idx] == 1) {
-        used[shift+used_idx++] = u2_idx; //if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);
+        used[shift+used_idx++] = u2_idx; 
+        if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);
       }
     }
 	}
       }
       granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
-      update_idx[i-step*stepSize] = used_idx;
+      //update_idx[i-step*stepSize] = used_idx;
     }
 
     } else {
@@ -567,7 +576,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
     recursive_lambda(step*stepSize,min((step+1)*stepSize,active.size()));
     
 // used[shift+j] for relevant j as indicated by update contain all of the indices to be updated; must call update here
-    long use_stepSize = active.size() < (step+1)*stepSize ? active.size() - step*stepSize : stepSize;
+    /* long use_stepSize = active.size() < (step+1)*stepSize ? active.size() - step*stepSize : stepSize;
     update_idx[use_stepSize] = 0;
     sequence::plusScan(update_idx,update_idx,use_stepSize+1);
     ps.resize_update(update_idx[use_stepSize]);
@@ -579,24 +588,33 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
         update_seq[update_idx[i-step*stepSize]+j] = used[shift+j];
       });
     }
-    updateBuckets(D, b, k2, butterflies, (stepSize < 1000), nu, update_seq, update_idx[use_stepSize]);
+    updateBuckets(D, b, k2, butterflies, (stepSize < 1000), nu, update_seq, update_idx[use_stepSize]);*/
   }
   free(wedgesPrefixSum);
+  auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
+  auto f_in = make_in_imap<bool>(nu, f);
+  auto out = pbbs::pack_index<uintE>(f_in);
+  out.alloc = false;
+  return make_pair(out.s, out.size());
 }
 
 //***************************************************************************************************
 //***************************************************************************************************
 
-void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, 
+void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense,
 		  bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<long>& D, buckets<array_imap<long>>& b, long k) {
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
   if (type == 3) {
-    PeelOrigParallel(ps, active, butterflies, GA, use_v, D, b, k);
+    auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v, D, b, k);
+    updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ret.first, ret.second);
+    free(ret.first);
     return;
   }
   else if (type == 5) {
-    PeelOrigParallel_WedgeAware(ps, active, butterflies, GA, use_v, D, b, k);
+    auto ret = PeelOrigParallel_WedgeAware(ps, active, butterflies, update_dense, GA, use_v, D, b, k);
+    updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ret.first, ret.second);
+    free(ret.first);
     return;
   }
   
@@ -641,6 +659,9 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
   long stepSize = min<long>(getWorkers() * 60, max_array_size/nu);
   PeelSpace ps = PeelSpace(type, nu, stepSize);
 
+  bool* update_dense = nullptr;
+  if (type == 3 || type == 5) update_dense = newA(bool, eltsPerCacheLine*nu);
+
   size_t finished = 0;
   //long nonZeroRounds = 0;
   //long totalRounds = 0;
@@ -654,12 +675,13 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
     //if(active.size() > 0) {nonZeroRounds++; }
     bool is_seq = (active.size() < 1000);
 
-    Peel_helper(ps, active, butterflies, GA, use_v, max_wedges, type, D, b, k);
+    Peel_helper(ps, active, butterflies, update_dense, GA, use_v, max_wedges, type, D, b, k);
 
     active.del();
   }
   ps.del();
   b.del();
+  if (type == 3 || type == 5) free(update_dense);
   //cout << "totalRounds = " << totalRounds << endl;
   //cout << "nonZeroRounds = " << nonZeroRounds << endl;
   

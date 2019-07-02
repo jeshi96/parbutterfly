@@ -126,7 +126,7 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
     //t1.reportTotal("time for init wedges");
     used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
-    update_idx_seq_int = _seq<long>(newA(long, stepSize+1), stepSize+1);
+    //update_idx_seq_int = _seq<long>(newA(long, stepSize+1), stepSize+1);
   }
 }
   void resize_update(size_t size) {
@@ -180,7 +180,10 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     else if (type == 2) {
       wedges_seq_long.del();
     }
-    else {wedges_seq_int.del(); used_seq_int.del(); update_idx_seq_int.del();}
+    else {
+      wedges_seq_int.del(); used_seq_int.del();
+      //update_idx_seq_int.del();
+    }
   }
 };
 
