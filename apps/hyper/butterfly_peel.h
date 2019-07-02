@@ -123,9 +123,9 @@ long countSeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active) {
 pair<tuple<uintE,long>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs) {
   using X = tuple<uintE,long>;
   // Sort seagulls (considering both active + non-active endpoints), and retrieve frequency counts
-  radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPFirst());
-  radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPSecond());
-  //sampleSort(seagulls, num_sgs, UVertexPairCmp2());
+  //radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPFirst());
+  //radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPSecond());
+  sampleSort(seagulls, num_sgs, UVertexPairCmp2());
   pair<long*, long> freq_pair = getFreqs<long>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), LONG_MAX, nonMaxLongF());
   long num_sg_freqs = freq_pair.second - 1;
   X* sg_freqs = newA(X, num_sg_freqs);
