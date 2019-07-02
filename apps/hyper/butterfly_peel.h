@@ -461,7 +461,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   //long* update_idx = ps.update_idx_seq_int.A;
 
   const size_t eltsPerCacheLine = 64/sizeof(long);
-  granular_for(i,0,GA.numEdges,GA.numEdges > 10000, { update_dense[eltsPerCacheLine*i] = false; });
+  granular_for(i,0,nu,nu > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
   for(long step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
     parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
@@ -534,7 +534,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   long* wedgesPrefixSum = getActiveWedgeIdxs(active_map,active.size(),GA,use_v);
 
   const size_t eltsPerCacheLine = 64/sizeof(long);
-  granular_for(i,0,GA.numEdges,GA.numEdges > 10000, { update_dense[eltsPerCacheLine*i] = false; });
+  granular_for(i,0,nu,nu > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
   for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
     std::function<void(intT,intT)> recursive_lambda =
@@ -607,13 +607,13 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* 
   bool is_seq = (active.size() < 1000);
   if (type == 3) {
     auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v, D, b, k);
-    updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ret.first, ret.second);
+    updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
     free(ret.first);
     return;
   }
   else if (type == 5) {
     auto ret = PeelOrigParallel_WedgeAware(ps, active, butterflies, update_dense, GA, use_v, D, b, k);
-    updateBuckets(D, b, k, butterflies, is_seq, GA.numEdges, ret.first, ret.second);
+    updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
     free(ret.first);
     return;
   }
