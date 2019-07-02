@@ -14,7 +14,7 @@
 #include "sparseSet.h"
 #include "sampleSort.h"
 #include "../../lib/histogram.h"
-//#include "../../lib/gbbs-histogram.h"
+#include "../../lib/sample_sort.h"
 #include "../../radixsort/RadixSort/radixSort.h"
 #include "../../radixsort/common/blockRadixSort.h"
 
@@ -297,7 +297,7 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   // We need to first collate by v1, v2
   //radix::intSort::blockSort<uintE>(wedges, num_wedges_f, UWFirst());
   //radix::intSort::blockSort<uintE>(wedges, num_wedges_f, UWSecond());
-  sampleSort(wedges, num_wedges_f, UWedgeCmp());
+  pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
 
@@ -315,7 +315,8 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   free(freq_arr);
 
   // now, we need to collate by our indices
-  radix::parallelIntegerSort<uintE>(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleFirst<uintE,long>());
+  //radix::parallelIntegerSort<uintE>(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleFirst<uintE,long>());
+  pbbs::sample_sort(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>());
   auto b_freq_pair = getFreqs(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
   const size_t eltsPerCacheLine = 64/sizeof(long);
@@ -346,7 +347,7 @@ intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   // We need to first collate by v1, v2
   //radix::parallelIntegerSort<uintE>(wedges, num_wedges_f, UWFirst());
   //radix::parallelIntegerSort<uintE>(wedges, num_wedges_f, UWSecond());
-  sampleSort(wedges, num_wedges_f, UWedgeCmp());
+  pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
   //getWedgesTimer.stop();
@@ -379,7 +380,7 @@ intT CountESortCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
   // We need to first collate
   //radix::parallelIntegerSort<uintE>(wedges, num_wedges_f, UWFirst());
   //radix::parallelIntegerSort<uintE>(wedges, num_wedges_f, UWSecond());
-  sampleSort(wedges, num_wedges_f, UWedgeCmp());
+  pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
 
@@ -412,7 +413,7 @@ intT CountESortCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
 
   // now, we need to collate by our indices
   //radix::parallelIntegerSort<uintE>(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleFirst<uintE,long>());
-  radix::parallelIntegerSort<uintE>(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleFirst<uintE,long>());
+  pbbs::sample_sort(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>());
   auto b_freq_pair = getFreqs<long>(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
 
@@ -440,7 +441,7 @@ intT CountESort(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   // First, retrieve a list of indices where consecutive wedges have different keys
   //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWFirst());
   //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWSecond());
-  sampleSort(wedges, num_wedges_curr, UWedgeCmp());
+  pbbs::sample_sort(wedges, num_wedges_curr, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
 
   const size_t eltsPerCacheLine = 64/sizeof(long);

@@ -30,6 +30,7 @@ struct UWedge {
   uintE v2;
   uintE u;
   intT j; intT k;
+UWedge() {}
 UWedge(uintE _v1, uintE _v2, uintE _u, intT _j, intT _k) : v1(_v1), v2(_v2), u(_u), j(_j), k(_k) {}
 };
 
@@ -58,6 +59,7 @@ struct UWedgeEq { inline bool operator() (UWedge vs1, UWedge vs2) { return (vs1.
 struct UVertexPair {
   uintE v1;
   uintE v2;
+UVertexPair() {}
 UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
 };
 

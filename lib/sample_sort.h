@@ -117,7 +117,7 @@ namespace pbbs {
 
       // move data from blocks to buckets
       E *B = new_array_no_init<E>(n,1);
-      size_t* bucket_offsets = transpose_buckets(A, B, counts, n, block_size,
+      size_t* bucket_offsets = pbbsa::transpose_buckets(A, B, counts, n, block_size,
 						   num_blocks, num_buckets);
       free(counts);
 
