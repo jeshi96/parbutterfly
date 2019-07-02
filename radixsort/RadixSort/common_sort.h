@@ -1,7 +1,7 @@
 #ifndef _S_COMMONSORT_INCLUDED
 #define _S_COMMONSORT_INCLUDED
-#include <misc.h>
-#include <radix_configs.h>
+#include "misc.h"
+#include "radix_configs.h"
 namespace radix{
 template< class _Type>
 //gcc can't inline this funciton for some reson 
@@ -45,7 +45,7 @@ template< class _Type, typename F>
 {
 
   const unsigned long Log2ofPowerOfTwoRadix = MAX_RADIX;
-  const unsigned long PowerOfTwoRadix = BUCKETS;
+  const unsigned long PowerOfTwoRadix = R_BUCKETS;
   const unsigned long numberOfBins = PowerOfTwoRadix;
   unsigned long count[ numberOfBins ];
   const unsigned long mask = (1<<Log2ofPowerOfTwoRadix)-1; 
@@ -127,14 +127,14 @@ template <class E, class F, class bint>
                         long n, long buckets, F extract) {
 
   //printf("start %p count is %p -> %p [%p, %p] %d\n", A, counts, &counts[BUCKETS - 1], A, A+n,getWorkerId());
-  bint currentHeadOffsets[BUCKETS];
-  bint tailOffsets[BUCKETS];
+  bint currentHeadOffsets[R_BUCKETS];
+  bint tailOffsets[R_BUCKETS];
 
   const unsigned long bitMask = extract._mask; 
   const unsigned long shiftRightAmount = extract._offset; 
 
   //printf("count init %p %d\n", A,getWorkerId());
-  for (int i = 0; i < BUCKETS; i++) {
+  for (int i = 0; i < R_BUCKETS; i++) {
     counts[i] = 0;
   }
 
@@ -149,14 +149,14 @@ template <class E, class F, class bint>
 
   //printf(" tail offset count %p\n", A);
   bint s = 0;
-  for (int i = 0; i < BUCKETS; i++) {
+  for (int i = 0; i < R_BUCKETS; i++) {
     currentHeadOffsets[i] = s;
     s += counts[i];
     tailOffsets[i] = s;
   }
 
 
-  for (long i = 0; i < BUCKETS; i++) {
+  for (long i = 0; i < R_BUCKETS; i++) {
     while(currentHeadOffsets[i] < tailOffsets[i]) {
       E v = A[currentHeadOffsets[i]];
       //long bucketOfElement = extractElement(v, bitMask, shiftRightAmount);
@@ -180,9 +180,9 @@ template <class E, class F, class bint>
   void radixSortStable(E* A, bint *counts,
 		       long n, F extract) {
 
-  bint currentHeadOffsets[BUCKETS];
+  bint currentHeadOffsets[R_BUCKETS];
 
-  for (int i = 0; i < BUCKETS; i++) {
+  for (int i = 0; i < R_BUCKETS; i++) {
     counts[i] = 0;
   }
 
@@ -192,7 +192,7 @@ template <class E, class F, class bint>
   }
 
   bint s = 0;
-  for (int i = 0; i < BUCKETS; i++) {
+  for (int i = 0; i < R_BUCKETS; i++) {
     currentHeadOffsets[i] = s;
     s += counts[i];
   }
@@ -238,7 +238,7 @@ template <class E, class F>
 }
 
 template <class E, class F, class bint>
-  void radixOneBittoPlaceSort(E* A, bint counts[BUCKETS],
+  void radixOneBittoPlaceSort(E* A, bint counts[R_BUCKETS],
 			      long n, F extract) {
 
 
