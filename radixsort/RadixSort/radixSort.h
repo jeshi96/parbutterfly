@@ -160,7 +160,7 @@ K findMaxHelper(E* A, sizeT n, F f, sizeT P, K t){
 				global_max = temp[i]; 
       }
   }
-
+  free(temp);
 	return global_max;
 }
 

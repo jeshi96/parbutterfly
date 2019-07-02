@@ -97,7 +97,8 @@ intT CountSortCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   free(freq_arr);
 
   // now, we need to collate by our indices
-  radix::intSort::blockSort<uintE>(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleFirst<uintE,long>());
+  //radix::intSort::blockSort<uintE>(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleFirst<uintE,long>());
+  radix::parallelIntegerSort<uintE>(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleFirst<uintE,long>());
   pair<long*, long> b_freq_pair = getFreqs<long>(cs.butterflies_seq_intt.A, 2*freq_pair.second-2, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
   const size_t eltsPerCacheLine = 64/sizeof(long);
