@@ -751,7 +751,7 @@ struct isZeroF{
   isZeroF(uintT offset, uintE *colors) : colors_(colors), offset_(offset) {};
   bool operator () (uintT v) {return colors_[offset_+v] == 0;};
   uintT offset_;
-  uintT *colors_;
+  uintE *colors_;
 };
 
 bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
