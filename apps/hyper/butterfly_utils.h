@@ -748,10 +748,9 @@ struct isSameColor{
 };
 
 struct isZeroF{
-  isZeroF(uintT offset, uintE *colors) : colors_(colors), offset_(offset) {};
-  bool operator () (uintT v) {return colors_[offset_+v] == 0;};
-  uintT offset_;
-  uintE *colors_;
+  uintT offset; uintE* colors;
+  isZeroF(uintT _offset, uintE *_colors) : offset(_offset), colors(_colors) {};
+  bool operator () (uintT i) {return colors[offset+i] == 0;};
 };
 
 bipartiteCSR delZeroDeg(bipartiteCSR& G) {
@@ -873,27 +872,27 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
     uintT v_clr_offset = offsetsV[i];
-    if (v_deg > 10000) sequence::filter(&G.edgesV[v_offset],&edgesV[v_clr_offset],v_deg,isZeroF(v_offset, colorsV));
-    else {
+    //if (v_deg > 10000) sequence::filter(&G.edgesV[v_offset],&edgesV[v_clr_offset],v_deg,isZeroF(v_offset, colorsV));
+    //else {
       long idx = 0;
       for(long j=0; j < v_deg; ++j) {
         uintE u = G.edgesV[v_offset + j];
         if (colorsV[v_offset + j] == 0) {edgesV[v_clr_offset + idx] = u; idx++;}
       }
-    }
+    //}
   }
   parallel_for(long i=0; i<G.nu; ++i) {
-    uintT v_offset = G.offsetsU[i];
-    uintT v_deg = G.offsetsU[i+1] - v_offset;
-    uintT v_clr_offset = offsetsU[i];
-    if (v_deg > 10000) sequence::filter(&G.edgesU[v_offset],&edgesU[v_clr_offset],v_deg,isZeroF(v_offset, colorsU));
-    else {
+    uintT u_offset = G.offsetsU[i];
+    uintT u_deg = G.offsetsU[i+1] - u_offset;
+    uintT u_clr_offset = offsetsU[i];
+    //if (u_deg > 10000) sequence::filter(&G.edgesU[u_offset],&edgesU[u_clr_offset],u_deg,isZeroF(u_offset, colorsU));
+    //else {
       long idx = 0;
-      for(long j=0; j < v_deg; ++j) {
-        uintE u = G.edgesU[v_offset + j];
-        if (colorsU[v_offset + j] == 0) {edgesU[v_clr_offset + idx] = u; idx++;}
+      for(long j=0; j < u_deg; ++j) {
+        uintE v = G.edgesU[u_offset + j];
+        if (colorsU[u_offset + j] == 0) {edgesU[u_clr_offset + idx] = v; idx++;}
       }
-    }
+    //}
   }
   free(colorsV); free(colorsU);
   auto tmp = bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);
@@ -966,7 +965,9 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     }
   }
   free(colorsV); free(colorsU);
-  return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);  
+  auto tmp = bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);
+  auto ret = delZeroDeg(tmp); tmp.del();
+  return ret;
 }
 
 bipartiteCSR readBipartite(char* fname) {
