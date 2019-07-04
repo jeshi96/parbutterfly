@@ -776,7 +776,15 @@ bipartiteCSR delZeroDeg(bipartiteCSR& G) {
   parallel_for(long i=0; i < G.numEdges; ++i) { edgesV[i] = offsetsU_f[G.edgesV[i]]; }
   parallel_for(long i=0; i < G.numEdges; ++i) { edgesU[i] = offsetsV_f[G.edgesU[i]]; }
   // reset offsets
-  parallel_for(long i=0; i < G.nv; ++i) {
+  parallel_for(long i=0; i < num_vff; ++i) {
+    offsetsV_ff[i] = G.offsetsV[offsetsV_ff[i]];
+  }
+  offsetsV_ff[num_vff] = G.offsetsV[G.nv];
+  parallel_for(long i=0; i < num_uff; ++i) {
+    offsetsU_ff[i] = G.offsetsU[offsetsU_ff[i]];
+  }
+  offsetsU_ff[num_uff] =  G.offsetsU[G.nu];
+  /*parallel_for(long i=0; i < G.nv; ++i) {
     if (G.offsetsV[i] == G.offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; 
     else offsetsV_f[i] = G.offsetsV[i];
   }
@@ -787,9 +795,9 @@ bipartiteCSR delZeroDeg(bipartiteCSR& G) {
   offsetsV_f[G.nv] = G.offsetsV[G.nv]; offsetsU_f[G.nu] = G.offsetsU[G.nu];
   long nv = sequence::filter(offsetsV_f,offsetsV_ff,G.nv+1,nonMaxUintTF())-1;
   long nu = sequence::filter(offsetsU_f,offsetsU_ff,G.nu+1,nonMaxUintTF())-1;
-  assert(nv == num_vff); assert(nu == num_uff);
+  assert(nv == num_vff); assert(nu == num_uff);*/
   free(offsetsV_f); free(offsetsU_f);
-  return bipartiteCSR(offsetsV_ff,offsetsU_ff,edgesV,edgesU,nv,nu,G.numEdges);
+  return bipartiteCSR(offsetsV_ff,offsetsU_ff,edgesV,edgesU,num_vff,num_uff,G.numEdges);
 }
 
 bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
