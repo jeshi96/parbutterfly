@@ -754,6 +754,44 @@ struct isZeroF{
   uintE *colors_;
 };
 
+bipartiteCSR delZeroDeg(bipartiteCSR& G) {
+  uintT* offsetsV_f = newA(uintT,G.nv+1);
+  uintT* offsetsU_f = newA(uintT,G.nu+1);
+  uintT* offsetsV_ff = newA(uintT,G.nv+1);
+  uintT* offsetsU_ff = newA(uintT,G.nu+1);
+  uintE* edgesV = newA(uintE, G.numEdges);
+  uintE* edgesU = newA(uintE, G.numEdges);
+  parallel_for(long i=0; i < G.nv; ++i) {
+    if (G.offsetsV[i] == G.offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; 
+    else offsetsV_f[i] = i;
+  }
+  parallel_for(long i=0; i < G.nu; ++i) {
+    if (G.offsetsU[i] == G.offsetsU[i+1]) offsetsU_f[i] = UINT_T_MAX;
+    else offsetsU_f[i] = i;
+  }
+  long num_vff = sequence::filter(offsetsV_f,offsetsV_ff,G.nv,nonMaxUintTF());
+  long num_uff = sequence::filter(offsetsU_f,offsetsU_ff,G.nu,nonMaxUintTF());
+  parallel_for(long i=0; i < num_vff; ++i) {offsetsV_f[offsetsV_ff[i]] = i;}
+  parallel_for(long i=0; i < num_uff; ++i) {offsetsU_f[offsetsU_ff[i]] = i;}
+  parallel_for(long i=0; i < mv; ++i) { edgesV[i] = offsetsU_f[G.edgesV[i]]; }
+  parallel_for(long i=0; i < mv; ++i) { edgesU[i] = offsetsV_f[G.edgesU[i]]; }
+  // reset offsets
+  parallel_for(long i=0; i < G.nv; ++i) {
+    if (G.offsetsV[i] == G.offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; 
+    else offsetsV_f[i] = G.offsetsV[i];
+  }
+  parallel_for(long i=0; i < G.nu; ++i) {
+    if (G.offsetsU[i] == G.offsetsU[i+1]) offsetsU_f[i] = UINT_T_MAX;
+    else offsetsU_f[i] = G.offsetsU[i];
+  }
+  offsetsV_f[G.nv] = G.offsetsV[G.nv]; offsetsU_f[G.nu] = G.offsetsU[G.nu];
+  long nv = sequence::filter(offsetsV_f,offsetsV_ff,G.nv+1,nonMaxUintTF())-1;
+  long nu = sequence::filter(offsetsU_f,offsetsU_ff,G.nu+1,nonMaxUintTF())-1;
+  assert(nv == num_vff); assert(nu == num_uff);
+  free(offsetsV_f); free(offsetsU_f);
+  return bipartiteCSR(offsetsV_ff,offsetsU_ff,edgesV,edgesU,nv,nu,G.numEdges);
+}
+
 bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   uintE numColors = max<uintE>(1,denom);
   uintE* colorsV = newA(uintE,G.numEdges);
@@ -850,8 +888,9 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     }
   }
   free(colorsV); free(colorsU);
-
-  return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);
+  auto tmp = bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);
+  auto ret = delZeroDeg(tmp); tmp.del();
+  return ret;
 }
 
 bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
