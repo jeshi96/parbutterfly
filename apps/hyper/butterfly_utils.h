@@ -773,8 +773,8 @@ bipartiteCSR delZeroDeg(bipartiteCSR& G) {
   long num_uff = sequence::filter(offsetsU_f,offsetsU_ff,G.nu,nonMaxUintTF());
   parallel_for(long i=0; i < num_vff; ++i) {offsetsV_f[offsetsV_ff[i]] = i;}
   parallel_for(long i=0; i < num_uff; ++i) {offsetsU_f[offsetsU_ff[i]] = i;}
-  parallel_for(long i=0; i < mv; ++i) { edgesV[i] = offsetsU_f[G.edgesV[i]]; }
-  parallel_for(long i=0; i < mv; ++i) { edgesU[i] = offsetsV_f[G.edgesU[i]]; }
+  parallel_for(long i=0; i < G.numEdges; ++i) { edgesV[i] = offsetsU_f[G.edgesV[i]]; }
+  parallel_for(long i=0; i < G.numEdges; ++i) { edgesU[i] = offsetsV_f[G.edgesU[i]]; }
   // reset offsets
   parallel_for(long i=0; i < G.nv; ++i) {
     if (G.offsetsV[i] == G.offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; 
