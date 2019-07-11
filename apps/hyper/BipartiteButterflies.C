@@ -179,8 +179,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   // if you only want total counts
   if (total) {
-    if (ty == 9 || ty == 12) CountOrigCompactSerialTotal(GA,use_v);
-    if (ty == 9 || ty == 12) return;
+    if (tw == 0 && (ty == 9 || ty == 12)) CountOrigCompactSerialTotal(GA,use_v);
+    if (tw == 0 && (ty == 9 || ty == 12)) return;
 
     timer t;
     t.start();
@@ -201,8 +201,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
  //TODO seq code integrate w/count
   if (te == 0) {
     // 12 for work efficient serial
-    if (ty == 9 || ty == 12) CountOrigCompactSerial(GA,use_v);
-    if (ty == 9 || ty == 12) return;
+    if (tw == 0 && (ty == 9 || ty == 12)) CountOrigCompactSerial(GA,use_v);
+    if (tw == 0 && (ty == 9 || ty == 12)) return;
     const size_t eltsPerCacheLine = 64/sizeof(long);
 
     timer t;
