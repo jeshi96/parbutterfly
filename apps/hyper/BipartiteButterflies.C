@@ -99,6 +99,56 @@ void CountOrigCompactSerial(bipartiteCSR& GA, bool use_v) {
   cout << "num: " << results/2 << "\n";
 }
 
+void CountOrigCompactSerialTotal(bipartiteCSR& GA, bool use_v) {
+  timer t1,t2;
+  t1.start();
+  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  long results = 0;
+  uintE* wedges = newA(uintE, nu);
+  uintE* used = newA(uintE, nu);
+
+  for(long i=0; i < nu; ++i) { wedges[i] = 0; }
+  long nb = 0;
+
+  t1.reportTotal("preprocess");
+  t2.start();
+
+  for(intT i=0; i < nu; ++i){
+    intT used_idx = 0;
+    intT u_offset  = offsetsU[i];
+    intT u_deg = offsetsU[i+1]-u_offset;
+    for (intT j=0; j < u_deg; ++j ) {
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1]-offsetsV[v];
+      for (intT k=0; k < v_deg; ++k) { 
+        uintE u2_idx = edgesV[v_offset+k];
+        if (u2_idx < i) {
+          nb += wedges[u2_idx];
+          //results += wedges[u2_idx];
+          wedges[u2_idx]++;
+          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+        }
+        else break;
+      }
+    }
+    for(intT j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
+  }
+  t2.reportTotal("main loop");
+  
+  free(wedges);
+  free(used);
+
+  cout << "num: " << nb << "\n";
+}
+
 // Note: must be invoked with symmetricVertex
 void Compute(bipartiteCSR& GA, commandLine P) {
   // Method type for counting + peeling
@@ -129,6 +179,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   // if you only want total counts
   if (total) {
+    if (ty == 9 || ty == 12) CountOrigCompactSerialTotal(GA,use_v);
+    if (ty == 9 || ty == 12) return;
+
     timer t;
     t.start();
     long num_butterflies = CountTotal(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
@@ -148,9 +201,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
  //TODO seq code integrate w/count
   if (te == 0) {
     // 12 for work efficient serial
-    if (ty == 9) CountOrigCompactSerial(GA,use_v);
-
-    if (ty == 9) return;
+    if (ty == 9 || ty == 12) CountOrigCompactSerial(GA,use_v);
+    if (ty == 9 || ty == 12) return;
     const size_t eltsPerCacheLine = 64/sizeof(long);
 
     timer t;

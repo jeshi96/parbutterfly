@@ -487,6 +487,70 @@ long CountWorkEfficientParallelTotal(graphCSR& GA, long max_array_size) {
   return num_butterflies;
 }
 
+
+long CountWorkEfficientSerialTotal(graphCSR& GA) {
+  //cout << "Work-efficient Serial (make sure running with CILK_NWORKERS=1)" << endl;
+  timer t1,t2,t3;
+  t1.start();
+  long nb = 0;
+  uintE* wedges = newA(uintE, GA.n);
+  uintE* used = newA(uintE, GA.n);
+  //long* butterflies = newA(long,GA.n);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
+  t1.stop();
+#ifdef VERBOSE
+  t1.reportTotal("preprocess (malloc)");
+#endif
+  t3.start();
+  for(long i=0;i<GA.n;i++) {
+    wedges[i] = 0;
+    //butterflies[i] = 0;
+  }
+  t3.stop();
+#ifdef VERBOSE
+  t3.reportTotal("preprocess (initialize)");
+  t2.start();
+#endif
+
+  for(long i=0; i < GA.n; ++i){
+    intT used_idx = 0;
+    intT u_offset  = GA.offsets[i];
+    intT u_deg = GA.offsets[i+1]-u_offset;
+    for (intT j=0; j < u_deg; ++j ) {
+      uintE v = GA.edges[u_offset+j] >> 1;
+      intT v_offset = GA.offsets[v];
+      intT v_deg = GA.offsets[v+1]-v_offset;
+      if (v <= i) break;
+      for (intT k=0; k < v_deg; ++k) { 
+	uintE u2_idx = GA.edges[v_offset+k] >> 1;
+	if (u2_idx > i) { //TODO combine into one graph
+	    nb += wedges[u2_idx];
+	  //results[(i % stepSize)*eltsPerCacheLine] += wedges[shift+u2_idx];
+	  wedges[u2_idx]++;
+	  if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+	}
+	else break;
+      }
+    }
+
+    for(long j=0; j < used_idx; ++j) {
+      wedges[used[j]] = 0;
+    }
+  }
+#ifdef VERBOSE
+  t2.reportTotal("counting (main loop)");
+#endif
+  
+  free(wedges);
+  free(used);
+#ifdef VERBOSE
+  //long total = 0;
+  //for(long i=0;i<GA.n;i++) total += butterflies[i];
+  //cout << "num butterflies: " << total/2 << "\n";
+#endif
+return nb;
+}
+
 //************************************************************************************************************************
 //************************************************************************************************************************
 
@@ -511,13 +575,14 @@ long CountRankTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedg
   t_time.start();
 #endif
 
-  long* wedge_idxs = (type == 11) ? nullptr : countWedgesScan(g);
+  long* wedge_idxs = (type == 11 || type == 12) ? nullptr : countWedgesScan(g);
 
   long num_butterflies = 0;
 #ifdef VERBOSE
   if (type == 8) t_time.reportTotal("counting (scan)");
 #endif
   if (type == 11) num_butterflies = CountWorkEfficientParallelTotal(g, max_array_size);
+  else if (type == 12) num_butterflies = CountWorkEfficientSerialTotal(g);
   else if (type == 8) num_butterflies = CountOrigCompactParallel_WedgeAwareTotal(g, max_array_size, wedge_idxs);
   else {
     CountSpace cs = CountSpace(type, g.n, false);
@@ -541,9 +606,9 @@ long CountRankTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedg
   }
   g.del();
 
-  if (type != 11) free(wedge_idxs);
+  if (type != 11 && type != 12) free(wedge_idxs);
 #ifdef VERBOSE
-  if (type != 11 && type != 8) t_time.reportTotal("counting");
+  if (type != 11 && type != 8 && type != 12) t_time.reportTotal("counting");
 #endif
   return num_butterflies;
 }
