@@ -527,7 +527,7 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   auto wedges_seq = ps.wedges_seq_int;
   auto used_seq = ps.used_seq_int;
 
-  uintE* wedges = wedges_seq.A;
+  auto wedges = wedges_seq.A;
   uintE* used = used_seq.A;
   //long* update_idx = ps.update_idx_seq_int.A;
 
