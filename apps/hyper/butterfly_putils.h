@@ -365,11 +365,11 @@ long* getActiveWedgeIdxs(Sequence I, long num_I, bipartiteCSR& GA, bool use_v, l
   parallel_for(long i=curr_idx; i < num_I; ++i) {
     idxs[i-curr_idx] = 0;
     uintE u = I[i];
-    intT u_offset = offsetsU[u];
-    intT u_deg = offsetsU[u+1] - u_offset;
+    uintT u_offset = offsetsU[u];
+    uintT u_deg = offsetsU[u+1] - u_offset;
     for(long j=0; j < u_deg; ++j) {
       uintE v = edgesU[u_offset + j];
-      intT v_deg = offsetsV[v+1] - offsetsV[v];
+      uintT v_deg = offsetsV[v+1] - offsetsV[v];
       idxs[i-curr_idx] += (v_deg - 1);
     }
   }
@@ -788,7 +788,7 @@ pair<tuple<uintE,long>*,long> _updateBuckets_seq(uintE* update_idxs, long num_up
     long old_b = D.s[u_idx];
 
     if(old_b > k) {
-      uintE new_b = max(butterflies[eltsPerCacheLine*u_idx], k);
+      long new_b = max(butterflies[eltsPerCacheLine*u_idx], k);
       D.s[u_idx] = new_b;
       long new_bkt = b.get_bucket(old_b, new_b);
       update[idx] = make_tuple(u_idx, new_bkt);
