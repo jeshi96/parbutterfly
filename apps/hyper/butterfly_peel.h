@@ -423,7 +423,7 @@ pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies
 
   auto wedges_seq_num = ps.wedges_hash->entries_no_init(ps.wedges_seq_intp);
 
-  using T = pair<uintE,long>;
+  using T = pair<long,long>;
   granular_for ( j, 0, wedges_seq_num, (wedges_seq_num > 1000), {
       auto sg_freq_pair = ps.wedges_seq_intp.A[j];
       long num = sg_freq_pair.second;
