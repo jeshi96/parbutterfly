@@ -193,24 +193,24 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
 
 
 template<class wedge, class wedgeCons, class Sequence>
-void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
-  intT curr_idx, intT next_idx) {
+void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
+  long curr_idx, long next_idx) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   long idx = 0;
-  for(intT i=curr_idx; i < next_idx; ++i) {
+  for(long i=curr_idx; i < next_idx; ++i) {
     uintE u = I[i];
     intT u_offset = offsetsU[u];
     intT u_deg = offsetsU[u+1] - u_offset;
-    for(intT j=0; j < u_deg; ++j) {
+    for(long j=0; j < u_deg; ++j) {
       uintE v = edgesU[u_offset + j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
       // Find neighbors (not equal to u) of v
-      for (intT k = 0; k < v_deg; ++k) {
+      for (long k = 0; k < v_deg; ++k) {
         uintE u2 = edgesV[v_offset + k];
         if (u2 != u) {
           wedges_seq.A[idx] = cons(u, u2, v, j, k);
@@ -222,8 +222,8 @@ void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipar
 }
 
 template<class wedge, class wedgeCons, class Sequence>
-void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
-  intT curr_idx=0, intT next_idx=INT_T_MAX) {
+void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I,long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
+  long curr_idx=0, long next_idx=LONG_MAX) {
 
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -236,7 +236,7 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartite
     wedges_seq.n = num_wedges;
   }
 
-  if (next_idx == INT_T_MAX) next_idx = num_I;
+  if (next_idx == LONG_MAX) next_idx = num_I;
   if (num_wedges < 10000) return _getActiveWedges_seq<wedge>(wedges_seq, I, num_I, GA, use_v, cons, num_wedges, curr_idx, next_idx);
 
   // First, we must retrive the indices at which to store each seagull (so that storage can be parallelized)
@@ -248,7 +248,7 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartite
   using T = long*;
   T* nbhd_idxs = newA(T, next_idx-curr_idx); 
 
-  parallel_for(intT i=curr_idx; i < next_idx; ++i) {
+  parallel_for(long i=curr_idx; i < next_idx; ++i) {
     // Set up for each active vertex
     uintE u = I[i];
     intT u_offset = offsetsU[u];
@@ -257,7 +257,7 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartite
     nbhd_idxs[i-curr_idx] = newA(long, u_deg + 1);
     (nbhd_idxs[i-curr_idx])[u_deg] = 0;
     // Assign indices associated with each neighbor of u
-    parallel_for(intT j=0; j < u_deg; ++j) {
+    parallel_for(long j=0; j < u_deg; ++j) {
       uintE v = edgesU[u_offset + j];
       (nbhd_idxs[i-curr_idx])[j] = offsetsV[v+1] - offsetsV[v] - 1;
     }
@@ -269,7 +269,7 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartite
   sequence::plusScan(sg_idxs, sg_idxs, next_idx-curr_idx + 1);
 
   // Store seagulls in parallel
-  parallel_for(intT i=curr_idx; i < next_idx; ++i) {
+  parallel_for(long i=curr_idx; i < next_idx; ++i) {
     uintE u = I[i];
     intT u_offset = offsetsU[u];
     intT u_deg = offsetsU[u+1] - u_offset;
@@ -293,7 +293,7 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartite
   }
 
   // Cleanup
-  parallel_for(intT i=curr_idx; i<next_idx;++i) { 
+  parallel_for(long i=curr_idx; i<next_idx;++i) { 
     free(nbhd_idxs[i-curr_idx]); 
   }
   free(nbhd_idxs);
@@ -301,8 +301,8 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartite
 }
 
 template<class wedgeCons, class Sequence>
-void _getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, 
-  intT curr_idx=0, intT next_idx=INT_T_MAX) {
+void _getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, 
+  long curr_idx=0, long next_idx=INT_T_MAX) {
 
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -311,17 +311,17 @@ void _getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& G
 
   if (next_idx == INT_T_MAX) next_idx = num_I;
   auto wedges = ps.resize(num_wedges);
-  parallel_for(intT i=curr_idx; i < next_idx; ++i){
+  parallel_for(long i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
     uintE u = I[i];
     intT u_offset = offsetsU[u];
     intT u_deg = offsetsU[u+1] - u_offset;
-    parallel_for (intT j=0; j < u_deg; ++j ) {
+    parallel_for (long j=0; j < u_deg; ++j ) {
       uintE v = edgesU[u_offset + j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
       // Find all seagulls with center v and endpoint u
-      for (intT k=0; k < v_deg; ++k) { 
+      for (long k=0; k < v_deg; ++k) { 
         uintE u2 = edgesV[v_offset + k];
         if (u2 != u) wedges->insert(make_pair(cons(u, u2, v, j, k),1));
 	    }
@@ -330,18 +330,18 @@ void _getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& G
 }
 
 template<class Sequence>
-pair<long,intT> getNextActiveWedgeIdx_seq(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
+pair<long,intT> getNextActiveWedgeIdx_seq(Sequence I, long num_I, bipartiteCSR& GA, bool use_v, long max_wedges, long curr_idx) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   long num_wedges = 0;
-  for(intT i=curr_idx; i < num_I; ++i) {
+  for(long i=curr_idx; i < num_I; ++i) {
     uintE u = I[i];
     intT u_offset = offsetsU[u];
     intT u_deg = offsetsU[u+1] - u_offset;
     long num = 0;
-    for(intT j=0; j < u_deg; ++j) {
+    for(long j=0; j < u_deg; ++j) {
       uintE v = edgesU[u_offset + j];
       intT v_deg = offsetsV[v+1] - offsetsV[v];
       num += (v_deg - 1);
@@ -356,18 +356,18 @@ pair<long,intT> getNextActiveWedgeIdx_seq(Sequence I, intT num_I, bipartiteCSR& 
 }
 
 template<class Sequence>
-long* getActiveWedgeIdxs(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, intT curr_idx=0) {
+long* getActiveWedgeIdxs(Sequence I, long num_I, bipartiteCSR& GA, bool use_v, long curr_idx=0) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
   long* idxs = newA(long, num_I - curr_idx + 1);
   idxs[num_I-curr_idx] = 0;
-  parallel_for(intT i=curr_idx; i < num_I; ++i) {
+  parallel_for(long i=curr_idx; i < num_I; ++i) {
     idxs[i-curr_idx] = 0;
     uintE u = I[i];
     intT u_offset = offsetsU[u];
     intT u_deg = offsetsU[u+1] - u_offset;
-    for(intT j=0; j < u_deg; ++j) {
+    for(long j=0; j < u_deg; ++j) {
       uintE v = edgesU[u_offset + j];
       intT v_deg = offsetsV[v+1] - offsetsV[v];
       idxs[i-curr_idx] += (v_deg - 1);
@@ -380,7 +380,7 @@ long* getActiveWedgeIdxs(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, i
 // TODO based on half can also optimize this stuff? but will be hard to parallelize later so maybe not
 //JS: there looks to be some inefficiency here. we should have gotten the prefix sum of wedges for all vertices at the beginning, so we don't need to recompute it here. binary search can use a doubling search instead, starting at the last index until getting the right range, then binary search inside.
 template<class Sequence>
-pair<long, intT> getNextActiveWedgeIdx(Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
+pair<long, long> getNextActiveWedgeIdx(Sequence I, long num_I, bipartiteCSR& GA, bool use_v, long max_wedges, long curr_idx) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
@@ -399,25 +399,25 @@ pair<long, intT> getNextActiveWedgeIdx(Sequence I, intT num_I, bipartiteCSR& GA,
 }
 
 template<class wedge, class wedgeCons, class Sequence>
-pair<long, intT> getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
-  long max_wedges, intT curr_idx, long num_wedges) {
+pair<long, long> getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+  long max_wedges, long curr_idx, long num_wedges) {
   if (max_wedges >= num_wedges) {
     _getActiveWedges<wedge>(wedges_seq, I, num_I, GA, use_v, cons, num_wedges);
     return make_pair(num_wedges, num_I);
   }
 
-  pair<long, intT> p = getNextActiveWedgeIdx(I, num_I, GA, use_v, max_wedges, curr_idx);
+  auto p = getNextActiveWedgeIdx(I, num_I, GA, use_v, max_wedges, curr_idx);
   _getActiveWedges<wedge>(wedges_seq, I, num_I, GA, use_v, cons, p.first, curr_idx, p.second);
   return p;
 }
 
 template<class wedgeCons, class Sequence>
-long getActiveWedgesHash(PeelSpace& ps, Sequence I, intT num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges) {
+long getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, long curr_idx, long num_wedges) {
   if (max_wedges >= num_wedges) {
     _getActiveWedgesHash(ps, I, num_I, GA, use_v, cons, num_wedges);
     return num_I;
   }
-  pair<long, intT> p = getNextActiveWedgeIdx(I, num_I, GA, use_v, max_wedges, curr_idx);
+  auto p = getNextActiveWedgeIdx(I, num_I, GA, use_v, max_wedges, curr_idx);
   _getActiveWedgesHash(ps, I, num_I, GA, use_v, cons, p.first, curr_idx, p.second);
   return p.second;
 }

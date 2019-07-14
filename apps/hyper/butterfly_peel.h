@@ -345,12 +345,12 @@ long getUpdatesHist(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freq
  *  Returns: Array of butterfly counts to be changed with corresponding vertex, and the number of
  *           such changes
  */
-pair<intT, long> PeelSort(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
+pair<long, long> PeelSort(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
   // Retrieve all seagulls
   const long nu = use_v ? GA.nu : GA.nv;
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  pair<long,intT> sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
-  intT next_idx = sg_pair.second;
+  auto sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
+ long next_idx = sg_pair.second;
 
   auto sg_freqs_pair = getSeagullFreqs(nu, ps.wedges_seq_uvp.A, sg_pair.first);
 
@@ -362,12 +362,12 @@ pair<intT, long> PeelSort(PeelSpace& ps, vertexSubset& active, long* butterflies
 }
 
 //TODO these are all CE versions -- do version where we don't use getUpdates_seq, and we writeadd (ish) to update
-pair<intT, long> PeelSort_seq(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
+pair<long, long> PeelSort_seq(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
   // Retrieve all seagulls
   const long nu = use_v ? GA.nu : GA.nv;
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  pair<long, intT> sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
-  intT next_idx = sg_pair.second;
+  auto sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
+  long next_idx = sg_pair.second;
 
   auto sg_freqs_pair = getSeagullFreqs_seq(nu, ps.wedges_seq_uvp.A, sg_pair.first);
 
@@ -381,12 +381,12 @@ pair<intT, long> PeelSort_seq(PeelSpace& ps, vertexSubset& active, long* butterf
 /*
  *  Precisely PeelSort, but using histograms instead of repeated sortings.
  */
-pair<intT, long> PeelHist(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
+pair<long, long> PeelHist(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
   // Retrieve all seagulls
   const long nu = use_v ? GA.nu : GA.nv;
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  pair<long, intT> sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
-  intT next_idx = sg_pair.second;
+  auto sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+  long next_idx = sg_pair.second;
 
   auto sg_freqs_pair = getSeagullFreqsHist(ps, nu, ps.wedges_seq_long.A, sg_pair.first);
   // Compute updated butterfly counts
@@ -396,12 +396,12 @@ pair<intT, long> PeelHist(PeelSpace& ps, vertexSubset& active, long* butterflies
   return make_pair(next_idx, ret);
 }
 
-pair<intT, long> PeelHist_seq(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
+pair<long, long> PeelHist_seq(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
   // Retrieve all seagulls
   const long nu = use_v ? GA.nu : GA.nv;
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  pair<long, intT> sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
-  intT next_idx = sg_pair.second;
+  auto sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+  long next_idx = sg_pair.second;
 
   auto sg_freqs_pair = getSeagullFreqsHist_seq(ps, nu, ps.wedges_seq_long.A, sg_pair.first);
   // Compute updated butterfly counts
@@ -414,12 +414,12 @@ pair<intT, long> PeelHist_seq(PeelSpace& ps, vertexSubset& active, long* butterf
 /*
  *  Precisely PeelSort, but using hash tables instead of repeated sortings.
  */
-pair<intT, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
+pair<long, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
   const size_t eltsPerCacheLine = 64/sizeof(long);
   // Retrieve all seagulls
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  intT next_idx = getActiveWedgesHash(ps, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+  long next_idx = getActiveWedgesHash(ps, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
 
   auto wedges_seq_num = ps.wedges_hash->entries_no_init(ps.wedges_seq_intp);
 
@@ -620,7 +620,7 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* 
   }
   
   long num_wedges = countSeagulls(GA, use_v, active);
-  pair<intT, long> ret;
+  pair<long, long> ret;
   //TODO remove update dense from all of these
   if (max_wedges >= num_wedges) {
     if (type == 0) ret = PeelHash(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
@@ -633,7 +633,7 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* 
     ps.clear();
     return;
   }
-  intT curr_idx = 0;
+  long curr_idx = 0;
   while(curr_idx < active.size()) {
     if (type == 0) ret = PeelHash(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
     else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
