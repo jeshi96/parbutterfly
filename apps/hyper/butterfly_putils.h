@@ -754,7 +754,7 @@ pair<tuple<uintE,long>*,long> _updateBuckets(uintE* update_idxs, long num_update
   array_imap<long> D, buckets<array_imap<long>> b, long k) {
   using X = tuple<uintE,long>;
   X* update = newA(X,num_updates);
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const long eltsPerCacheLine = 64/sizeof(long);
 
   // Filter for bucket updates
   parallel_for(long i=0; i < num_updates; ++i) {
@@ -781,7 +781,7 @@ pair<tuple<uintE,long>*,long> _updateBuckets_seq(uintE* update_idxs, long num_up
   array_imap<long> D, buckets<array_imap<long>> b, long k) {
   using X = tuple<uintE, long>;
   X* update = newA(X, num_updates);
-  const intT eltsPerCacheLine = 64/sizeof(long);
+  const long eltsPerCacheLine = 64/sizeof(long);
   long idx = 0;
   for(long i=0; i < num_updates; ++i) {
     uintE u_idx = update_idxs[i];
