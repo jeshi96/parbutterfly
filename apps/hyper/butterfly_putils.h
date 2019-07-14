@@ -85,7 +85,7 @@ struct PeelSpace {
   long nu;
   long stepSize;
   _seq<UVertexPair> wedges_seq_uvp;
-  _seq<uintE> wedges_seq_int;
+  _seq<long> wedges_seq_int;
   _seq<long> wedges_seq_long;
   _seq<uintE> used_seq_int;
   _seq<uintE> update_seq_int;
@@ -95,7 +95,7 @@ struct PeelSpace {
   sparseAdditiveSet<long, long>** wedges_hash_list;
   _seq<pair<long,long>> wedges_seq_intp;
   _seq<pair<long,long>> butterflies_seq_intp;
-  intT num_wedges_hash;
+  long num_wedges_hash;
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
 PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
@@ -121,7 +121,7 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
   }
   else {
     //timer t1;
-    wedges_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
+    wedges_seq_int = _seq<long>(newA(long, nu*stepSize), nu*stepSize);
     //t1.start();
     granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
     //t1.reportTotal("time for init wedges");
@@ -148,10 +148,10 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
     }
     using T = sparseAdditiveSet<long, long>*;
     T* new_wedges_hash_list = newA(T, find_idx+1);
-    parallel_for(intT i=0; i < num_wedges_hash; ++i) {
+    parallel_for(long i=0; i < num_wedges_hash; ++i) {
       new_wedges_hash_list[i] = wedges_hash_list[i];
     }
-    parallel_for(intT i=num_wedges_hash; i < find_idx+1; ++i) {
+    parallel_for(long i=num_wedges_hash; i < find_idx+1; ++i) {
       new_wedges_hash_list[i] = new sparseAdditiveSet<long, long>(1u << i,1, LONG_MAX, LONG_MAX);
     }
     free(wedges_hash_list);
@@ -170,7 +170,7 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
   void del() {
   	update_seq_int.del();
     if (type == 0) {
-      parallel_for(intT i=0; i < num_wedges_hash; ++i) { wedges_hash_list[i]->del(); free(wedges_hash_list[i]); }
+      parallel_for(long i=0; i < num_wedges_hash; ++i) { wedges_hash_list[i]->del(); free(wedges_hash_list[i]); }
       free(wedges_hash_list);
       update_hash.del();
       wedges_seq_intp.del(); 

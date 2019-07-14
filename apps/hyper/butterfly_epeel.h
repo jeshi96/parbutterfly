@@ -121,8 +121,8 @@ pair<uintE*, long> PeelEOrigParallel_WedgeAware(uintE* eti, uintE* ite, bool* cu
   auto wedges_seq = ps.wedges_seq_int;
   auto used_seq = ps.used_seq_int;
 
-  uintE* wedges = wedges_seq.A;
-  uintE* used = used_seq.A;
+  auto wedges = wedges_seq.A;
+  auto used = used_seq.A;
 
   //granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
 
