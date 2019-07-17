@@ -253,9 +253,10 @@ struct buckets {
       auto _d = d;
       auto tmp = array_imap<uintE>(m);
       uintE* A = bkts[open_buckets].A;
-      parallel_for(size_t i=0; i<m; i++) {
-        tmp[i] = A[i];
-      }
+      granular_for(i,0,m,m>1000,{tmp[i]=A[i];});
+      /* parallel_for(size_t i=0; i<m; i++) { */
+      /*   tmp[i] = A[i]; */
+      /* } */
       if (order == increasing) {
         cur_range++; // increment range
       } else {

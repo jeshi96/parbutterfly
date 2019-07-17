@@ -656,7 +656,7 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
   auto D = array_imap<long>(nu, [&] (size_t i) { return butterflies[eltsPerCacheLine*i]; });
 
   auto b = make_buckets(nu, D, increasing, num_buckets); // TODO may also have to fix buckets to use long
-
+  
   long stepSize = min<long>(getWorkers() * 60, max_array_size/nu);
   PeelSpace ps = PeelSpace(type, nu, stepSize);
 
@@ -666,8 +666,11 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
   size_t finished = 0;
   //long nonZeroRounds = 0;
   //long totalRounds = 0;
+  timer t;
   while (finished != nu) {
+    t.start();
     auto bkt = b.next_bucket();
+    t.stop();
     auto active = bkt.identifiers;
     if (active.size() == 0) {active.del(); continue;}
     long k = bkt.id;
@@ -680,6 +683,7 @@ array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_
 
     active.del();
   }
+  t.reportTotal("next bucket");
   ps.del();
   b.del();
   if (type == 3 || type == 5) free(update_dense);
