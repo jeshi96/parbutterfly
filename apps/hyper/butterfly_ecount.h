@@ -1257,9 +1257,6 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   else if (type == 12) CountESerial(eti, butterflies, GA, use_v);
   else if (type == 8) CountEOrigCompactParallel_WedgeAware(GA, butterflies, butterflies_u, use_v, max_array_size, wedge_idxs);
   else {
-    // TODO clean up utils, do overflow stuff (double check youtube needs it)
-    // TODO check correctness against each other
-    // TODO why is hash so slow
     if (max_wedges >= num_wedges) {
       if (type == 0) CountESort(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti);
       else if (type == 1) CountESortCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);

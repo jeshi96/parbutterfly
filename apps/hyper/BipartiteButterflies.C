@@ -5,8 +5,6 @@
 #include <assert.h>
 
 #define HYPER 1
-//#define LONG 1
-//#define EDGELONG 1
 #define MCX16 1
 #define VERBOSE 1
 
@@ -26,7 +24,6 @@
 #include "sparseSet.h"
 #include "sampleSort.h"
 #include "../../lib/histogram.h"
-//#include "../../lib/gbbs-histogram.h"
 
 #include "butterfly_count.h"
 #include "butterfly_ecount.h"
@@ -46,8 +43,6 @@ using namespace std;
 void CountOrigCompactSerial(bipartiteCSR& GA, bool use_v) {
   timer t1,t2;
   t1.start();
-  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
-  cout << "Original Serial (make sure running with CILK_NWORKERS=1)" << endl;  
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -80,7 +75,6 @@ void CountOrigCompactSerial(bipartiteCSR& GA, bool use_v) {
         if (u2_idx < i) {
           butterflies[i] += wedges[u2_idx];
           butterflies[u2_idx] += wedges[u2_idx];
-          //results += wedges[u2_idx];
           wedges[u2_idx]++;
           if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
         }
@@ -132,7 +126,6 @@ void CountOrigCompactSerialTotal(bipartiteCSR& GA, bool use_v) {
         uintE u2_idx = edgesV[v_offset+k];
         if (u2_idx < i) {
           nb += wedges[u2_idx];
-          //results += wedges[u2_idx];
           wedges[u2_idx]++;
           if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
         }
@@ -155,7 +148,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long ty = P.getOptionLongValue("-t",0);
   long tp = P.getOptionLongValue("-tp",0);
   long te = P.getOptionLongValue("-e",0);
-  long tw = P.getOptionLongValue("-w",0);
+  long tw = P.getOptionLongValue("-w",0); // 0 = side, 1 = co core, 2 = approx co core, 3 = deg, 4 = approx deg
   bool nopeel = P.getOptionValue("-nopeel");
   bool total = P.getOptionValue("-total");
   

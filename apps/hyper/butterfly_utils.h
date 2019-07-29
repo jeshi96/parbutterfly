@@ -17,58 +17,72 @@
 #include "sequence.h"
 #include "binary_search.h"
 
-#define clean_errno() (errno == 0 ? "None" : strerror(errno))
-#define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
-#define assertf(A, M, ...) if(!(A)) {log_error(M, ##__VA_ARGS__); assert(A); }
-
 #define MAX_STEP_SIZE 1000
 
 using namespace std;
 
+// Represents a wedge, where v1 and v2 are the endpoints, u is the center, j is
+// the index of u as a neighbor of v1, and k is the index of v2 as a neighbor
+// of u. Also, constructors and comparators for UWedge.
 struct UWedge {
   uintE v1;
   uintE v2;
   uintE u;
   intT j; intT k;
-UWedge() {}
-UWedge(uintE _v1, uintE _v2, uintE _u, intT _j, intT _k) : v1(_v1), v2(_v2), u(_u), j(_j), k(_k) {}
+  UWedge() {}
+  UWedge(uintE _v1, uintE _v2, uintE _u, intT _j, intT _k) : v1(_v1), v2(_v2), u(_u), j(_j), k(_k) {}
 };
-
-struct UWedgeCons { inline UWedge operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UWedge(v1, v2, c, j, k); }};
-
-struct UWedgeIntRankCons {
-  long nu;
-UWedgeIntRankCons(long _nu) : nu(_nu) {}
-  inline long operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
-    return ((((long) v1) * nu + ((long) v2 >> 1)) << 1) + (v2 & 0b1);
-  }
+struct UWedgeCons {
+  inline UWedge operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UWedge(v1, v2, c, j, k); }
 };
-
 struct UWedgeCmp {
   inline bool operator() (UWedge vs1, UWedge vs2) {
     if (vs1.v1 == vs2.v1) return vs1.v2 < vs2.v2;
     return vs1.v1 < vs2.v1;
   }
 };
-
 struct UWedgeEq { inline bool operator() (UWedge vs1, UWedge vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
 
-// Represents a pair of vertices on one side of a bipartite graph (ordered, with least vertex first)
 
-// Represents a pair of vertices on one side of a bipartite graph (unordered, stored based on constructor order)
+// Constructs a long representing the endpoints of a wedge
+struct UWedgeIntRankCons {
+  long nu;
+  UWedgeIntRankCons(long _nu) : nu(_nu) {}
+  inline long operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
+    return ((((long) v1) * nu + ((long) v2 >> 1)) << 1) + (v2 & 0b1);
+  }
+};
+struct UVertexPairIntCons {
+  long nu;
+  UVertexPairIntCons(long _nu) : nu(_nu) {}
+  inline long operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
+    return (long) v1 * nu + (long) v2;
+  }
+};
+struct UVertexPairIntRankCons {
+  long nu;
+  UVertexPairIntRankCons(long _nu) : nu(_nu) {}
+  inline long operator() (uintE v1, uintE v2, bool b) {
+    return ((((long) v1) * nu + (long) v2) << 1) + (b ? 0b1 : 0);
+  }
+};
+
+
+// Represents a pair of vertices on one side of a bipartite graph (unordered,
+// stored based on constructor order). Also, constructors and comparators for
+// UVertexPair.
 struct UVertexPair {
   uintE v1;
   uintE v2;
-UVertexPair() {}
-UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
+  UVertexPair() {}
+  UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
 };
-
-//TODO get rid of legacy _nv
-// Comparer for VertexPair based on least vertex in pair and then greatest vertex in pair
-
-// Comparer for VertexPair based on greatest vertex in pair and then least vertex in pair
-
-// Comparer for UVertexPair
+struct UVertexPairCons {
+  inline UVertexPair operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UVertexPair(v1, v2); }
+};
+struct UVertexPairRankCons {
+  inline UVertexPair operator() (uintE v1, uintE v2, bool b) { return UVertexPair(v1, (v2 << 1) + b); }
+};
 struct UVertexPairCmp2{
   UVertexPairCmp2() {}
   inline bool operator() (UVertexPair vs1, UVertexPair vs2) {
@@ -76,7 +90,6 @@ struct UVertexPairCmp2{
     return vs1.v2 < vs2.v2;
   }
 };
-
 struct UVertexPairCmp {
   UVertexPairCmp() {}
   inline bool operator() (UVertexPair vs1, UVertexPair vs2) {
@@ -84,118 +97,48 @@ struct UVertexPairCmp {
     return vs1.v1 < vs2.v1;
   }
 };
+struct UVertexPairEq {
+  inline bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);}
+};
+struct UVertexPairV2{inline uintE operator() (UVertexPair obj) {return obj.v2;}};
 
+
+// Returns the first and second endpoints in UVertexPair and UWedge
 struct UVPFirst { uintE operator() (const UVertexPair& x) {return x.v1;}};
 struct UVPSecond { uintE operator() (const UVertexPair& x) {return x.v2;}};
 struct UWFirst { uintE operator() (const UWedge& x) {return x.v1;}};
 struct UWSecond { uintE operator() (const UWedge& x) {return x.v2;}};
+
+// Tuple functions
 template<class T, class X>
-  struct tupleFirst {T operator() (tuple<T,X> a) {return get<0>(a);} };
-
-// Equality for VertexPair and UVertexPair
-struct UVertexPairEq { inline bool operator() (UVertexPair vs1, UVertexPair vs2) { return (vs1.v1 == vs2.v1) && (vs1.v2 == vs2.v2);} };
-
-// Constructs a VertexPair and UVertexPair
-struct UVertexPairCons { inline UVertexPair operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UVertexPair(v1, v2); }};
-
-struct UVertexPairRankCons {
-  inline UVertexPair operator() (uintE v1, uintE v2, bool b) { return UVertexPair(v1, (v2 << 1) + b); }
-};
-
-// Constructs a uintE form of a VertexPair and UVertexPair
-struct UVertexPairIntCons {
-  long nu;
-UVertexPairIntCons(long _nu) : nu(_nu) {}
-  inline long operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
-    return (long) v1 * nu + (long) v2;
-  }
-};
-struct UVertexPairIntRankCons {
-  long nu;
-UVertexPairIntRankCons(long _nu) : nu(_nu) {}
-  inline long operator() (uintE v1, uintE v2, bool b) {
-    return ((((long) v1) * nu + (long) v2) << 1) + (b ? 0b1 : 0);
-  }
-};
-
-// Comparer for indices for VertexPairs in nest, by v1 or v2 (based on use_v1)
-struct NestedUVPCmp {
-  UVertexPair* nest;
-  bool use_v1;
-NestedUVPCmp(UVertexPair* _nest, bool _use_v1) : nest(_nest), use_v1(_use_v1) {}
-  inline bool operator() (uintE idx1, uintE idx2) {
-    if (use_v1) return nest[idx1].v1 < nest[idx2].v1;
-    return nest[idx1].v2 < nest[idx2].v2;
-  }
-};
-struct NestedUVPEq {
-  UVertexPair* nest;
-  bool use_v1;
-NestedUVPEq(UVertexPair* _nest, bool _use_v1) : nest(_nest), use_v1(_use_v1) {}
-  inline bool operator() (uintE idx1, uintE idx2) {
-    if (use_v1) return nest[idx1].v1 == nest[idx2].v1;
-    return nest[idx1].v2 == nest[idx2].v2;
-  }
-};
-
-struct NestedUIECmp{
-  uintE* nest;
-NestedUIECmp(uintE* _nest) : nest(_nest) {}
-  inline bool operator() (uintE idx1, uintE idx2) { //
-    return nest[idx1] < nest[idx2];
-  }
-};
-
+struct tupleFirst {T operator() (tuple<T,X> a) {return get<0>(a);} };
 struct nonZeroF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}};
-struct nonZeroPairF{inline bool operator() (pair<uintE,uintE> &a) {return (a.second != 0);}};
-struct greaterOneF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) > 1);}};
-struct greaterOneLongF{inline bool operator() (tuple<long,uintE> &a) {return (get<1>(a) > 1);}};
-template<class T> struct cmpF{inline bool operator() (T a, T b) {return a < b;}};
-
-struct nonEmptyUVPF{inline bool operator() (UVertexPair &a) {return (a.v1 != UINT_E_MAX || a.v2 != UINT_E_MAX);}};
-struct nonEmptyUWF{inline bool operator() (UWedge &a) {return (a.v1 != UINT_E_MAX || a.v2 != UINT_E_MAX || a.u != UINT_E_MAX);}};
-
+struct greaterOneLongF{inline bool operator() (tuple<long,uintE> &a) {return (get<1>(a) > 1);}}
 struct nonMaxTupleF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}};
 
 template<class T, class X>
-  struct tupleLt {inline bool operator() (tuple<T,X> a, tuple<T,X> b) {return get<0>(a) < get<0>(b);} };
+struct tupleLt {inline bool operator() (tuple<T,X> a, tuple<T,X> b) {return get<0>(a) < get<0>(b);} };
 template<class T, class X>
-  struct tupleEq {inline bool operator() (tuple<T,X> a,tuple<T,X> b) {return get<0>(a) == get<0>(b); }};
+struct tupleEq {inline bool operator() (tuple<T,X> a,tuple<T,X> b) {return get<0>(a) == get<0>(b); }};
 template<class T, class X>
-  struct tupleAdd {
-    inline tuple<T,X> operator() (tuple<T,X> a, tuple<T,X> b) const {
-      return make_tuple(get<0>(a), get<1>(a) + get<1>(b));
-    };
-  };
-
-struct uintELt {inline bool operator () (uintE a, uintE b) {return a < b;};};
-struct uintEEq {inline bool operator() (uintE a, uintE b) {return a == b;};};
-struct uintETupleLt {inline bool operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) {return get<0>(a) < get<0>(b);} };
-struct uintETupleGt {inline bool operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) {return get<1>(a) > get<1>(b);} };
-struct uintETupleEq {inline bool operator() (tuple<uintE,uintE> a,tuple<uintE,uintE> b) {return get<0>(a) == get<0>(b); }};
-struct uintETupleAdd {
-  inline tuple<uintE,uintE> operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) const {
+struct tupleAdd {
+  inline tuple<T,X> operator() (tuple<T,X> a, tuple<T,X> b) const {
     return make_tuple(get<0>(a), get<1>(a) + get<1>(b));
   };
 };
-struct uintETupleLtBoth {
-  inline bool operator() (tuple<uintE,uintE> a, tuple<uintE,uintE> b) {
-    if (get<0>(a) == get<0>(b)) return get<1>(a) < get<1>(b);
-    return get<0>(a) < get<0>(b);
-  }
-};
 
-template<class T> struct refl{inline T operator() (T obj) {return obj;}};
-template<class T> struct reflCount{inline long operator() (T obj) {return 1;}};
-struct UVertexPairV2{inline uintE operator() (UVertexPair obj) {return obj.v2;}};
-struct choose2{inline long operator() (long obj) {return obj*(obj-1)/2;}};
 struct uintETupleGet0{inline uintE operator() (tuple<uintE,long> obj) {return get<0>(obj);}};
 struct uintECount{inline long operator() (tuple<uintE,long> obj) {return get<1>(obj);}};
+
+// Other functions
+template<class T> struct refl{inline T operator() (T obj) {return obj;}};
+template<class T> struct reflCount{inline long operator() (T obj) {return 1;}};
+struct choose2{inline long operator() (long obj) {return obj*(obj-1)/2;}};
 
 template <class E>
 struct writeAddArr {
   E* arr;
-writeAddArr(E* _arr) : arr(_arr) {}
+  writeAddArr(E* _arr) : arr(_arr) {}
   inline void operator() (long idx, E num) {
     writeAdd(&arr[idx], num);
   }
@@ -204,7 +147,7 @@ writeAddArr(E* _arr) : arr(_arr) {}
 template <class E>
 struct writeAddSet {
   sparseAdditiveSet<E> set;
-writeAddSet(sparseAdditiveSet<E> _set) : set(_set) {}
+  writeAddSet(sparseAdditiveSet<E> _set) : set(_set) {}
   inline void operator() (long idx, E num) {
     set.insert(pair<uintE, E>(idx, num));
   }
@@ -1737,14 +1680,5 @@ uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
 uintE* idxsToEdge(bipartiteCSR& G, bool use_v) {
   return edgeToIdxs(G, !use_v);
 }
-
-/*pair<uintE, uintE> idxsToEdge(uintE idx, uintE* ite) {
-  uintE u = edgesV[idx];
-  uintE v = edgesU[ite[idx]];
-  // we want to go through all neighbors of v
-  // intersect each N(u') with N(u)
-  // get all u, v, u2
-  // intersection of N(u) and N(u2) - 1 is the num butterflies to subtract from v, u2
-  }*/
 
 #endif

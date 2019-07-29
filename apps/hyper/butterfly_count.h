@@ -1029,30 +1029,47 @@ void CountWorkEfficientSerial(graphCSR& GA, long* butterflies) {
 #endif
 }
 
+/*
+ *  Computes butterfly counts per vertex, given ranked vertices.
+ * 
+ *  GA            : Bipartite graph in CSR format
+ *  use_v         : Denotes which bipartition to store counts on, based on which bipartition produces the fewest wedges.
+ *                  If true, stores counts on U. If false, stores counts on V.
+ *  num_wedges    : Number of wedges produced by the given ranking
+ *  max_wedges    : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *                  memory
+ *  max_array_size:
+ *  type          : Wedge/butterfly aggregation type
+ *  ranks         :
+ *  rankV         :
+ *  rankU         :
+ * 
+ *  Returns an array of butterfly counts, indexed by vertex.
+ */
 long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size, long type,
 		uintE* ranks, uintE* rankV, uintE* rankU) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
+
 #ifdef VERBOSE
   timer t_rank;
   t_rank.start();
 #endif
+
   auto g = rankGraph(GA, use_v, ranks, rankV, rankU);
   free(ranks);
+
 #ifdef VERBOSE
   t_rank.reportTotal("ranking");
-
   timer t_malloc;
   t_malloc.start();
 #endif
   const size_t eltsPerCacheLine = 64/sizeof(long);
-  long* rank_butterflies = newA(long,eltsPerCacheLine*g.n); //(type == 12) ? nullptr : 
-  //if (type != 12) {
-    granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
-  //}
+  long* rank_butterflies = newA(long,eltsPerCacheLine*g.n);
+  granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
+
 #ifdef VERBOSE
   t_malloc.reportTotal("preprocess (malloc)");
-
   timer t_time;
   t_time.start();
 #endif
@@ -1062,7 +1079,6 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
 #ifdef VERBOSE
   if (type == 8) t_time.reportTotal("counting (scan)");
 #endif
-
 
   if (type == 11) CountWorkEfficientParallel(g, rank_butterflies, max_array_size);
   else if (type == 12) CountWorkEfficientSerial(g, rank_butterflies);
@@ -1092,16 +1108,10 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     cs.del();
   }
   g.del();
-  //if (type == 12) {free(rankU); free(rankV); return nullptr;}
   if (type != 11 && type != 12) free(wedge_idxs);
 
-  //uintE* rank_butterflies2 = newA(uintE,eltsPerCacheLine*g.n);
-  //granular_for(i,0,g.n,g.n > 10000, { rank_butterflies2[eltsPerCacheLine*i] = 0; });
-  //CountWorkEfficientParallel(g, rank_butterflies2);
-  //for(long i=0; i < g.n; ++i) {assert(rank_butterflies2[eltsPerCacheLine*i] == rank_butterflies[eltsPerCacheLine*i]);}
 #ifdef VERBOSE
   if (type != 11 && type != 8 && type != 12) t_time.reportTotal("counting");
-
   timer t_convert;
   t_convert.start();
 #endif
@@ -1115,6 +1125,7 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     });
   free(rank_butterflies);
   free(rankU); free(rankV);
+
 #ifdef VERBOSE
   t_convert.reportTotal("convert");
 #endif
@@ -1122,75 +1133,87 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   return butterflies;
 }
 
-long* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size, long type=0, long tw=0) {
+/*
+ *  Computes butterfly counts per vertex.
+ * 
+ *  GA            : Bipartite graph in CSR format
+ *  use_v         : Denotes which bipartition to store counts on, based on which bipartition produces the fewest wedges.
+ *                  If true, stores counts on U. If false, stores counts on V.
+ *  num_wedges    : Number of wedges produced by the bipartition given by use_v, assuming ranking by side
+ *  max_wedges    : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *                  memory
+ *  max_array_size:
+ *  type          : Wedge/butterfly aggregation type
+ *  tw            : Vertex ordering option
+ * 
+ *  Returns an array of butterfly counts, indexed by vertex.
+ */
+long* Count(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size, long type=0,
+  long tw=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
-  // tw 0 is use side, tw 1 is use co core ranks, tw 2 is use approx co core ranks, tw 3 is use the better b/w approx co core and side (TODO put in deg for tw 3)
+
+  // Any ranking that is not by side
   if (tw != 0) {
-  #ifdef VERBOSE
+    #ifdef VERBOSE
     timer t_rank;
     t_rank.start();
-  #endif
-    //auto rank_tup = getDegRanks(GA);
-    // auto rank_tup = getCoreRanks(GA);
+    #endif
+
+    // Pick the correct ranking
     tuple<uintE*,uintE*,uintE*> rank_tup;
     if (tw == 1) rank_tup = getCoCoreRanks(GA);
     else if (tw == 2) rank_tup = getApproxCoCoreRanks(GA);
     else if (tw == 3) rank_tup = getDegRanks(GA);
     else if (tw == 4) rank_tup = getApproxDegRanks(GA);
 
-    //long num_rwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
-    //  rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));
-    //num_rwedges += sequence::reduce<long>((long) 0, GA.nv, addF<long>(),
-    //  rankWedgeF<long>(GA.offsetsV, GA.edgesV, get<1>(rank_tup), get<2>(rank_tup)));
-
-    //long num_cwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
-    //  rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup2), get<1>(rank_tup2)));
-    //num_cwedges += sequence::reduce<long>((long) 0, GA.nv, addF<long>(),
-    //  rankWedgeF<long>(GA.offsetsV, GA.edgesV, get<1>(rank_tup2), get<2>(rank_tup2)));
-
-    long num_ccwedges = sequence::reduce<long>((long) 0, GA.nu, addF<long>(),
-					       rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));
-    num_ccwedges += sequence::reduce<long>((long) 0, GA.nv, addF<long>(),
-					   rankWedgeF<long>(GA.offsetsV, GA.edgesV, get<1>(rank_tup), get<2>(rank_tup)));
-#ifdef VERBOSE
+    // Compute the number of wedges that the ranking produces
+    long num_ccwedges = sequence::reduce<long>(
+      (long) 0, GA.nu, addF<long>(), rankWedgeF<long>(GA.offsetsU, GA.edgesU, get<2>(rank_tup), get<1>(rank_tup)));
+    num_ccwedges += sequence::reduce<long>(
+      (long) 0, GA.nv, addF<long>(), rankWedgeF<long>(GA.offsetsV, GA.edgesV, get<1>(rank_tup), get<2>(rank_tup))
+      );
+    #ifdef VERBOSE
     t_rank.reportTotal("ranking");
-#endif
-
-    //cout << "Rank wedges: " << num_rwedges << "\n";
-    //cout << "Core wedges: " << num_cwedges << "\n";
-    /*
-    cout << "Side wedges: " << num_wedges << "\n";
-    cout << "Co Core wedges: " << num_ccwedges << "\n"; */
-
-    if (num_ccwedges < num_wedges + 1000 || tw > 0) return CountRank(GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup), get<2>(rank_tup));
-    free(get<0>(rank_tup)); free(get<1>(rank_tup)); free(get<2>(rank_tup));
+    #endif
+    // Compute butterfly counts per vertex using the specified ranking
+    return CountRank(GA, use_v, num_ccwedges, max_wedges, max_array_size, type, get<0>(rank_tup), get<1>(rank_tup),
+                     get<2>(rank_tup));
   }
 
-#ifdef VERBOSE
-timer t_malloc;
-t_malloc.start();
-#endif
+  // Ranking by side
+
+  #ifdef VERBOSE
+  timer t_malloc;
+  t_malloc.start();
+  #endif
+
   const size_t eltsPerCacheLine = 64/sizeof(long);
   long* butterflies = newA(long, eltsPerCacheLine*nu);
   granular_for(i,0,nu,nu > 10000, { butterflies[eltsPerCacheLine * i] = 0; });
-#ifdef VERBOSE
-  t_malloc.reportTotal("preprocess (malloc)");
 
+  #ifdef VERBOSE
+  t_malloc.reportTotal("preprocess (malloc)");
   timer t_time;
   t_time.start();
-#endif
+  #endif
+
+  // Compute wedge indices so that wedges can be stored in parallel (for any aggregation type except simple batching)
   long* wedge_idxs = (type == 7 || type == 11) ? nullptr : countWedgesScan(GA, use_v, true);
 
-#ifdef VERBOSE
+  #ifdef VERBOSE
   if (type == 8) t_time.reportTotal("counting (scan)");
-#endif
+  #endif
 
-  if (type == 7) CountOrigCompactParallel(GA, use_v, butterflies, max_array_size);
-  else if (type == 8) CountOrigCompactParallel_WedgeAware(GA,use_v,butterflies,max_array_size,wedge_idxs);
-  else if (type == 11) CountOrigCompactParallel(GA, use_v, butterflies, max_array_size);
+  if (type == 7)
+    CountOrigCompactParallel(GA, use_v, butterflies, max_array_size);
+  else if (type == 8)
+    CountOrigCompactParallel_WedgeAware(GA, use_v, butterflies, max_array_size,
+                                        wedge_idxs);
+  else if (type == 11)
+    CountOrigCompactParallel(GA, use_v, butterflies, max_array_size);
   else {
-  CountSpace cs = CountSpace(type, nu, false);
+    CountSpace cs = CountSpace(type, nu, false);
 
     if (max_wedges >= num_wedges) {
       if (type == 0) CountSort(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs);
@@ -1217,9 +1240,9 @@ t_malloc.start();
 
   if (type != 7 && type != 11) free(wedge_idxs);
 
-#ifdef VERBOSE
+  #ifdef VERBOSE
   if (type != 7 && type != 11 && type != 8) t_time.reportTotal("counting");
-#endif
-  return butterflies;
+  #endif
 
+  return butterflies;
 }
