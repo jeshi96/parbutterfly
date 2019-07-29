@@ -172,44 +172,49 @@ template<class K, class E>
 //***********************************************************************************************
 
 
-//symmetric compact bipartite
+// Symmetric compact bipartite graph format (CSR)
 struct bipartiteCSR {
   uintT *offsetsV, *offsetsU;
   uintE *edgesV, *edgesU;
   long nv, nu, numEdges;
 
-bipartiteCSR () {}
-bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
-  offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
-  {}
-
+  bipartiteCSR () {}
+  bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
+    offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
+    {}
+  
   void del() {
     free(offsetsV); free(offsetsU); free(edgesV); free(edgesU);
   }
 };
 
+// Symmetric compact graph format (CSR)
 struct graphCSR {
   uintT *offsets;
   uintE *edges;
   long n, numEdges;
 
-graphCSR(uintT* _offsets, uintE* _edges, long _n, long _ne) :
-  offsets(_offsets), edges(_edges), n(_n), numEdges(_ne)
-  {}
+  graphCSR(uintT* _offsets, uintE* _edges, long _n, long _ne) :
+    offsets(_offsets), edges(_edges), n(_n), numEdges(_ne)
+    {}
 
   void del() {
     free(offsets); free(edges);
   }
 };
 
+// Function to compute the number of wedges a ranked graph produces
 template <class E>
 struct rankWedgeF { 
   uintT* offsets;
   uintE* edges;
   uintE* rank;
   uintE* orank;
-rankWedgeF(uintT* _offsets, uintE* _edges, uintE* _rank, uintE* _orank) :
-  offsets(_offsets), edges(_edges), rank(_rank), orank(_orank) {}
+
+  rankWedgeF(uintT* _offsets, uintE* _edges, uintE* _rank, uintE* _orank) :
+    offsets(_offsets), edges(_edges), rank(_rank), orank(_orank) {}
+
+  // Each vertex i contributes indegree * outdegree + (indegree choose 2) wedges
   inline E operator() (const uintT& i) const {
     intT v_offset = offsets[i];
     intT v_deg = offsets[i+1]-v_offset;
@@ -231,7 +236,7 @@ tuple<uintE*, uintE*, uintE*> getRanks(bipartiteCSR& G, F samplesort_f) {
   
   parallel_for(long v=0; v < G.nv+G.nu; ++v) { ranks[v] = v; }
 
-  sampleSort(ranks,G.nv+G.nu, samplesort_f); 
+  sampleSort(ranks, G.nv+G.nu, samplesort_f); 
 
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
     if (ranks[i] >= G.nv) rankU[ranks[i] - G.nv] = i;
