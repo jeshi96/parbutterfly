@@ -16,9 +16,6 @@
 #include "../../lib/sample_sort.h"
 #include "../../radixsort/RadixSort/radixSort.h"
 
-timer nextWedgeTimer, hashInsertTimer, numButterfliesHashInsertTimer, getWedgesFromHashTimer, initHashTimer;
-timer seqLoopTimer, seqWriteTimer;
-
 #include "butterfly_utils.h"
 
 using namespace std;
@@ -186,8 +183,6 @@ intT CountSort(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 
   // Retrieve frequency counts for all wedges with the same key
   // First, retrieve a list of indices where consecutive wedges have different keys
-  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWFirst());
-  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWSecond());
   pbbs::sample_sort(wedges, num_wedges_curr, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
 
@@ -215,7 +210,6 @@ intT CountSort(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
 //********************************************************************************************
 //********************************************************************************************
 
-//cs, g, num_wedges, use_v, nv, nu, butterflies, max_wedges, wedge_idxs, ranks
 intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
 	       intT curr_idx=0) {
   const size_t eltsPerCacheLine = 64/sizeof(long);
@@ -234,7 +228,6 @@ intT CountHash(CountSpace& cs, graphCSR& GA, long num_wedges, long* butterflies,
       writeAdd(&butterflies[eltsPerCacheLine*u], num_butterflies);
       writeAdd(&butterflies[eltsPerCacheLine*u2], num_butterflies);
     }
-    // if slow, could try to do an intersect here to find v
   }
 
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
@@ -347,10 +340,7 @@ intT CountHashCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges, wedge_idxs);
-  //getWedgesFromHashTimer.start();
   size_t num_wedges_seq = cs.wedges_hash.entries_no_init(cs.wedges_seq_intp);
-  //getWedgesFromHashTimer.stop();
-  //numButterfliesHashInsertTimer.start();
   using T = pair<uintE, long>;
   // Retrieve count on each key; that number choose 2 is the number of butterflies
   parallel_for (long i=0; i < num_wedges_seq; ++i) {
@@ -371,7 +361,6 @@ intT CountHashCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
     auto butterfly_pair = cs.butterflies_seq_intp.A[i];
     butterflies[eltsPerCacheLine*butterfly_pair.first] += butterfly_pair.second;
   }
-  //numButterfliesHashInsertTimer.stop();  
   return next_idx;
 }
 
@@ -612,6 +601,17 @@ intT CountHistCE(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 //********************************************************************************************
 //********************************************************************************************
 
+/*
+ *  Computes butterfly counts per vertex, using by side ranking and wedge-aware
+ *  batching.
+ * 
+ *  GA             : Bipartite graph in CSR format
+ *  use_v          : Denotes which bipartition to store counts on, based on which bipartition produces the fewest
+ *                   wedges. If true, stores counts on U. If false, stores counts on V.
+ *  butterflies    : Array to store butterfly counts per vertex
+ *  max_array_size :
+ *  wedgesPrefixSum: Wedge indices to identify which vertices to process per batch
+ */
 void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* butterflies, long max_array_size, long* wedgesPrefixSum) {
   timer t1,t2,t3,t4;
   const long nv = use_v ? GA.nv : GA.nu;
@@ -690,6 +690,16 @@ void CountOrigCompactParallel_WedgeAware(bipartiteCSR& GA, bool use_v, long* but
   free(used);
 }
 
+/*
+ *  Computes butterfly counts per vertex, using by side ranking and simple
+ *  batching.
+ * 
+ *  GA            : Bipartite graph in CSR format
+ *  use_v         : Denotes which bipartition to store counts on, based on which bipartition produces the fewest
+ *                  wedges. If true, stores counts on U. If false, stores counts on V.
+ *  butterflies   : Array to store butterfly counts per vertex
+ *  max_array_size:
+ */
 void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_array_size) {
   timer t1,t2,t3;
   t1.start();
@@ -703,24 +713,28 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, l
 
   long stepSize = min<long>(getWorkers() * 60, max_array_size/nu); // tunable parameter
 
-
+  // Stores number of wedges per endpoints
   uintE* wedges = newA(uintE, nu*stepSize);
+  // Keeps track of entries used in the wedges array
   uintE* used = newA(uintE, nu*stepSize);
-  t1.stop();
-#ifdef VERBOSE
-  t1.reportTotal("preprocess (malloc)");
 
-#endif
+  t1.stop();
+  #ifdef VERBOSE
+  t1.reportTotal("preprocess (malloc)");
+  #endif
   t3.start();
+  
+  // Initialize wedges array
   granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges[i] = 0; });
   const size_t eltsPerCacheLine = 64/sizeof(long);
+  
   t3.stop();
-#ifdef VERBOSE
+  #ifdef VERBOSE
   t3.reportTotal("preprocess (initialize)");
-
   t2.start();
-#endif
+  #endif
 
+  // Consider vertices i in batches, as given by stepSize
   for(intT step = 0; step < (nu+stepSize-1)/stepSize; step++) {
     parallel_for_1(intT i=step*stepSize; i < min((step+1)*stepSize,nu); ++i){
       intT used_idx = 0;
@@ -731,26 +745,34 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, l
 	uintE v = edgesU[u_offset+j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1]-offsetsV[v];
+  // Iterate through all 2-hop neighbors of i
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = edgesV[v_offset+k];
 	  if (u2_idx < i) {
+      // Increment the number of wedges on the second endpoint
 	    wedges[shift+u2_idx]++;
+      // Keep track of used second endpoints
 	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = u2_idx;
 	  }
 	  else break;
 	}
       }
+
+      // Iterate through all second endpoints to store butterfly counts on
       for(intT j=0; j < used_idx; ++j) {
         uintE u2_idx = used[shift+j];
-        writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-        writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long)((long) wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+        writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long) wedges[shift+u2_idx] * (wedges[shift+u2_idx]-1) / 2));
+        writeAdd(&butterflies[eltsPerCacheLine*u2_idx],
+                 (long)((long) wedges[shift+u2_idx] * (wedges[shift+u2_idx]-1) / 2));
+        // Clear wedges array for reuse
         wedges[u2_idx+shift] = 0;
       }
     }
   }
-#ifdef VERBOSE
+
+  #ifdef VERBOSE
   t2.reportTotal("counting (main loop)");
-#endif
+  #endif
 
   free(wedges);
   free(used);
@@ -759,6 +781,15 @@ void CountOrigCompactParallel(bipartiteCSR& GA, bool use_v, long* butterflies, l
 //********************************************************************************************
 //********************************************************************************************
 
+/*
+ *  Computes butterfly counts per vertex, given a ranked graph and using
+ *  wedge-aware batching.
+ * 
+ *  GA             : Ranked graph in CSR format
+ *  butterflies    : Array to store butterfly counts per vertex
+ *  max_array_size :
+ *  wedgesPrefixSum: Wedge indices to identify which vertices to process per batch
+ */
 void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long max_array_size, long* wedgesPrefixSum) {
   const size_t eltsPerCacheLine = 64/sizeof(long);
   long stepSize = min<long>(getWorkers() * 40, max_array_size/GA.n); // tunable parameter
@@ -766,7 +797,9 @@ void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long m
   timer t1,t2,t3,t4;
   t1.start();
 
+  // Stores number of wedges per endpoints
   uintE* wedges = newA(uintE, GA.n*stepSize);
+  // Keeps track of entries used in the wedges array
   uintE* used = newA(uintE, GA.n*stepSize);
 
   t1.stop();
@@ -775,6 +808,7 @@ void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long m
   #endif
   t3.start();
 
+  // Initialize wedges array
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
 
   t3.stop();
@@ -783,32 +817,37 @@ void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long m
   t2.start();
   #endif
 
+  // Consider vertices i in batches, as given by wedgesPrefixSum
   for(intT step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
     std::function<void(intT,intT)> recursive_lambda =
       [&]
       (intT start, intT end){
       if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
 	for (intT i = start; i < end; i++){
-      intT used_idx = 0;
-      long shift = GA.n*(i-step*stepSize);
-      intT u_offset  = GA.offsets[i];
-      intT u_deg = GA.offsets[i+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) {
+    intT used_idx = 0;
+    long shift = GA.n*(i-step*stepSize);
+    intT u_offset  = GA.offsets[i];
+    intT u_deg = GA.offsets[i+1]-u_offset;
+    for (intT j=0; j < u_deg; ++j ) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
-	if (v <= i) break; 
+	if (v <= i) break;
+  // Iterate through all 2-hop neighbors of i (with appropriate rank)
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	  if (u2_idx > i) {
+      // Increment the number of wedges on the second endpoint
 	    wedges[shift+u2_idx]++;
+      // Keep track of used second endpoints
 	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = GA.edges[v_offset+k];
 	  }
 	  else break;
 	}
-      }
+    }
 
-      for (long j=0; j < u_deg; ++j ) {
+    // Iterate through centers of wedges to store butterfly counts on
+    for (long j=0; j < u_deg; ++j ) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
@@ -817,20 +856,25 @@ void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long m
 	for (long k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	  if (u2_idx > i) {
+      // Only store butterfly counts per center if it is on the right
+      // bipartition
 	    if (wedges[shift+u2_idx] > 1) writeAdd(&butterflies[eltsPerCacheLine*v], (long)(wedges[shift+u2_idx]-1));
 	  }
 	  else break;
 	}
-      }
+    }
       
-      for(long j=0; j < used_idx; ++j) {
-        uintE u2_idx = used[shift+j] >> 1;
-        if(used[shift+j] & 0b1) {
-	  writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+    // Iterate through all second endpoints to store butterfly counts on
+    for(long j=0; j < used_idx; ++j) {
+  uintE u2_idx = used[shift+j] >> 1;
+  // Only store butterfly counts per center if it is on the right bipartition
+  if(used[shift+j] & 0b1) {
+	  writeAdd(&butterflies[eltsPerCacheLine*i], (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
 	  writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-        }
-        wedges[shift+u2_idx] = 0;
-      }
+  }
+  // Clear wedges array for reuse
+  wedges[shift+u2_idx] = 0;
+    }
 	}
       } else {
 	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
@@ -839,20 +883,31 @@ void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long m
     }; 
     recursive_lambda(step*stepSize,min((step+1)*stepSize,GA.n));
   }
-#ifdef VERBOSE
+  #ifdef VERBOSE
   t2.reportTotal("counting (main loop)");
-#endif
+  #endif
   
   free(wedges);
   free(used);
 }
 
+/*
+ *  Computes butterfly counts per vertex, given a ranked graph and using simple
+ *  batching.
+ * 
+ *  GA            : Ranked graph in CSR format
+ *  butterflies   : Array to store butterfly counts per vertex
+ *  max_array_size:
+ */
 void CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_size) {
   timer t1,t2,t3;
   t1.start();
 
   long stepSize = min<long>(getWorkers() * 60, max_array_size/GA.n);
+
+  // Stores number of wedges per endpoints
   uintE* wedges = newA(uintE, GA.n*stepSize);
+  // Keeps track of entries used in the wedges array
   uintE* used = newA(uintE, GA.n*stepSize);
 
   t1.stop();
@@ -861,6 +916,7 @@ void CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_
   #endif
   t3.start();
 
+  // Initialize wedges array
   granular_for(i,0,GA.n*stepSize,GA.n*stepSize > 10000, { wedges[i] = 0; });
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
@@ -870,6 +926,7 @@ void CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_
   t2.start();
   #endif
   
+  // Consider vertices i in batches, as given by stepSize
   for(long step = 0; step < (GA.n+stepSize-1)/stepSize; step++) {
     parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,GA.n); ++i){
       intT used_idx = 0;
@@ -881,16 +938,20 @@ void CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
 	if (v <= i) break; 
+  // Iterate through all 2-hop neighbors of i (with appropriate rank)
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	  if (u2_idx > i) {
+      // Increment the number of wedges on the second endpoint
 	    wedges[shift+u2_idx]++;
+      // Keep track of used second endpoints
 	    if (wedges[shift+u2_idx] == 1) used[shift+used_idx++] = GA.edges[v_offset+k];
 	  }
 	  else break;
 	}
       }
 
+      // Iterate through centers of wedges to store butterfly counts on
       for (long j=0; j < u_deg; ++j ) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
@@ -900,19 +961,24 @@ void CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_
 	for (long k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
 	  if (u2_idx > i) {
+      // Only store butterfly counts per center if it is on the right
+      // bipartition
 	    if (wedges[shift+u2_idx] > 1) writeAdd(&butterflies[eltsPerCacheLine*v], (long)(wedges[shift+u2_idx]-1));
 	  }
 	  else break;
 	}
       }
       
+      // Iterate through all second endpoints to store butterfly counts on
       for(long j=0; j < used_idx; ++j) {
-        uintE u2_idx = used[shift+j] >> 1;
-        if(used[shift+j] & 0b1) {
-	  writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
+  uintE u2_idx = used[shift+j] >> 1;
+  // Only store butterfly counts per endpoint if it is on the right bipartition
+  if(used[shift+j] & 0b1) {
+    writeAdd(&butterflies[eltsPerCacheLine*i],  (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
 	  writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long)((long)wedges[shift+u2_idx]*(wedges[shift+u2_idx]-1) / 2));
-        }
-        wedges[shift+u2_idx] = 0;
+  }
+  // Clear wedges array for reuse
+  wedges[shift+u2_idx] = 0;
       }
     }
   }
@@ -939,7 +1005,9 @@ void CountWorkEfficientSerial(graphCSR& GA, long* butterflies) {
   timer t1,t2,t3;
   t1.start();
 
+  // Stores number of wedges per endpoints
   uintE* wedges = newA(uintE, GA.n);
+  // Keeps track of entries used in the wedges array
   uintE* used = newA(uintE, GA.n);
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
