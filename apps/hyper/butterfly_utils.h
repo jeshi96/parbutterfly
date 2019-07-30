@@ -114,7 +114,9 @@ template<class T, class X>
 struct tupleFirst {T operator() (tuple<T,X> a) {return get<0>(a);} };
 struct nonZeroF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}};
 struct greaterOneLongF{inline bool operator() (tuple<long,uintE> &a) {return (get<1>(a) > 1);}}
-struct nonMaxTupleF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}};
+struct nonMaxTupleF{
+  inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}
+};
 
 template<class T, class X>
 struct tupleLt {inline bool operator() (tuple<T,X> a, tuple<T,X> b) {return get<0>(a) < get<0>(b);} };
@@ -228,16 +230,26 @@ struct rankWedgeF {
   }
 };
 
+/*
+ *  Ranks vertices in bipartite graph G according to the ordering samplesort_f.
+ * 
+ *  GA          : Bipartite graph in CSR format
+ *  samplesort_f: Comparison function that orders U and V vertices (where all U indices come before V indices)
+ * 
+ *  Returns a tuple of arrays. The first array sorts indices given by U and V by rank (where all U indices come before V
+ *  indices). The second array maps V indices to their rank, and the third array maps U indices to their rank.
+ */
 template<class F>
 tuple<uintE*, uintE*, uintE*> getRanks(bipartiteCSR& G, F samplesort_f) {
   uintE* ranks = newA(uintE, G.nv + G.nu);
   uintE* rankV = newA(uintE, G.nv);
   uintE* rankU = newA(uintE, G.nu);
   
+  // Sort indices given by U and V by rank
   parallel_for(long v=0; v < G.nv+G.nu; ++v) { ranks[v] = v; }
-
   sampleSort(ranks, G.nv+G.nu, samplesort_f); 
 
+  // Map each U and V vertex to its rank
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
     if (ranks[i] >= G.nv) rankU[ranks[i] - G.nv] = i;
     else rankV[ranks[i]] = i;
@@ -246,6 +258,14 @@ tuple<uintE*, uintE*, uintE*> getRanks(bipartiteCSR& G, F samplesort_f) {
   return make_tuple(ranks, rankV, rankU);
 }
 
+/*
+ *  Ranks vertices in bipartite graph G according to approximate degree ordering
+ * 
+ *  GA: Bipartite graph in CSR format
+ * 
+ *  Returns a tuple of arrays. The first array sorts indices given by U and V by rank (where all U indices come before V
+ *  indices). The second array maps V indices to their rank, and the third array maps U indices to their rank.
+ */
 tuple<uintE*, uintE*, uintE*> getApproxDegRanks(bipartiteCSR& G) {
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     uintE deg_a = (a >= G.nv) ? G.offsetsU[a-G.nv+1]-G.offsetsU[a-G.nv] : G.offsetsV[a+1]-G.offsetsV[a];
@@ -257,6 +277,14 @@ tuple<uintE*, uintE*, uintE*> getApproxDegRanks(bipartiteCSR& G) {
   return getRanks(G, samplesort_f);
 }
 
+/*
+ *  Ranks vertices in bipartite graph G according to degree ordering
+ * 
+ *  GA: Bipartite graph in CSR format
+ * 
+ *  Returns a tuple of arrays. The first array sorts indices given by U and V by rank (where all U indices come before V
+ *  indices). The second array maps V indices to their rank, and the third array maps U indices to their rank.
+ */
 tuple<uintE*, uintE*, uintE*> getDegRanks(bipartiteCSR& G) {
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     uintE deg_a = (a >= G.nv) ? G.offsetsU[a-G.nv+1]-G.offsetsU[a-G.nv] : G.offsetsV[a+1]-G.offsetsV[a];
@@ -266,13 +294,16 @@ tuple<uintE*, uintE*, uintE*> getDegRanks(bipartiteCSR& G) {
   return getRanks(G, samplesort_f);
 }
 
+// Function that retrieves the degrees of vertices in a bipartite graph, when ordered with all U indices before V
+// indices
 template <class E>
 struct degF { 
   uintT* offsetsV;
   uintT* offsetsU;
   vertexSubset active;
   long nv;
-degF(long _nv, uintT* _offsetsV, uintT* _offsetsU, vertexSubset& _active) : nv(_nv), offsetsV(_offsetsV), offsetsU(_offsetsU), active(_active) {}
+  degF(long _nv, uintT* _offsetsV, uintT* _offsetsU, vertexSubset& _active) :
+    nv(_nv), offsetsV(_offsetsV), offsetsU(_offsetsU), active(_active) {}
   inline E operator() (const uintT& i) const {
     bool use_v = active.vtx(i) < nv;
     intT idx = use_v ? active.vtx(i) : active.vtx(i) - nv;
@@ -281,12 +312,8 @@ degF(long _nv, uintT* _offsetsV, uintT* _offsetsU, vertexSubset& _active) : nv(_
   }
 };
 
-
-
-////////////////////////////////////////////////////////////////////////
-
 template <class E, class VS>
-  vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
+vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
   long nTo = GA.nv + GA.nu;
   uintT m = V.size();
   V.toSparse();
@@ -371,18 +398,6 @@ BipartiteProp(bipartiteCSR& _GA, KV _empty, size_t ht_size=numeric_limits<size_t
 tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
   using X = tuple<bool, uintE>;
   long n = GA.nv + GA.nu;
-  //bool* active = newA(bool,n);
-  //{parallel_for(long i=0;i<n;i++) active[i] = 1;}
-  //vertexSubset Frontier(n, n, active);
-  /*uintE* Degrees = newA(uintE,n);
-    {parallel_for(long i=0;i<GA.nv;i++) {
-    Degrees[i] = GA.offsetsV[i+1] - GA.offsetsV[i];
-    }}
-    {parallel_for(long i=0;i<GA.nu;i++) {
-    Degrees[GA.nv+i] = GA.offsetsU[i+1] - GA.offsetsU[i];
-    }}*/
-  //bool* Flags = newA(bool,n);
-  //{parallel_for(long i=0;i<n;i++) Flags[i] = 0;}
   auto D = array_imap<uintE>(n, [&] (size_t i) {
       if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv] <= 0 ? 0 : (uintE) floor(log2(GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv])) + 1;
       return GA.offsetsV[i+1] - GA.offsetsV[i] <= 0 ? 0 : (uintE) floor(log2(GA.offsetsV[i+1] - GA.offsetsV[i])) + 1;
@@ -433,16 +448,6 @@ tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_bu
 tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
   using X = tuple<bool, uintE>;
   long n = GA.nv + GA.nu;
-  //bool* active = newA(bool,n);
-  //{parallel_for(long i=0;i<n;i++) active[i] = 1;}
-  //vertexSubset Frontier(n, n, active);
-  /*uintE* Degrees = newA(uintE,n);
-    {parallel_for(long i=0;i<GA.nv;i++) {
-    Degrees[i] = GA.offsetsV[i+1] - GA.offsetsV[i];
-    }}
-    {parallel_for(long i=0;i<GA.nu;i++) {
-    Degrees[GA.nv+i] = GA.offsetsU[i+1] - GA.offsetsU[i];
-    }}*/
 
   auto D = array_imap<uintE>(n, [&] (size_t i) {
       if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
@@ -453,42 +458,11 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
   auto b = make_buckets(n, D, decreasing, num_buckets);
 
   size_t finished = 0;
-  //long rounds = 0;
-  //long small_rounds = 0;
   while (finished != n) {
-    //rounds++;
     auto bkt = b.next_bucket();
     auto active2 = bkt.identifiers;
     uintE k = bkt.id;
     finished += active2.size();
-    /*if (active.size() <= 10) {
-      small_rounds++;
-      for (intT i=0; i < active.size(); ++i) {
-      bool use_v = active.vtx(i) < GA.nv;
-      intT idx = use_v ? active.vtx(i) : active.vtx(i) - GA.nv;
-      intT offset  = use_v ? GA.offsetsV[idx] : GA.offsetsU[idx];
-      intT deg = (use_v ? GA.offsetsV[idx+1] : GA.offsetsU[idx+1]) - offset;
-      X* updated = newA(X, deg);
-      intT deg_idx = 0;
-      granular_for(j,0,deg,deg > 10000, { 
-      intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
-      // must decrement D.s[nbhr]
-      //writeAdd(&update[nbhr], 1);
-      uintE old_deg = D.s[nbhr];
-      if (old_deg < k) {
-      uintE new_deg = min(old_deg - 1, k);
-      D.s[nbhr] = new_deg;
-      uintE bkt = b.get_bucket(old_deg, new_deg);
-      updated[deg_idx++] = make_tuple(nbhr, bkt);
-      }
-      });
-      vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(GA.nu+GA.nv,deg_idx,updated);
-      b.update_buckets(moved.get_fn_repr(), moved.size());
-      moved.del();
-      }
-      active.del();
-      }
-      else {*/
     auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
       uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
       uintE deg = D.s[v];
@@ -501,15 +475,11 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
       return Maybe<tuple<uintE, uintE> >();
     };
 
-    //vertexSubset FrontierH = vertexProp(GA,active,Remove_BPedge(Flags));
-    //cout << "k="<<k<< " num active = " << active.numNonzeros() << " frontierH = " << FrontierH.numNonzeros() << endl;
     vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active2, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());
     moved.del(); active2.del();
-    //}
   }
   b.del();
-  //free(active);
 
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
@@ -525,10 +495,7 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
       return G.offsetsV[i+1] - G.offsetsV[i];
     });
 
-  //auto em = EdgeMap<uintE, vertex>(GA, make_tuple(UINT_E_MAX, 0), (size_t)G.numEdges/5);
   auto b = make_buckets(n, D, increasing, num_buckets);
-  //intT* update = newA(intT, G.nu + G.nv);
-  //parallel_for(long v=0; v < G.nv+G.nu; ++v) { update[v] = 0; }
 
   size_t finished = 0;
   while (finished != n) {
@@ -547,8 +514,6 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
       intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1]) - offset;
       granular_for(j,0,deg,deg > 10000, { 
 	  intT nbhr = use_v ? G.edgesV[offset+j] + G.nv : G.edgesU[offset+j];
-	  // must decrement D.s[nbhr]
-	  //writeAdd(&update[nbhr], 1);
 	  update_hash.insert(make_pair(nbhr,1));
 	});
     }
@@ -587,6 +552,9 @@ tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=1
   
   return getRanks(G, samplesort_f);
 }
+
+//********************************************************************************************
+//********************************************************************************************
 
 graphCSR rankGraph(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uintE* rankU) {
   using X = tuple<uintE,uintE>;
@@ -668,6 +636,9 @@ pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, 
   return make_pair(graphCSR(offsets,edges,G.nv+G.nu,G.numEdges), edges_convert);
 }
 
+//********************************************************************************************
+//********************************************************************************************
+
 template <class E>
 struct clrF { 
   uintE* edges; uintT offset; uintT color; uintT* colors;
@@ -731,18 +702,7 @@ bipartiteCSR delZeroDeg(bipartiteCSR& G) {
     offsetsU_ff[i] = G.offsetsU[offsetsU_ff[i]];
   }
   offsetsU_ff[num_uff] =  G.offsetsU[G.nu];
-  /*parallel_for(long i=0; i < G.nv; ++i) {
-    if (G.offsetsV[i] == G.offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; 
-    else offsetsV_f[i] = G.offsetsV[i];
-  }
-  parallel_for(long i=0; i < G.nu; ++i) {
-    if (G.offsetsU[i] == G.offsetsU[i+1]) offsetsU_f[i] = UINT_T_MAX;
-    else offsetsU_f[i] = G.offsetsU[i];
-  }
-  offsetsV_f[G.nv] = G.offsetsV[G.nv]; offsetsU_f[G.nu] = G.offsetsU[G.nu];
-  long nv = sequence::filter(offsetsV_f,offsetsV_ff,G.nv+1,nonMaxUintTF())-1;
-  long nu = sequence::filter(offsetsU_f,offsetsU_ff,G.nu+1,nonMaxUintTF())-1;
-  assert(nv == num_vff); assert(nu == num_uff);*/
+
   free(offsetsV_f); free(offsetsU_f);
   return bipartiteCSR(offsetsV_ff,offsetsU_ff,edgesV,edgesU,num_vff,num_uff,G.numEdges);
 }
@@ -776,17 +736,7 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
       colorsU[u_offset + j] = colorsV[v_offset + find_idx];
       });
   }
-  /*parallel_for(long u=0; u < G.nu; ++u) {
-    uintT u_offset = G.offsetsU[u];
-    uintT u_deg = G.offsetsU[u+1] - u_offset;
-    parallel_for(long j=0; j < u_deg; ++j) {
-      uintT i = G.edgesU[u_offset + j];
-      long concat = i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-      concat ^= u + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-      //long concat = (i + u) * (i + u + 1) / 2 + i;
-      colorsU[v_offset + j] = hashInt((ulong) seed + concat) % numColors;
-    }
-  }*/
+
   uintT* offsetsV = newA(uintT,G.nv+1);
   uintT* offsetsU = newA(uintT,G.nu+1);
   offsetsV[G.nv] = 0; offsetsU[G.nu] = 0;

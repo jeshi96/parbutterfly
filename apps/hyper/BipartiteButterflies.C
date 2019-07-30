@@ -31,10 +31,6 @@
 #include "butterfly_epeel.h"
 #include "butterfly_count_total.h"
 
-#define clean_errno() (errno == 0 ? "None" : strerror(errno))
-#define log_error(M, ...) fprintf(stderr, "[ERROR] (%s:%d: errno: %s) " M "\n", __FILE__, __LINE__, clean_errno(), ##__VA_ARGS__)
-#define assertf(A, M, ...) if(!(A)) {log_error(M, ##__VA_ARGS__); assert(A); }
-
 #include <vector>
 
 using namespace std;
@@ -96,7 +92,7 @@ void CountOrigCompactSerial(bipartiteCSR& GA, bool use_v) {
 void CountOrigCompactSerialTotal(bipartiteCSR& GA, bool use_v) {
   timer t1,t2;
   t1.start();
-  //cout << GA.nv << " " << GA.nu << " " << GA.numEdges << endl;
+
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -225,9 +221,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     long total = sequence::reduce<long>((long)0,(long)num_idxs,addF<long>(),butterflies_extract_f);
     
     cout << "number of butterflies: " << total/2 << "\n";
-  
-    //uintE* butterflies2 = Count(GA, use_v, num_wedges, max_wedges, 0, 0);
-    //for (long i=0; i < num_idxs; ++i) { assertf(butterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, butterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
+
     if(!nopeel) {
       timer t2;
       t2.start();
@@ -273,9 +267,6 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     
     long total = sequence::reduce<long>((long)0,(long)GA.numEdges,addF<long>(),butterflies_extract_f);
     cout << "number of edge butterflies: " << total/4 << "\n";
-
-    //uintE* butterflies2 = CountE(eti, GA, use_v, num_wedges, max_wedges, 0, 0);
-    //for (long i=0; i < GA.numEdges; ++i) { assertf(ebutterflies[eltsPerCacheLine*i] == butterflies2[eltsPerCacheLine*i], "%d, %d, %d", i, ebutterflies[eltsPerCacheLine*i], butterflies2[eltsPerCacheLine*i]); }
 
     if(!nopeel) {
       timer t2;
