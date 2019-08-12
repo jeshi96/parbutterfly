@@ -312,11 +312,23 @@ struct degF {
   }
 };
 
+/*
+ *  Finds the one-hop neighbors of vertices in V.
+ * 
+ *  GA: Bipartite graph in CSR format
+ *  V : Set of active vertices
+ * 
+ *  Returns a vertexSubsetData object that wraps an array of all one-hop neighbors of active vertices in V, in the 
+ *  form (neighbor, 1).
+ */
 template <class E, class VS>
 vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
   long nTo = GA.nv + GA.nu;
   uintT m = V.size();
   V.toSparse();
+
+  // Find degrees of vertices in V so that we can produce indices to store
+  // all neighbors in parallel
   auto degrees = array_imap<uintT>(m);
   granular_for(i, 0, m, (m > 2000), {
       bool use_v = V.vtx(i) < GA.nv;
@@ -325,12 +337,14 @@ vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
       degrees[i] = deg;
     });
   long outEdgeCount = pbbs::scan_add(degrees, degrees);
+
   if (outEdgeCount == 0) {
     return vertexSubsetData<E>(nTo);
   }
   typedef tuple<uintE, E> VE;
   VE* outEdges = pbbs::new_array_no_init<VE>(outEdgeCount);
 
+  // Retrieve all neighbors of vertices in V
   parallel_for (size_t i = 0; i < m; i++) {
     uintT o = degrees[i];
     bool use_v = V.vtx(i) < GA.nv;
@@ -338,15 +352,17 @@ vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
     intT offset  = use_v ? GA.offsetsV[idx] : GA.offsetsU[idx];
     intT deg = (use_v ? GA.offsetsV[idx+1] : GA.offsetsU[idx+1]) - offset;
     granular_for(j,0,deg,deg > 10000, {
-	intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
-	// must decrement D.s[nbhr]
-	outEdges[o+j] = make_tuple(nbhr, 1);
+	    intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
+      // Store the one-hop neighbor of idx
+	    outEdges[o+j] = make_tuple(nbhr, 1);
       });
   }
   auto vs = vertexSubsetData<E>(nTo, outEdgeCount, outEdges);
   return vs;
 }
 
+// Struct to hold logic for retrieving and updating with relation to one-hop
+// neighbors of active sets
 template <class Val>
 struct BipartiteProp {
   using K = uintE; // keys are always uintE's (vertex-identifiers)
@@ -361,28 +377,48 @@ BipartiteProp(bipartiteCSR& _GA, KV _empty, size_t ht_size=numeric_limits<size_t
   ht = pbbs::hist_table<K, Val>(_empty, ht_size);
 }
 
-  // map_f: (uintE v, uintE ngh) -> E
-  // reduce_f: (E, tuple(uintE ngh, E ngh_val)) -> E
-  // apply_f: (uintE ngh, E reduced_val) -> O
+  /*
+   *  Collates the one-hop neighbors of vertices in vs, using reduce_f to
+   *  collate (neighbor, 1) pairs and using apply_f to map the (neighbor, count)
+   *  pairs to the desired format.
+   * 
+   *  vs      : Set of active vertices
+   *  reduce_f: A function (M current_count, tuple(uintE neighbor, M count)) -> M reduced_val
+   *  apply_f : A function (uintE neighbor, M reduced_val) -> O
+   * 
+   *  Returns a vertexSubsetData object that wraps an array of collated one-hop neighbors of the vertices in vs, in a
+   *  format as specified by apply_f.
+   */
   template <class O, class M, class Reduce, class Apply, class VS>
-    inline vertexSubsetData<O> edgeMapReduce(VS& vs, Reduce& reduce_f, Apply& apply_f) {
+  inline vertexSubsetData<O> edgeMapReduce(VS& vs, Reduce& reduce_f, Apply& apply_f) {
     size_t m = vs.size();
     if (m == 0) {
       return vertexSubsetData<O>(GA.nv+GA.nu);
     }
-
+    // Retrieve all one-hop neighbors
     auto oneHop = edgeMapInduced<M, VS>(GA, vs);
     oneHop.toSparse();
 
     auto get_elm = make_in_imap<tuple<K, M> >(oneHop.size(), [&] (size_t i) { return oneHop.vtxAndData(i); });
     auto get_key = make_in_imap<uintE>(oneHop.size(), [&] (size_t i) -> uintE { return oneHop.vtx(i); });
 
+    // Use a histogram to collate one-hop neighbors
     auto q = [&] (sequentialHT<K, Val>& S, tuple<K, M> v) -> void { S.template insertF<M>(v, reduce_f); };
     auto res = pbbs::histogram_reduce<tuple<K, M>, tuple<K, O> >(get_elm, get_key, oneHop.size(), q, apply_f, ht);
     oneHop.del();
     return vertexSubsetData<O>(GA.nv+GA.nu, res.first, res.second);
   }
 
+  /*
+   *  Counts the one-hop neighbors of vertices in vs, using apply_f to map the
+   *  (neighbor, count) pairs to the desired format.
+   * 
+   *  vs      : Set of active vertices
+   *  apply_f : A function (uintE neighbor, M reduced_val) -> O
+   * 
+   *  Returns a vertexSubsetData object that wraps an array of counted one-hop neighbors of the vertices in vs, in a
+   *  format as specified by apply_f.
+   */
   template <class O, class Apply, class VS>
     inline vertexSubsetData<O> bpedgePropCount(VS& vs, Apply& apply_f) {
     auto reduce_f = [&] (const uintE& cur, const tuple<uintE, uintE>& r) { return cur + 1; };
@@ -394,35 +430,49 @@ BipartiteProp(bipartiteCSR& _GA, KV _empty, size_t ht_size=numeric_limits<size_t
   }
 };
 
-// TODO serialize for small buckets, log buckets
+/*
+ *  Ranks vertices in bipartite graph G according to approximate complement
+ *  degeneracy ordering.
+ * 
+ *  GA: Bipartite graph in CSR format
+ * 
+ *  Returns a tuple of arrays. The first array sorts indices given by U and V by rank (where all U indices come before V
+ *  indices). The second array maps V indices to their rank, and the third array maps U indices to their rank.
+ */
 tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
   using X = tuple<bool, uintE>;
   long n = GA.nv + GA.nu;
+  // Map each vertex to the log of its degree
   auto D = array_imap<uintE>(n, [&] (size_t i) {
-      if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv] <= 0 ? 0 : (uintE) floor(log2(GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv])) + 1;
+      if(i >= GA.nv)
+        return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv] <= 0 ? 0 :
+          (uintE) floor(log2(GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv])) + 1;
       return GA.offsetsV[i+1] - GA.offsetsV[i] <= 0 ? 0 : (uintE) floor(log2(GA.offsetsV[i+1] - GA.offsetsV[i])) + 1;
     });
-
+  // Keep a map of each vertex to its degree
   auto D_act = array_imap<uintE>(n, [&] (size_t i) {
       if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
       return GA.offsetsV[i+1] - GA.offsetsV[i];
     });
 
+  // Structure to maintain bucket updates
   auto hp = BipartiteProp<uintE>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.numEdges/5);
   auto b = make_buckets(n, D, decreasing, num_buckets);
 
   size_t finished = 0;
   while (finished != n) {
     auto bkt = b.next_bucket();
+    // Active vertices (in the bucket that we're processing)
     auto active2 = bkt.identifiers;
     uintE k = bkt.id;
     finished += active2.size();
+    // Given updated degrees, function to update our maps and recompute bucket
     auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
       uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
       uintE deg = D_act.s[v];
       uintE deg_log = D.s[v];
       if (deg_log < k) {
-        uintE new_deg = deg - edgesRemoved; //min(deg - edgesRemoved, k);
+        uintE new_deg = deg - edgesRemoved;
         uintE new_deg_log = deg - edgesRemoved <= 0 ? 0 : (uintE) floor(log2(new_deg)) + 1;
         D_act.s[v] = new_deg;
         D.s[v] = min(new_deg_log, k);
@@ -432,37 +482,50 @@ tuple<uintE*,uintE*,uintE*> getApproxCoCoreRanks(bipartiteCSR& GA, size_t num_bu
       return Maybe<tuple<uintE, uintE> >();
     };
 
+    // Retrieve updated degrees and update buckets
     vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active2, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());
     moved.del(); active2.del();
   }
   b.del();
-  
+
+  // Given the ordering by approx complement degeneracy, compute rankings
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
   };
-  //free(active);
   return getRanks(GA, samplesort_f);
 }
 
+/*
+ *  Ranks vertices in bipartite graph G according to complement degeneracy
+ *  ordering.
+ * 
+ *  GA: Bipartite graph in CSR format
+ * 
+ *  Returns a tuple of arrays. The first array sorts indices given by U and V by rank (where all U indices come before V
+ *  indices). The second array maps V indices to their rank, and the third array maps U indices to their rank.
+ */
 tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=128) {
   using X = tuple<bool, uintE>;
   long n = GA.nv + GA.nu;
-
+  // Map each vertex to its degree
   auto D = array_imap<uintE>(n, [&] (size_t i) {
       if(i >= GA.nv) return GA.offsetsU[i-GA.nv+1] - GA.offsetsU[i-GA.nv];
       return GA.offsetsV[i+1] - GA.offsetsV[i];
     });
 
+  // Structure to maintain bucket updates
   auto hp = BipartiteProp<uintE>(GA, make_tuple(UINT_E_MAX, 0), (size_t)GA.numEdges/5);
   auto b = make_buckets(n, D, decreasing, num_buckets);
 
   size_t finished = 0;
   while (finished != n) {
     auto bkt = b.next_bucket();
+    // Active vertices (in the bucket that we're processing)
     auto active2 = bkt.identifiers;
     uintE k = bkt.id;
     finished += active2.size();
+    // Given updated degrees, function to update our maps and recompute bucket
     auto apply_f = [&] (const tuple<uintE, uintE>& p) -> const Maybe<tuple<uintE, uintE> > {
       uintE v = std::get<0>(p), edgesRemoved = std::get<1>(p);
       uintE deg = D.s[v];
@@ -475,138 +538,112 @@ tuple<uintE*,uintE*,uintE*> getCoCoreRanks(bipartiteCSR& GA, size_t num_buckets=
       return Maybe<tuple<uintE, uintE> >();
     };
 
+    // Retrieve updated degrees and update buckets
     vertexSubsetData<uintE> moved = hp.template bpedgePropCount<uintE>(active2, apply_f);
     b.update_buckets(moved.get_fn_repr(), moved.size());
     moved.del(); active2.del();
   }
   b.del();
 
+  // Given the ordering by approx complement degeneracy, compute rankings
   auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
     return D[a] > D[b];
   };
   return getRanks(GA, samplesort_f);
 }
 
-tuple<uintE*, uintE*, uintE*> getCoreRanks(bipartiteCSR& G, size_t num_buckets=128) {
-  using X = tuple<uintE, uintE>;
-  const size_t n = G.nv + G.nu; const size_t m = G.numEdges;
-  auto D = array_imap<uintE>(n, [&] (size_t i) {
-      if(i >= G.nv) return G.offsetsU[i-G.nv+1] - G.offsetsU[i-G.nv];
-      return G.offsetsV[i+1] - G.offsetsV[i];
-    });
-
-  auto b = make_buckets(n, D, increasing, num_buckets);
-
-  size_t finished = 0;
-  while (finished != n) {
-    auto bkt = b.next_bucket();
-    auto active = bkt.identifiers;
-    uintE k = bkt.id;
-    finished += active.size();
-
-    long num_hash = sequence::reduce<long>((long) 0, active.size(), addF<long>(), degF<long>(G.nv, G.offsetsV, G.offsetsU, active));
-    sparseAdditiveSet<intT> update_hash = sparseAdditiveSet<intT>(num_hash, 1, INT_T_MAX);
-
-    parallel_for(intT i=0; i < active.size(); ++i) {
-      bool use_v = active.vtx(i) < G.nv;
-      intT idx = use_v ? active.vtx(i) : active.vtx(i) - G.nv;
-      intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
-      intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1]) - offset;
-      granular_for(j,0,deg,deg > 10000, { 
-	  intT nbhr = use_v ? G.edgesV[offset+j] + G.nv : G.edgesU[offset+j];
-	  update_hash.insert(make_pair(nbhr,1));
-	});
-    }
-
-    auto update = update_hash.entries();
-    X* update_b = newA(X, update.n);
-    parallel_for(long i=0; i < update.n; ++i) { 
-      uintE v = update.A[i].first;
-      uintE deg = D.s[v];
-      if (deg > k) {
-        uintE new_deg = max(deg - update.A[i].second, k);
-        D.s[v] = new_deg;
-        uintE bkt = b.get_bucket(deg, new_deg);
-        update_b[i] = make_tuple(v, bkt);
-      }
-      else update_b[i] = make_tuple(UINT_E_MAX, UINT_E_MAX);
-    }
-    update_hash.del();
-    update.del();
-
-    X* update_filter = newA(X, update.n);
-    long num_updates_filter = sequence::filter(update_b ,update_filter, update.n, nonMaxTupleF());
-    free(update_b);
-
-    //vertexSubsetData<uintE> moved = em.template edgeMapCount<uintE>(active, apply_f);
-    // second should be array of tuple<uintE,uintE> of idx, new bucket pairs; first is length of this array
-    vertexSubsetData<uintE> moved = vertexSubsetData<uintE>(G.nu+G.nv, num_updates_filter, update_filter);
-    b.update_buckets(moved.get_fn_repr(), moved.size());
-    moved.del(); 
-    active.del();
-  }
-
-  auto samplesort_f = [&] (const uintE a, const uintE b) -> const uintE {
-    return D[a] > D[b];
-  };
-  
-  return getRanks(G, samplesort_f);
-}
-
 //********************************************************************************************
 //********************************************************************************************
 
+/*
+ *  Computes a graph in CSR format with vertices and adjacency lists ordered
+ *  by rank, as given by ranks, rankV, and rankU.
+ * 
+ *  G    : Bipartite graph in CSR format
+ *  use_v: Denotes which bipartition to store counts on, based on which bipartition produces the fewest wedges.
+ *         If true, stores counts on U. If false, stores counts on V. This information is encapsulated in the
+ *         returned graph
+ *  ranks: Sorted U and V vertices by rank (where U indices all come before V indices)
+ *  rankV: Array mapping V indices to their rank
+ *  rankU: Array mapping U indices to their rank
+ * 
+ *  Returns a graph in CSR format with vertices and adjacency lists  ordered
+ *  by rank.
+ */
 graphCSR rankGraph(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uintE* rankU) {
   using X = tuple<uintE,uintE>;
-  // we put a 1 if nu and use_vb; 0 otherwise
-  // store if 1, don't store if 0 (store if nu and use_v or if nv and not use_v)
-  
   uintT* offsets = newA(uintT,G.nv+G.nu+1);
   offsets[G.nv+G.nu] = 0;
-
+  // Set up offsets
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
     if (ranks[i] >= G.nv) offsets[i] = G.offsetsU[ranks[i]-G.nv+1]-G.offsetsU[ranks[i]-G.nv];
     else offsets[i] = G.offsetsV[ranks[i]+1]-G.offsetsV[ranks[i]];
   }
-
-  // Now we have to reformat the graph
   sequence::plusScan(offsets,offsets,G.nv+G.nu+1);
 
   uintE* edges = newA(uintE,offsets[G.nv+G.nu]);
-
   auto lt = [] (const uintE& l, const uintE& r) { return l > r; };
+
+  // Fill in the correct edges using offsets
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
-    // need to fill in offsets[i] to offsets[i+1] in edges array
     bool use_v = (ranks[i] < G.nv);
+    // Retrieve the corresponding vertex in G
     intT idx = use_v ? ranks[i] : ranks[i] - G.nv;
     intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
     intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
     granular_for(j,0,deg,deg > 10000, { 
+  // Fill in all neighbors of idx using G
 	intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
 	uintE r; 
+  // Each vertex is appended with a rightmost bit, which is 1 if 
+  // it is on the right bipartition to store butterfly counts on, and 0 
+  // otherwise.
+  // That is to say, we append a 1 if the vertex is in U and use_vb is true,
+  // or if the vertex is in V and use_vb is false. Otherwise, we append 0.
 	if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
 	else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
 	edges[offsets[i]+j] = r;
       });
+    // Sort adjacency list of idx
     sampleSort(&edges[offsets[i]], deg, lt);
   }
+
+  // Create sorted graph
   return graphCSR(offsets,edges,G.nv+G.nu,G.numEdges);
 }
 
+/*
+ *  Computes a graph in CSR format with vertices and adjacency lists ordered
+ *  by rank, as given by ranks, rankV, and rankU. Also, saves a conversion
+ *  array that translates edges in the ranked graph to their original
+ *  indices in G.
+ * 
+ *  G    : Bipartite graph in CSR format
+ *  use_v: Denotes which bipartition to store counts on, based on which bipartition produces the fewest wedges.
+ *         If true, stores counts on U. If false, stores counts on V. This information is encapsulated in the
+ *         returned graph
+ *  ranks: Sorted U and V vertices by rank (where U indices all come before V indices)
+ *  rankV: Array mapping V indices to their rank
+ *  rankU: Array mapping U indices to their rank
+ * 
+ *  Returns a pair, where the first element is a graph in CSR format with
+ *  vertices and adjacency lists  ordered by rank. The second element is
+ *  an array of tuples that converts edges in the ranked graph to
+ *  their original index in GA (the first elements of the tuple form 
+ *  the edge list of the ranked graph, and the second element is the
+ *  corresponding original index in GA).
+ */
 pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uintE* rankU) {
   using X = tuple<uintE,uintE>;
-  // we put a 1 if nu and use_vb; 0 otherwise
-  // store if 1, don't store if 0 (store if nu and use_v or if nv and not use_v)
 
   uintT* offsets = newA(uintT,G.nv+G.nu+1);
   offsets[G.nv+G.nu] = 0;
-
+  // Set up offsets
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
     if (ranks[i] >= G.nv) offsets[i] = G.offsetsU[ranks[i]-G.nv+1]-G.offsetsU[ranks[i]-G.nv];
     else offsets[i] = G.offsetsV[ranks[i]+1]-G.offsetsV[ranks[i]];
   }
 
-  // Now we have to reformat the graph
   sequence::plusScan(offsets,offsets,G.nv+G.nu+1);
 
   uintE* edges = newA(uintE,offsets[G.nv+G.nu]);
@@ -614,25 +651,37 @@ pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, 
 
   auto lt = [] (const uintE& l, const uintE& r) { return l > r; };
   auto ltx = [] (const X& l, const X& r) { return get<0>(l) > get<0>(r); };
+
+  // Fill in the correct edges using offsets
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
-    // need to fill in offsets[i] to offsets[i+1] in edges array
     bool use_v = (ranks[i] < G.nv);
+    // Retrieve the corresponding vertex in G
     intT idx = use_v ? ranks[i] : ranks[i] - G.nv;
     intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
     intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
+    // Fill in all neighbors of idx using G
     granular_for(j,0,deg,deg > 10000, { 
 	intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
-	uintE r; 
+	uintE r;
+  // Each vertex is appended with a rightmost bit, which is 1 if 
+  // it is on the right bipartition to store butterfly counts on, and 0 
+  // otherwise.
+  // That is to say, we append a 1 if the vertex is in U and use_vb is true,
+  // or if the vertex is in V and use_vb is false. Otherwise, we append 0.
 	if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
 	else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
-	//edges[offsets[i]+j] = r;
+	// Include offset+j to allow for translation back to the original graph
 	edges_convert[offsets[i]+j] = make_tuple(r,offset+j);
       });
+    // Sort adjacency list of idx
     sampleSort(&edges_convert[offsets[i]], deg, ltx);
+    // Set sorted offsets in the edges array for the ranked graph
     granular_for(j,0,deg,deg > 10000, {
 	edges[offsets[i]+j] = get<0>(edges_convert[offsets[i]+j]); 
-      });
+    });
   }
+
+  // Create sorted graph
   return make_pair(graphCSR(offsets,edges,G.nv+G.nu,G.numEdges), edges_convert);
 }
 
@@ -642,7 +691,8 @@ pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, 
 template <class E>
 struct clrF { 
   uintE* edges; uintT offset; uintT color; uintT* colors;
-  clrF(uintE* _edges, uintT _offset, uintT _color, uintT* _colors) : edges(_edges), offset(_offset), color(_color), colors(_colors) {}
+  clrF(uintE* _edges, uintT _offset, uintT _color, uintT* _colors) :
+    edges(_edges), offset(_offset), color(_color), colors(_colors) {}
   inline E operator() (const uintT& i) const {
     return (E) (colors[edges[offset+i]] == color ? 1 : 0); 
   }
@@ -704,7 +754,7 @@ bipartiteCSR delZeroDeg(bipartiteCSR& G) {
   offsetsU_ff[num_uff] =  G.offsetsU[G.nu];
 
   free(offsetsV_f); free(offsetsU_f);
-  return bipartiteCSR(offsetsV_ff,offsetsU_ff,edgesV,edgesU,num_vff,num_uff,G.numEdges);
+  return bipartiteCSR(offsetsV_ff, offsetsU_ff, edgesV, edgesU, num_vff, num_uff, G.numEdges);
 }
 
 bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
