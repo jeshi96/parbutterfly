@@ -21,6 +21,9 @@
 
 using namespace std;
 
+enum CountType {SORT, ASORT, HASH, AHASH, HIST, AHIST, BATCHS, BATCHWA, SERIAL};
+enum RankType {SIDE, COCORE, ACOCORE, DEG, ADEG};
+
 // Represents a wedge, where v1 and v2 are the endpoints, u is the center, j is
 // the index of u as a neighbor of v1, and k is the index of v2 as a neighbor
 // of u. Also, constructors and comparators for UWedge.
@@ -962,7 +965,7 @@ bipartiteCSR readBipartite(char* fname) {
 
   S.del();
   free(W.Strings);
-  //W.del(); // to deal with performance bug in malloc
+
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
 }
 
@@ -995,12 +998,7 @@ long* computeWorkPrefixSum(bipartiteCSR & GA, bool use_v) {
       uintE v = edgesU[u_offset+j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1]-offsetsV[v];
-      // for(intT k=0; k<v_deg;k++) {
-      //   uintE u2_idx = GA.edgesV[v_offset+k];
-      //   if(u2_idx < i) u_work++;
-      //   else break;
-  
-      // }
+
       u_work += offsetsV[v+1]-offsetsV[v];
     }
     workPrefixSum[i] = u_work;
@@ -1191,7 +1189,7 @@ long* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
 }
 
 struct CountESpace {
-  long type; long nu; bool rank;
+  CountType type; long nu; bool rank;
   // for sort: 0, 1
   _seq<UWedge> wedges_seq_uw;
   // for sort: 1; for hist: 6
@@ -1210,58 +1208,58 @@ struct CountESpace {
   sparseAdditiveSet<long, long> butterflies_hash;
 
 
-CountESpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
+CountESpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
   using T = pair<long,long>;
   using X = tuple<uintE,long>;
   using E = pair<long, uintE>;
-  if (type == 2 || type == 3) {
+  if (type == HASH || type == AHASH) {
     wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-    if (type == 3) {
+    if (type == HASH) {
       wedges_seq_intp = _seq<T>(newA(T, nu), nu);
       butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
     }
   }
-  else if (type == 4 || type == 6) {
+  else if (type == HIST || type == AHIST) {
     tmp = pbbsa::sequence<tuple<long, uintE>>();
     out = pbbsa::sequence<tuple<long, uintE>>();
     wedges_seq_int = _seq<long>(newA(long, nu), nu);
     wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-    if (type == 6) {
+    if (type == HIST) {
       butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
       tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
       out_uint = pbbsa::sequence<tuple<uintE, long>>();
     }
   }
-  else if (type == 0 || type == 1) {
-    if (type == 1) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+  else if (type == SORT || type == ASORT) {
+    if (type == SORT) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
     wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
   }
 }
 
   void clear() {
-    if (type == 2 || type == 3 || type == 4 || type == 6) wedges_hash.clear();
-    if (type == 3) butterflies_hash.clear();
+    if (type == HASH || type == AHASH || type == HIST || type == AHIST) wedges_hash.clear();
+    if (type == HASH) butterflies_hash.clear();
   }
 
   void del() {
-    if (type == 2 || type == 3) {
+    if (type == HASH || type == AHASH) {
       wedges_hash.del();
-      if (type == 3) { wedges_seq_intp.del(); butterflies_hash.del(); }
+      if (type == HASH) { wedges_seq_intp.del(); butterflies_hash.del(); }
     }
-    else if (type == 4 || type == 6) {
+    else if (type == HIST || type == AHIST) {
       wedges_seq_int.del();
       wedges_hash.del();
-      if (type == 6) butterflies_seq_intt.del();
+      if (type == HIST) butterflies_seq_intt.del();
     }
-    else if (type == 0 || type == 1) {
-      if (type == 1) butterflies_seq_intt.del();
+    else if (type == SORT || type == ASORT) {
+      if (type == SORT) butterflies_seq_intt.del();
       wedges_seq_uw.del();
     }
   }
 };
 
 struct CountSpace {
-  long type; long nu; bool rank;
+  CountType type; long nu; bool rank;
   // for hash: 2, 3
   sparseAdditiveSet<long, long> wedges_hash;
   _seq<pair<long,long>> wedges_seq_intp;
@@ -1280,20 +1278,20 @@ struct CountSpace {
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<UWedge> wedges_seq_uw;
 
-CountSpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
+CountSpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
   using T = pair<uintE,long>;
   using X = tuple<uintE,uintE>;
   using E = pair<long,long>;
   using L = tuple<uintE,long>;
-  if (type == 2 || type == 3) {
+  if (type == HASH || type == AHASH) {
     wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
     wedges_seq_intp = _seq<E>(newA(E, nu), nu);
-    if (type == 3) {
+    if (type == HASH) {
       butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
       butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
     }
   }
-  else if (type == 4 || type == 6) {
+  else if (type == HIST || type == AHIST) {
     tmp = pbbsa::sequence<tuple<long, uintE>>();
     out = pbbsa::sequence<tuple<long, uintE>>();
     wedges_seq_int = _seq<long>(newA(long, nu), nu);
@@ -1301,42 +1299,42 @@ CountSpace(long _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank)
       wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
       wedges_seq_intp = _seq<E>(newA(E, nu), nu);
     }
-    if (type == 6) {
+    if (type == HIST) {
       butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
       tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
       out_uint = pbbsa::sequence<tuple<uintE, long>>();
     }
   }
-  else if (type == 0 || type == 1) {
-    if (type == 1) butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
+  else if (type == SORT || type == ASORT) {
+    if (type == SORT) butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
     if (!rank) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
     else wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
   }
 }
 
   void clear() {
-    if (type == 2 || type == 3) {
+    if (type == HASH || type == AHASH) {
       wedges_hash.clear();
-      if (type == 3) butterflies_hash.clear();
+      if (type == HASH) butterflies_hash.clear();
     }
-    else if ((type == 4 || type == 6) && rank) wedges_hash.clear();
+    else if ((type == HIST || type == AHIST) && rank) wedges_hash.clear();
 
   }
 
   void del() {
-    if (type == 2 || type == 3) {
+    if (type == HASH || type == AHASH) {
       wedges_hash.del(); wedges_seq_intp.del(); 
-      if (type == 3) { butterflies_hash.del(); butterflies_seq_intp.del(); }
+      if (type == HASH) { butterflies_hash.del(); butterflies_seq_intp.del(); }
     }
-    else if (type == 4 || type == 6) {
+    else if (type == HIST || type == AHIST) {
       wedges_seq_int.del();
       if (rank){
         wedges_hash.del(); wedges_seq_intp.del();
       }
-      if (type == 6) butterflies_seq_intt.del();
+      if (type == HIST) butterflies_seq_intt.del();
     }
-    else if (type == 0 || type == 1) {
-      if (type == 1) butterflies_seq_intt.del(); 
+    else if (type == SORT || type == ASORT) {
+      if (type == SORT) butterflies_seq_intt.del(); 
       if (!rank) wedges_seq_uvp.del();
       else wedges_seq_uw.del();
     }

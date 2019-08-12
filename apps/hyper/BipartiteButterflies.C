@@ -138,13 +138,79 @@ void CountOrigCompactSerialTotal(bipartiteCSR& GA, bool use_v) {
   cout << "num: " << nb << "\n";
 }
 
-// Note: must be invoked with symmetricVertex
+string CountTypeToStr(CountType ty) {
+  switch(ty) {
+    case ASORT: return "Sort"; break;
+    case SORT: return "SortCE"; break;
+    case AHASH: return "Hash"; break;
+    case HASH: return "HashCE"; break;
+    case AHIST: return "Hist"; break;
+    case HIST: return "HistCE"; break;
+    case BATCHS: return "Par"; break;
+    case SERIAL: return "Serial"; break;
+    case BATCHWA: return "WedgePar"; break;
+    default: break;
+  }
+  return "";
+}
+
 void Compute(bipartiteCSR& GA, commandLine P) {
-  // Method type for counting + peeling
-  long ty = P.getOptionLongValue("-t",0);
+  const size_t eltsPerCacheLine = 64/sizeof(long);
+
+  // Type for counting
+  long count_type_long = P.getOptionLongValue("-t", LONG_MAX);
+  string count_type_str = P.getOptionValue("-countType", "");
+  CountType ty;
+  if (count_type_long == LONG_MAX) {
+    if (count_type_str == "ASORT") ty = ASORT;
+    else if (count_type_str == "SORT") ty = SORT;
+    else if (count_type_str == "AHASH") ty = AHASH;
+    else if (count_type_str == "HASH") ty = HASH;
+    else if (count_type_str == "AHIST") ty = AHIST;
+    else if (count_type_str == "HIST") ty = HIST;
+    else if (count_type_str == "BATCHS") ty = BATCHS;
+    else if (count_type_str == "BATCHWA") ty = BATCHWA;
+    else ty = SERIAL;
+  }
+  else {
+    switch(count_type_long) {
+      case 0: ty = ASORT; break;
+      case 1: ty = SORT; break;
+      case 2: ty = AHASH; break;
+      case 3: ty = HASH; break;
+      case 4: ty = AHIST; break;
+      case 6: ty = HIST; break;
+      case 5: case 7: case 11: ty = BATCHS; break;
+      case 9: case 12: ty = SERIAL; break;
+      case 8: ty = BATCHWA; break;
+      default: break;
+    }
+  }
+
+  // Type for ranking
+  long rank_type_long = P.getOptionLongValue("-w", LONG_MAX);
+  string rank_type_str = P.getOptionValue("-rankType", "");
+  RankType tw;
+  if (rank_type_long == LONG_MAX) {
+    if (rank_type_str == "SIDE") tw = SIDE;
+    else if (count_type_str == "COCORE") tw = COCORE;
+    else if (count_type_str == "ACOCORE") tw = ACOCORE;
+    else if (count_type_str == "DEG") tw = DEG;
+    else tw = ADEG;
+  }
+  else {
+    switch(rank_type_long) {
+      case 0: tw = SIDE; break;
+      case 1: tw = COCORE; break;
+      case 2: tw = ACOCORE; break;
+      case 3: tw = DEG; break;
+      case 4: tw = ADEG; break;
+      default: break;
+    }
+  }
+
   long tp = P.getOptionLongValue("-tp",0);
   long te = P.getOptionLongValue("-e",0);
-  long tw = P.getOptionLongValue("-w",0); // 0 = side, 1 = co core, 2 = approx co core, 3 = deg, 4 = approx deg
   bool nopeel = P.getOptionValue("-nopeel");
   bool total = P.getOptionValue("-total");
   
@@ -168,19 +234,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   // if you only want total counts
   if (total) {
-    if (tw == 0 && (ty == 9 || ty == 12)) CountOrigCompactSerialTotal(GA,use_v);
-    if (tw == 0 && (ty == 9 || ty == 12)) return;
+    if (tw == SIDE && (ty == SERIAL)) CountOrigCompactSerialTotal(GA,use_v);
+    if (tw == SIDE && (ty == SERIAL)) return;
 
     timer t;
     t.start();
     long num_butterflies = CountTotal(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
     t.stop();
 
-    if (ty==0) t.reportTotal("Sort:");
-    else if (ty==2) t.reportTotal("Hash:");
-    else if (ty==4) t.reportTotal("Hist:");
-    else if (ty==7 || ty == 11) t.reportTotal("Par");
-    else if (ty==8) t.reportTotal("WedgePar");
+    t.reportTotal(CountTypeToStr(ty));
+
     if (sparse == 1) num_butterflies *= pow(denom, 3);
     else if (sparse == 2) num_butterflies *= pow(denom, 4);
     cout << "number of butterflies: " << num_butterflies << "\n";
@@ -189,29 +252,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
  //TODO seq code integrate w/count
   if (te == 0) {
-    // 12 for work efficient serial
-    if (tw == 0 && (ty == 9 || ty == 12)) CountOrigCompactSerial(GA,use_v);
-    if (tw == 0 && (ty == 9 || ty == 12)) return;
-    const size_t eltsPerCacheLine = 64/sizeof(long);
+    if (tw == SIDE && ty == SERIAL) CountOrigCompactSerial(GA,use_v);
+    if (tw == SIDE && ty == SERIAL) return;
 
     timer t;
     t.start();
     long* butterflies = Count(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
     t.stop();
 
-    if (ty==0) t.reportTotal("Sort:");
-    else if (ty==1) t.reportTotal("SortCE:");
-    else if (ty==2) t.reportTotal("Hash:");
-    else if (ty==3) t.reportTotal("HashCE:");
-    else if (ty==4) t.reportTotal("Hist:");
-    else if (ty==6) t.reportTotal("HistCE:");
-    else if (ty==7 || ty == 11) t.reportTotal("Par");
-    else if (ty==8) t.reportTotal("WedgePar");
-    else if (ty==12) t.reportTotal("Serial");
+    t.reportTotal(CountTypeToStr(ty));
 
-    //if (ty==12) return;
-
-  
     long num_idxs = use_v ? GA.nu : GA.nv;
 
     auto butterflies_extract_f = [&] (const long i) -> const long {
@@ -232,10 +282,6 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       else if (tp==2) t2.reportTotal("Hist Peel:");
       else if (tp == 3) t2.reportTotal("Par Peel:");
       else if (tp == 5) t2.reportTotal("WedgePar Peel:");
-
-      /*long mc = 0;
-      for (size_t i=0; i < num_idxs; i++) { mc = std::max(mc, cores[i]); }
-      cout << "### Max core: " << mc << endl;*/
     }
     free(butterflies);
   }
@@ -249,17 +295,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     t3.start();
     long* ebutterflies = CountE(eti, GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
     t3.stop();
-    if(ty==2) t3.reportTotal("E Hash:");
-    else if (ty == 3) t3.reportTotal("E HashCE:");
-    else if (ty == 0) t3.reportTotal("E Sort:");
-    else if (ty==1) t3.reportTotal("E SortCE:");
-    else if (ty==4) t3.reportTotal("E Hist:");
-    else if (ty==6) t3.reportTotal("E HistCE:");
-    else if (ty == 5 || ty == 11) t3.reportTotal("E Par:");
-    else if (ty == 8) t3.reportTotal("E WedgePar:");
-    else if (ty == 12) t3.reportTotal("E Serial:");
-
-    const size_t eltsPerCacheLine = 64/sizeof(long);
+  
+    t3.reportTotal(CountTypeToStr(ty));
 
     auto butterflies_extract_f = [&] (const long i) -> const long {
       return ebutterflies[eltsPerCacheLine*i];

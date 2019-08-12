@@ -1526,7 +1526,7 @@ void CountESerial(uintE* eti, long* butterflies, bipartiteCSR& GA, bool use_v) {
  *  Note: This function takes ownership of and frees ranks, rankV, and rankU
  */
 long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size,
-                 long type, uintE* ranks, uintE* rankV, uintE* rankU) {
+                 CountType type, uintE* ranks, uintE* rankV, uintE* rankU) {
   #ifdef VERBOSE
   timer t_rank;
   t_rank.start();
@@ -1560,48 +1560,48 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
 
   // Compute wedge indices so that wedges can be stored in parallel (for any
   // aggregation type except simple batching)
-  long* wedge_idxs = (type == 11 || type == 12) ? nullptr : countWedgesScan(g);
+  long* wedge_idxs = (type == BATCHS || type == SERIAL) ? nullptr : countWedgesScan(g);
 
   // Initialize structure that holds all space for counting algorithms, to be
   // reused with wedge batches
   CountESpace cs = CountESpace(type, numEdges, true);
 
   #ifdef VERBOSE
-  if (type == 8) t_time2.reportTotal("counting (scan)");
+  if (type == BATCHWA) t_time2.reportTotal("counting (scan)");
   #endif
 
   // Choose wedge/butterfly aggregation type
-  if (type == 11) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
-  else if (type == 12) CountEWorkEfficientSerial(g, rank_butterflies);
-  else if (type == 8) CountEOrigCompactParallel_WedgeAware(g, rank_butterflies, max_array_size, wedge_idxs);
+  if (type == BATCHS) CountEWorkEfficientParallel(g, rank_butterflies, max_array_size);
+  else if (type == SERIAL) CountEWorkEfficientSerial(g, rank_butterflies);
+  else if (type == BATCHWA) CountEOrigCompactParallel_WedgeAware(g, rank_butterflies, max_array_size, wedge_idxs);
   else {
     if (max_wedges >= num_wedges) {
-      if (type == 0) CountESort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-      else if (type == 1) CountESortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-      else if (type == 2) CountEHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-      else if (type == 3) CountEHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-      else if (type == 4) CountEHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
-      else if (type == 6) CountEHistCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      if (type == ASORT) CountESort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == SORT) CountESortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == AHASH) CountEHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == HASH) CountEHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == AHIST) CountEHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
+      else if (type == HIST) CountEHistCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs);
     }
     else {
       intT curr_idx = 0;
       while(curr_idx < g.n) {
-  if (type ==0) curr_idx = CountESort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-  else if (type ==1) curr_idx = CountESortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-  else if (type ==2) curr_idx = CountEHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-  else if (type == 3) curr_idx = CountEHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-  else if (type == 4) curr_idx = CountEHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
-  else if (type == 6) curr_idx = CountEHistCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+  if (type == ASORT) curr_idx = CountESort(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+  else if (type == SORT) curr_idx = CountESortCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+  else if (type == AHASH) curr_idx = CountEHash(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+  else if (type == HASH) curr_idx = CountEHashCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+  else if (type == AHIST) curr_idx = CountEHist(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
+  else if (type == HIST) curr_idx = CountEHistCE(cs, g, num_wedges, rank_butterflies, max_wedges, wedge_idxs, curr_idx);
   cs.clear();
       }
     }
   }
 
   cs.del();
-  if (type != 11 && type != 12) free(wedge_idxs);
+  if (type != BATCHS && type != SERIAL) free(wedge_idxs);
 
   #ifdef VERBOSE
-  if (type != 11 && type != 8 && type != 12) t_time2.reportTotal("counting")
+  if (type != BATCHS && type != BATCHWA && type != SERIAL) t_time2.reportTotal("counting")
   timer t_convert;
   t_convert.start();
   #endif
@@ -1650,12 +1650,12 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
  *  Returns an array of butterfly counts, indexed by edge.
  */
 long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, long max_array_size,
-             long type=0, long tw=0) {
+             CountType type, RankType tw) {
   const long nu = use_v ? GA.nu : GA.nv;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
   // Any ranking that is not by side
-  if (tw !=0) {
+  if (tw != SIDE) {
     #ifdef VERBOSE
     timer t_rank;
     t_rank.start();
@@ -1663,10 +1663,10 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
 
     // Pick the correct ranking
     tuple<uintE*,uintE*,uintE*> rank_tup;
-    if (tw == 1) rank_tup = getCoCoreRanks(GA);
-    else if (tw == 2) rank_tup = getApproxCoCoreRanks(GA);
-    else if (tw == 3) rank_tup = getDegRanks(GA);
-    else if (tw == 4) rank_tup = getApproxDegRanks(GA);
+    if (tw == COCORE) rank_tup = getCoCoreRanks(GA);
+    else if (tw == ACOCORE) rank_tup = getApproxCoCoreRanks(GA);
+    else if (tw == DEG) rank_tup = getDegRanks(GA);
+    else if (tw == ADEG) rank_tup = getApproxDegRanks(GA);
 
     // Compute the number of wedges that the ranking produces
     long num_ccwedges = sequence::reduce<long>(
@@ -1696,9 +1696,9 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
 
   // For storing butterfly counts without translating edges accessed on
   // different bipartitions
-  long* butterflies_u = (type == 3 || type == 1 || type == 6 || type == 12) ? nullptr :
+  long* butterflies_u = (type == HASH || type == SORT || type == HIST || type == SERIAL) ? nullptr :
     newA(long, eltsPerCacheLine*GA.numEdges);
-  if (type != 3 && type != 1 && type != 6 && type != 12) {
+  if (type != HASH && type != SORT && type != HIST && type != SERIAL) {
     parallel_for(long i=0; i < GA.numEdges; ++i){
       butterflies_u[eltsPerCacheLine*i] = 0;
     }
@@ -1712,46 +1712,46 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
 
   // Compute wedge indices so that wedges can be stored in parallel (for any
   // aggregation type except simple batching)
-  long* wedge_idxs = type == 5 ? nullptr : countWedgesScan(GA, use_v, true);
+  long* wedge_idxs = type == BATCHS ? nullptr : countWedgesScan(GA, use_v, true);
 
   // Initialize structure that holds all space for counting algorithms, to be
   // reused with wedge batches
   CountESpace cs = CountESpace(type, GA.numEdges, false);
 
   #ifdef VERBOSE
-  if (type == 8) t_time.reportTotal("counting (scan)");
+  if (type == BATCHWA) t_time.reportTotal("counting (scan)");
   #endif
 
   // Choose wedge/butterfly aggregation type
-  if (type == 5) CountEOrigCompactParallel(eti, butterflies, butterflies_u, GA, use_v, max_array_size);
-  else if (type == 12) CountESerial(eti, butterflies, GA, use_v);
-  else if (type == 8) CountEOrigCompactParallel_WedgeAware(GA, butterflies, butterflies_u, use_v, max_array_size,
-                                                           wedge_idxs);
+  if (type == BATCHS) CountEOrigCompactParallel(eti, butterflies, butterflies_u, GA, use_v, max_array_size);
+  else if (type == SERIAL) CountESerial(eti, butterflies, GA, use_v);
+  else if (type == BATCHWA) CountEOrigCompactParallel_WedgeAware(GA, butterflies, butterflies_u, use_v, max_array_size,
+                                                                 wedge_idxs);
   else {
     if (max_wedges >= num_wedges) {
-      if (type == 0) CountESort(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti);
-      else if (type == 1) CountESortCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
-      else if (type == 2) CountEHash(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs,
-                                     eti);
-      else if (type == 3) CountEHashCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
-      else if (type == 4) CountEHist(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs,
-                                     eti);
-      else if (type == 6) CountEHistCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+      if (type == ASORT) CountESort(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti);
+      else if (type == SORT) CountESortCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+      else if (type == AHASH) CountEHash(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs,
+                                         eti);
+      else if (type == HASH) CountEHashCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
+      else if (type == AHIST) CountEHist(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs,
+                                         eti);
+      else if (type == HIST) CountEHistCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti);
     }
     else {
       intT curr_idx = 0;
       while(curr_idx < nu) {
-  if (type == 0)
+  if (type == ASORT)
     curr_idx = CountESort(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti, curr_idx);
-  else if (type == 1)
+  else if (type == SORT)
     curr_idx = CountESortCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
-  else if (type == 2)
+  else if (type == AHASH)
     curr_idx = CountEHash(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti, curr_idx);
-  else if (type == 3)
+  else if (type == HASH)
     curr_idx = CountEHashCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
-  else if (type == 4)
+  else if (type == AHIST)
     curr_idx = CountEHist(cs, GA, use_v, num_wedges, butterflies, butterflies_u, max_wedges, wedge_idxs, eti, curr_idx);
-  else if (type == 6)
+  else if (type == HIST)
     curr_idx = CountEHistCE(cs, GA, use_v, num_wedges, butterflies, max_wedges, wedge_idxs, eti, curr_idx);
   cs.clear();
       }
@@ -1759,12 +1759,12 @@ long* CountE(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long max
   }
   cs.del();
 
-  if (type != 5 && type != 12) free(wedge_idxs);
+  if (type != BATCHS && type != SERIAL) free(wedge_idxs);
   #ifdef VERBOSE
-  if (type != 5 && type != 8 && type != 12) t_time.reportTotal("counting");
+  if (type != SERIAL && type != BATCHWA && type != SERIAL) t_time.reportTotal("counting");
   #endif
 
-  if (type !=3 && type != 1 && type != 6 && type != 12) {
+  if (type != HASH && type != SORT && type != HIST && type != SERIAL) {
     #ifdef VERBOSE
     timer t_convert;
     t_convert.start();
