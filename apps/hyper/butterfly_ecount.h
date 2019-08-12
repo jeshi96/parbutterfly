@@ -1542,7 +1542,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   free(ranks); free(rankU); free(rankV); 
 
   #ifdef VERBOSE
-  t_rank.reportTotal("ranking")
+  t_rank.reportTotal("ranking");
   timer t_time, t_time2;
   t_time.start();
   #endif

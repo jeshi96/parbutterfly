@@ -23,6 +23,7 @@ using namespace std;
 
 enum CountType {SORT, ASORT, HASH, AHASH, HIST, AHIST, BATCHS, BATCHWA, SERIAL};
 enum RankType {SIDE, COCORE, ACOCORE, DEG, ADEG};
+enum PeelType {PSORT, PHASH, PHIST, PBATCHS, PBATCHWA};
 
 // Represents a wedge, where v1 and v2 are the endpoints, u is the center, j is
 // the index of u as a neighbor of v1, and k is the index of v2 as a neighbor
@@ -115,7 +116,7 @@ struct UWSecond { uintE operator() (const UWedge& x) {return x.v2;}};
 // Tuple functions
 template<class T, class X>
 struct tupleFirst {T operator() (tuple<T,X> a) {return get<0>(a);} };
-struct nonZeroF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}};
+struct nonZeroF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}}
 struct greaterOneLongF{inline bool operator() (tuple<long,uintE> &a) {return (get<1>(a) > 1);}}
 struct nonMaxTupleF{
   inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}
