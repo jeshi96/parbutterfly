@@ -352,9 +352,9 @@ vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
     intT offset  = use_v ? GA.offsetsV[idx] : GA.offsetsU[idx];
     intT deg = (use_v ? GA.offsetsV[idx+1] : GA.offsetsU[idx+1]) - offset;
     granular_for(j,0,deg,deg > 10000, {
-	    intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
+      intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
       // Store the one-hop neighbor of idx
-	    outEdges[o+j] = make_tuple(nbhr, 1);
+      outEdges[o+j] = make_tuple(nbhr, 1);
       });
   }
   auto vs = vertexSubsetData<E>(nTo, outEdgeCount, outEdges);
@@ -593,16 +593,16 @@ graphCSR rankGraph(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uin
     intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
     granular_for(j,0,deg,deg > 10000, { 
   // Fill in all neighbors of idx using G
-	intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
-	uintE r; 
+  intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
+  uintE r; 
   // Each vertex is appended with a rightmost bit, which is 1 if 
   // it is on the right bipartition to store butterfly counts on, and 0 
   // otherwise.
   // That is to say, we append a 1 if the vertex is in U and use_vb is true,
   // or if the vertex is in V and use_vb is false. Otherwise, we append 0.
-	if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
-	else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
-	edges[offsets[i]+j] = r;
+  if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
+  else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
+  edges[offsets[i]+j] = r;
       });
     // Sort adjacency list of idx
     sampleSort(&edges[offsets[i]], deg, lt);
@@ -661,23 +661,23 @@ pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, 
     intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
     // Fill in all neighbors of idx using G
     granular_for(j,0,deg,deg > 10000, { 
-	intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
-	uintE r;
+  intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
+  uintE r;
   // Each vertex is appended with a rightmost bit, which is 1 if 
   // it is on the right bipartition to store butterfly counts on, and 0 
   // otherwise.
   // That is to say, we append a 1 if the vertex is in U and use_vb is true,
   // or if the vertex is in V and use_vb is false. Otherwise, we append 0.
-	if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
-	else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
-	// Include offset+j to allow for translation back to the original graph
-	edges_convert[offsets[i]+j] = make_tuple(r,offset+j);
+  if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
+  else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
+  // Include offset+j to allow for translation back to the original graph
+  edges_convert[offsets[i]+j] = make_tuple(r,offset+j);
       });
     // Sort adjacency list of idx
     sampleSort(&edges_convert[offsets[i]], deg, ltx);
     // Set sorted offsets in the edges array for the ranked graph
     granular_for(j,0,deg,deg > 10000, {
-	edges[offsets[i]+j] = get<0>(edges_convert[offsets[i]+j]); 
+  edges[offsets[i]+j] = get<0>(edges_convert[offsets[i]+j]); 
     });
   }
 
@@ -1078,7 +1078,7 @@ template <class L, class T, class Cmp, class Eq, class F>
 
 template <class L, class S, class T, class Cmp, class Eq, class OpT, class OpuintE, class OpCount>
   pair<tuple<S,L>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
-				       OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
+               OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
   //if(sort) parallelIntegerSort(objs, num, cmp); //sampleSort(objs, num, cmp);
 
   using X = tuple<S,L>;
@@ -1127,10 +1127,10 @@ long* countWedgesScan(graphCSR& G) {
       intT v_offset = G.offsets[v];
       intT v_deg = G.offsets[v+1] - v_offset;
       if (v > i) {
-	for (intT k = 0; k < v_deg; ++k) {
-	  if ((G.edges[v_offset + k] >> 1) > i) (nbhd_idxs[i][j])++;
-	  else break;
-	}
+  for (intT k = 0; k < v_deg; ++k) {
+    if ((G.edges[v_offset + k] >> 1) > i) (nbhd_idxs[i][j])++;
+    else break;
+  }
       }
     }
     idxs[i] = sequence::plusReduce(nbhd_idxs[i], deg + 1);
@@ -1436,15 +1436,15 @@ template<class wedgeCons, class T>
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
     parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
-	uintE v = edgesU[u_offset+j];
-	intT v_offset = offsetsV[v];
-	intT v_deg = offsetsV[v+1] - v_offset;
-	// Find all seagulls with center v and endpoint u
-	for (long k=0; k < v_deg; ++k) { 
-	  uintE u2 = edgesV[v_offset+k];
-	  if (u2 < i) wedges.insert(make_pair(cons(i, u2, v, j, k),1));
-	  else break;
-	}
+  uintE v = edgesU[u_offset+j];
+  intT v_offset = offsetsV[v];
+  intT v_deg = offsetsV[v+1] - v_offset;
+  // Find all seagulls with center v and endpoint u
+  for (long k=0; k < v_deg; ++k) { 
+    uintE u2 = edgesV[v_offset+k];
+    if (u2 < i) wedges.insert(make_pair(cons(i, u2, v, j, k),1));
+    else break;
+  }
     }
   }
   //hashInsertTimer.stop();
@@ -1550,7 +1550,7 @@ template<class wedge, class wedgeCons>
 
 template<class wedge, class wedgeCons>
   void _getWedges(_seq<wedge>& wedges_seq, graphCSR& GA, wedgeCons cons, long num_wedges, 
-		  long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
+      long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
   // Allocate space for seagull storage
   if (wedges_seq.n < num_wedges) {
     free(wedges_seq.A);
@@ -1598,17 +1598,17 @@ template<class wedgeCons, class T>
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
     granular_for(j,0,u_deg,u_deg>1000,{
-	uintE v = GA.edges[u_offset+j] >> 1;
-	intT v_offset = GA.offsets[v];
-	intT v_deg = GA.offsets[v+1] - v_offset;
-	if (v > i) {
-	  // Find all seagulls with center v and endpoint u
-	  for (intT k=0; k < v_deg; ++k) { 
-	    uintE u2 = GA.edges[v_offset+k] >> 1;
-	    if (u2 > i) wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
-	    else break;
-	  }
-	} 
+  uintE v = GA.edges[u_offset+j] >> 1;
+  intT v_offset = GA.offsets[v];
+  intT v_deg = GA.offsets[v+1] - v_offset;
+  if (v > i) {
+    // Find all seagulls with center v and endpoint u
+    for (intT k=0; k < v_deg; ++k) { 
+      uintE u2 = GA.edges[v_offset+k] >> 1;
+      if (u2 > i) wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
+      else break;
+    }
+  } 
       });
   }
 }
@@ -1625,7 +1625,7 @@ intT getNextWedgeIdx(graphCSR& GA, long max_wedges, intT curr_idx, long* wedge_i
 
 template<class wedgeCons, class T>
   intT getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, 
-		     intT curr_idx, long num_wedges, long* wedge_idxs) {
+         intT curr_idx, long num_wedges, long* wedge_idxs) {
   if (max_wedges >= num_wedges) {
     _getWedgesHash(wedges, GA, cons, num_wedges);
     return GA.n;
