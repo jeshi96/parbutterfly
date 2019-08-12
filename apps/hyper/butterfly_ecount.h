@@ -295,8 +295,6 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 
   // Retrieve frequency counts for all wedges with the same key
   // We need to first collate by v1, v2
-  //radix::intSort::blockSort<uintE>(wedges, num_wedges_f, UWFirst());
-  //radix::intSort::blockSort<uintE>(wedges, num_wedges_f, UWSecond());
   pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
@@ -345,14 +343,10 @@ intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   //getWedgesTimer.start();
   // Retrieve frequency counts for all wedges with the same key
   // We need to first collate by v1, v2
-  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_f, UWFirst());
-  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_f, UWSecond());
   pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
-  //getWedgesTimer.stop();
 
-  //rehashWedgesTimer.start();
   const size_t eltsPerCacheLine = 64/sizeof(long);
   parallel_for(long i=0; i < freq_pair.second - 1; ++i) {
     long num = freq_arr[i+1] - freq_arr[i] - 1;
@@ -363,7 +357,7 @@ intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
     });
     }
   }
-  //rehashWedgesTimer.stop();
+
   free(freq_arr);
   return wedges_pair.second;
 }
@@ -378,8 +372,6 @@ intT CountESortCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
 
   // Retrieve frequency counts for all wedges with the same key
   // We need to first collate
-  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_f, UWFirst());
-  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_f, UWSecond());
   pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
@@ -412,7 +404,6 @@ intT CountESortCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
   free(freq_arr);
 
   // now, we need to collate by our indices
-  //radix::parallelIntegerSort<uintE>(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleFirst<uintE,long>());
   pbbs::sample_sort(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>());
   auto b_freq_pair = getFreqs<long>(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
@@ -439,8 +430,6 @@ intT CountESort(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 
   // Retrieve frequency counts for all wedges with the same key
   // First, retrieve a list of indices where consecutive wedges have different keys
-  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWFirst());
-  //radix::parallelIntegerSort<uintE>(wedges, num_wedges_curr, UWSecond());
   pbbs::sample_sort(wedges, num_wedges_curr, UWedgeCmp());
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
 
@@ -466,12 +455,32 @@ intT CountESort(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 //********************************************************************************************
 //********************************************************************************************
 
+/*
+ *  Computes butterfly counts per edge, given a ranked graph and using
+ *  hash aggregation (for wedge aggregation), and atomic CAS (for butterfly
+ *  aggregation).
+ * 
+ *  cs         : Holds all array space needed, to be reused between batches
+ *  GA         : Ranked graph in CSR format
+ *  num_wedges : Number of wedges produced by the ranking
+ *  butterflies: Array to store butterfly counts per edge
+ *  max_wedges : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *               memory
+ *  wedges_idxs: Wedge indices to allow for wedge retrieval in parallel
+ *  curr_idx   : Denotes the vertex to start processing the batch from
+ * 
+ *  Returns an index specifying the next vertex that still needs to be processed
+ */
 intT CountEHash(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
-		intT curr_idx=0) {
+		            intT curr_idx=0) {
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
-  intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
+  // Construct a hash table to aggregate wedges
+  intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges,
+                                wedge_idxs);
 
+  // Retrieve aggregated wedge counts and store butterfly count per edge
+  // Iterate through all wedges with endpoint i
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
@@ -480,15 +489,18 @@ intT CountEHash(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
 	if (v > i) {
+    // Iterate through all wedges with endpoints i and u2, and center v
 	  for (intT k=0; k < v_deg; ++k) { 
 	    uintE u2 = GA.edges[v_offset+k] >> 1;
 	    if (u2 > i) {
+        // Find the number of wedges with endpoints i and u2
 	      long to_find = ((((long) i) *GA.n + (long) u2) << 1) + (GA.edges[v_offset+k] & 0b1);
 	      long num_butterflies = cs.wedges_hash.find(to_find).second;
 	      if (num_butterflies > 1) {
-		writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], num_butterflies - 1);
-		writeAdd(&butterflies[eltsPerCacheLine*(u_offset+j)], num_butterflies - 1);
-	      } // store on edges -- note must sum eti and ite versions in the end
+          // Store butterfly counts per edge, (i, v) and (u2, v)
+		      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], num_butterflies - 1);
+		      writeAdd(&butterflies[eltsPerCacheLine*(u_offset+j)], num_butterflies - 1);
+	      }
 	    }
 	    else break;
 	  }
@@ -498,38 +510,62 @@ intT CountEHash(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   return next_idx;
 }
 
+/*
+ *  Computes butterfly counts per edge, given a ranked graph and using
+ *  hash aggregation (for wedge and butterfly aggregation).
+ * 
+ *  cs         : Holds all array space needed, to be reused between batches
+ *  GA         : Ranked graph in CSR format
+ *  num_wedges : Number of wedges produced by the ranking
+ *  butterflies: Array to store butterfly counts per edge
+ *  max_wedges : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *               memory
+ *  wedges_idxs: Wedge indices to allow for wedge retrieval in parallel
+ *  curr_idx   : Denotes the vertex to start processing the batch from
+ * 
+ *  Returns an index specifying the next vertex that still needs to be processed
+ */
 intT CountEHashCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
-		  intT curr_idx=0) {
+		              intT curr_idx=0) {
   using T = pair<uintE, long>;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
-  intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges, wedge_idxs);
+  // Construct a hash table to aggregate wedges
+  intT next_idx = getWedgesHash(cs.wedges_hash, GA, UVertexPairIntRankCons(GA.n), max_wedges, curr_idx, num_wedges,
+                                wedge_idxs);
 
+  // Retrieve aggregated wedge counts and store butterfly count per edge
+  // Iterate through all wedges with endpoint i
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
-    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
+    parallel_for(intT j=0;j<u_deg;j++) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
-	if (v > i) { 
+	if (v > i) {
+    // Iterate through all wedges with endpoints i and u2, and center v
 	  for (intT k=0; k < v_deg; ++k) { 
 	    uintE u2 = GA.edges[v_offset+k] >> 1;
 	    if (u2 > i) {
-	      long to_find = ((((long) i) *GA.n + (long) u2) << 1) + (GA.edges[v_offset+k] & 0b1);
+        // Find the number of wedges with endpoints i and u2
+	      long to_find = ((((long) i) * GA.n + (long) u2) << 1) + (GA.edges[v_offset+k] & 0b1);
 	      long num_butterflies = cs.wedges_hash.find(to_find).second;
 	      if (num_butterflies > 1) {
-		cs.butterflies_hash.insert(T((v_offset+k), num_butterflies-1));
-		cs.butterflies_hash.insert(T((u_offset+j), num_butterflies-1));
-	      } // store on edges -- note must sum eti and ite versions in the end
+          // Insert butterfly counts per edge, (i, v) and (u2, v)
+	        cs.butterflies_hash.insert(T((v_offset+k), num_butterflies-1));
+        	cs.butterflies_hash.insert(T((u_offset+j), num_butterflies-1));
+	      }
 	    }
 	    else break;
 	  }
 	}
     }
   }
+
   size_t num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.wedges_seq_intp);
 
+  // Store butterfly counts per edge
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto butterfly_pair = cs.wedges_seq_intp.A[i];
     butterflies[eltsPerCacheLine*butterfly_pair.first] += butterfly_pair.second;
@@ -537,7 +573,30 @@ intT CountEHashCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
   return next_idx;
 }
 
-intT CountEHash(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long* butterflies_u, long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
+/*
+ *  Computes butterfly counts per edge, using by side ranking and and hash
+ *  aggregation (for wedge aggregation), and atomic CAS (for butterfly
+ *  aggregation).
+ * 
+ *  cs           : Holds all array space needed, to be reused between batches
+ *  GA           : Bipartite graph in CSR format
+ *  use_v        : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *                 produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  num_wedges   : Number of wedges produced by the specified bipartition
+ *  butterflies  : Array to store butterfly counts per edge, considering edges derived from one orientation (as given
+ *                 by use_v)
+ *  butterflies_u: Array to store butterfly counts per edge, considering edges derived from the other orientation (as 
+ *                 given by use_v)
+ *  max_wedges   : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *                 memory
+ *  wedges_idxs  : Wedge indices to allow for wedge retrieval in parallel
+ *  eti          : Array that converts edge indices from one orientation (as given by use_v) to the other
+ *  curr_idx     : Denotes the vertex to start processing the batch from
+ * 
+ *  Returns an index specifying the next vertex that still needs to be processed
+ */
+intT CountEHash(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long* butterflies_u,
+                long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -545,27 +604,28 @@ intT CountEHash(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  //getWedgesTimer.start();
+  // Construct a hash table to aggregate wedges
   UVertexPairIntCons cons = UVertexPairIntCons(nu);
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, cons, max_wedges, curr_idx, num_wedges, wedge_idxs);
-  //getWedgesTimer.stop();
 
-  //rehashWedgesTimer.start();
   const size_t eltsPerCacheLine = 64/sizeof(long);
-  // TODO modularize w/hashce
+
+  // Retrieve aggregated wedge counts and store butterfly count per edge
+  // Iterate through all wedges with endpoint i
   parallel_for (intT i = curr_idx; i < next_idx; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
-    //granular_for (j, 0, u_deg, (u_deg > 1000), {
-    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
+    parallel_for(intT j=0;j<u_deg;j++) {
 	uintE v = edgesU[u_offset + j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1] - v_offset;
-	// Find all seagulls with center v and endpoint u
+	// Iterate through all wedges with endpoints i and u2, and center v
 	for (intT k=0; k < v_deg; ++k) {
 	  uintE u2 = edgesV[v_offset + k];
 	  if (u2 < i) {
+      // Find the number of wedges with endpoints i and u2
 	    long num_butterflies = cs.wedges_hash.find(i*nu + u2).second - 1;
+      // Store butterfly counts per edge, (i, v) and (u2, v)
 	    writeAdd(&butterflies_u[eltsPerCacheLine*(u_offset + j)],num_butterflies); 
 	    writeAdd(&butterflies[eltsPerCacheLine*(v_offset + k)],num_butterflies); 
 	  }
@@ -573,39 +633,60 @@ intT CountEHash(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 	}
     }
   }
-  //rehashWedgesTimer.stop();
   
   return next_idx;
 }
 
-intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
+/*
+ *  Computes butterfly counts per edge, using by side ranking and hash
+ *  aggregation (for wedge and butterfly aggregation).
+ * 
+ *  cs         : Holds all array space needed, to be reused between batches
+ *  GA         : Bipartite graph in CSR format
+ *  use_v      : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *               produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  num_wedges : Number of wedges produced by the specified bipartition
+ *  butterflies: Array to store butterfly counts per edge
+ *  max_wedges : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *               memory
+ *  wedges_idxs: Wedge indices to allow for wedge retrieval in parallel
+ *  eti        : Array that converts edge indices from one orientation (as given by use_v) to the other
+ *  curr_idx   : Denotes the vertex to start processing the batch from
+ * 
+ *  Returns an index specifying the next vertex that still needs to be processed
+ */
+intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges,
+                  long* wedge_idxs, uintE* eti, intT curr_idx=0) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-  //getWedgesTimer.start();
+
+  // Construct a hash table to aggregate wedges
   UVertexPairIntCons cons = UVertexPairIntCons(nu);
   intT next_idx = getWedgesHash(cs.wedges_hash, GA, use_v, cons, max_wedges, curr_idx, num_wedges, wedge_idxs);
-  //getWedgesTimer.stop();
-  //rehashWedgesTimer.start();
+
+  // Retrieve aggregated wedge counts and store butterfly count per edge in another hash table
+  // Iterate through all wedges with endpoint i
   parallel_for (intT i = curr_idx; i < next_idx; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
-    //granular_for (j, 0, u_deg, (u_deg > 1000), {
-    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
+    parallel_for(intT j=0;j<u_deg;j++) {
 	uintE v = edgesU[u_offset + j];
 	intT v_offset = offsetsV[v];
 	intT v_deg = offsetsV[v+1] - v_offset;
-	// Find all seagulls with center v and endpoint u
+	// Iterate through all wedges with endpoints i and u2, and center v
 	for (intT k=0; k < v_deg; ++k) {
 	  uintE u2 = edgesV[v_offset + k];
 	  if (u2 < i) {
-	    long num_butterflies = cs.wedges_hash.find(((long) i)*nu + (long)u2).second - 1;
+      // Find the number of wedges with endpoints i and u2
+	    long num_butterflies = cs.wedges_hash.find(((long) i) * nu + (long) u2).second - 1;
+      // Insert butterfly counts per edge, (i, v) and (u2, v)
 	    if (num_butterflies > 0) {
-	    cs.butterflies_hash.insert(make_pair(eti[u_offset + j], num_butterflies));
-	    cs.butterflies_hash.insert(make_pair(v_offset + k, num_butterflies));
+	      cs.butterflies_hash.insert(make_pair(eti[u_offset + j], num_butterflies));
+	      cs.butterflies_hash.insert(make_pair(v_offset + k, num_butterflies));
 	    }
 	  }
 	  else break;
@@ -614,8 +695,9 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   }
 
   size_t num_wedges_seq = cs.butterflies_hash.entries_no_init(cs.wedges_seq_intp);
-
   const size_t eltsPerCacheLine = 64/sizeof(long);
+
+  // Store butterfly counts per edge
   parallel_for(long i=0; i < num_wedges_seq; ++i) {
     auto butterflies_pair = cs.wedges_seq_intp.A[i];
     butterflies[eltsPerCacheLine*butterflies_pair.first] += butterflies_pair.second;
