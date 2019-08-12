@@ -692,6 +692,7 @@ pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, 
 //********************************************************************************************
 //********************************************************************************************
 
+// Determines if color of an indicated edge is equal to specified color
 template <class E>
 struct clrF { 
   uintE* edges; uintT offset; uintT color; uintT* colors;
@@ -702,6 +703,7 @@ struct clrF {
   }
 };
 
+// Determines if color of an indicated edges is 0
 template <class E>
 struct eF { 
   uintT offset; uintE* colors;
@@ -711,8 +713,10 @@ struct eF {
   }
 };
 
+// Returns true if value is not max
 struct nonMaxUintTF{bool operator() (uintT &a) {return (a != UINT_T_MAX);}};
 
+// Determines if color of an indicated vertex is equal to the specified color
 struct isSameColor{
   isSameColor(uintT mycolor, uintT *colors) : colors_(colors), me_(mycolor) {};
   bool operator () (uintT v) {return me_ == colors_[v];};
@@ -720,12 +724,13 @@ struct isSameColor{
   uintT *colors_;
 };
 
-struct isZeroF{
-  uintT offset; uintE* colors;
-  isZeroF(uintT _offset, uintE *_colors) : offset(_offset), colors(_colors) {};
-  bool operator () (uintT i) {return colors[offset+i] == 0;};
-};
-
+/*
+ *  Removes all singleton vertices from G.
+ * 
+ *  G: Bipartite graph in CSR format
+ * 
+ *  Returns a bipartite graph in CSR format with no singleton vertices.
+ */
 bipartiteCSR delZeroDeg(bipartiteCSR& G) {
   uintT* offsetsV_f = newA(uintT,G.nv+1);
   uintT* offsetsU_f = newA(uintT,G.nu+1);
@@ -733,6 +738,8 @@ bipartiteCSR delZeroDeg(bipartiteCSR& G) {
   uintT* offsetsU_ff = newA(uintT,G.nu+1);
   uintE* edgesV = newA(uintE, G.numEdges);
   uintE* edgesU = newA(uintE, G.numEdges);
+
+  // Mark singleton vertices
   parallel_for(long i=0; i < G.nv; ++i) {
     if (G.offsetsV[i] == G.offsetsV[i+1]) offsetsV_f[i] = UINT_T_MAX; 
     else offsetsV_f[i] = i;
@@ -741,13 +748,19 @@ bipartiteCSR delZeroDeg(bipartiteCSR& G) {
     if (G.offsetsU[i] == G.offsetsU[i+1]) offsetsU_f[i] = UINT_T_MAX;
     else offsetsU_f[i] = i;
   }
+
+  // Filter out singleton vertices, leaving a list of vertices to keep
   long num_vff = sequence::filter(offsetsV_f,offsetsV_ff,G.nv,nonMaxUintTF());
   long num_uff = sequence::filter(offsetsU_f,offsetsU_ff,G.nu,nonMaxUintTF());
+
+  // Create a mapping to rename vertices, so that indices are incremental
   parallel_for(long i=0; i < num_vff; ++i) {offsetsV_f[offsetsV_ff[i]] = i;}
   parallel_for(long i=0; i < num_uff; ++i) {offsetsU_f[offsetsU_ff[i]] = i;}
+  // Rename all neighbors using the new mapping
   parallel_for(long i=0; i < G.numEdges; ++i) { edgesV[i] = offsetsU_f[G.edgesV[i]]; }
   parallel_for(long i=0; i < G.numEdges; ++i) { edgesU[i] = offsetsV_f[G.edgesU[i]]; }
-  // reset offsets
+
+  // Create new offsets list for our renamed vertices
   parallel_for(long i=0; i < num_vff; ++i) {
     offsetsV_ff[i] = G.offsetsV[offsetsV_ff[i]];
   }
@@ -761,7 +774,17 @@ bipartiteCSR delZeroDeg(bipartiteCSR& G) {
   return bipartiteCSR(offsetsV_ff, offsetsU_ff, edgesV, edgesU, num_vff, num_uff, G.numEdges);
 }
 
+/*
+ *  Edge-sparsify G.
+ * 
+ *  G    : Bipartite graph in CSR format
+ *  denom: Edges in G are kept with probability 1/denom
+ *  seed : Random seed
+ * 
+ *  Returns a sparsified bipartite graph in CSR format.
+ */
 bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
+  // Determine which edges to keep by coloring with denom colors
   uintE numColors = max<uintE>(1,denom);
   uintE* colorsV = newA(uintE,G.numEdges);
   uintE* colorsU = newA(uintE,G.numEdges);
@@ -770,12 +793,14 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     uintT v_deg = G.offsetsV[i+1] - v_offset;
     parallel_for(long j=0; j < v_deg; ++j) {
       uintT u = G.edgesV[v_offset + j];
+      // Create a randomized color
       long concat = i + 0x9e3779b9 + (seed << 6) + (seed >> 2);
       concat ^= u + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-      //long concat = (i + u) * (i + u + 1) / 2 + i;
       colorsV[v_offset + j] = hashInt((ulong) seed + concat) % numColors;
     }
   }
+  // Keep colors indexed from G.U by searching for the corresponding edge
+  // indexed from G.V
   parallel_for(intT i=0; i < G.nu; ++i) {
     intT u_offset = G.offsetsU[i];
     intT u_deg = G.offsetsU[i+1] - u_offset;
@@ -783,7 +808,7 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
       uintE v = G.edgesU[u_offset + j];
       intT v_offset = G.offsetsV[v];
       intT v_deg = G.offsetsV[v+1] - v_offset;
-      // find k such that edgesV[v_offset + k] = i
+      // Find find_idx such that edgesV[v_offset + find_idx] = i
       auto idx_map = make_in_imap<uintE>(v_deg, [&] (size_t k) { return G.edgesV[v_offset + k]; });
       auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
       size_t find_idx = pbbs::binary_search(idx_map, i, lte);
@@ -791,13 +816,15 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
       });
   }
 
+  // Compute new offsets after filtering out edges that aren't colored 0
   uintT* offsetsV = newA(uintT,G.nv+1);
   uintT* offsetsU = newA(uintT,G.nu+1);
   offsetsV[G.nv] = 0; offsetsU[G.nu] = 0;
   parallel_for(long i=0; i < G.nv; ++i) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
-    if (v_deg > 10000) offsetsV[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), eF<uintT>(v_offset, colorsV));
+    if (v_deg > 10000) offsetsV[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(),
+                                                             eF<uintT>(v_offset, colorsV));
     else {
       offsetsV[i] = 0;
       for(long j=0; j < v_deg; ++j) {
@@ -808,7 +835,8 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   parallel_for(long i=0; i < G.nu; ++i) {
     uintT u_offset = G.offsetsU[i];
     uintT u_deg = G.offsetsU[i+1] - u_offset;
-    if (u_deg > 10000) offsetsU[i] = sequence::reduce<uintT>((uintT) 0, u_deg, addF<uintT>(), eF<uintT>(u_offset, colorsU));
+    if (u_deg > 10000) offsetsU[i] = sequence::reduce<uintT>((uintT) 0, u_deg, addF<uintT>(),
+                                                             eF<uintT>(u_offset, colorsU));
     else {
       offsetsU[i] = 0;
       for(long j=0; j < u_deg; ++j) {
@@ -818,55 +846,74 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   }
   long mv = sequence::plusScan(offsetsV,offsetsV,G.nv+1);
   long mu = sequence::plusScan(offsetsU,offsetsU,G.nu+1);
+
+  // Compute new adjacency lists after filtering out edges that aren't colored 0
   uintE* edgesV = newA(uintE,mv);
   uintE* edgesU = newA(uintE,mu);
   parallel_for(long i=0; i<G.nv; ++i) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
     uintT v_clr_offset = offsetsV[i];
-    //if (v_deg > 10000) sequence::filter(&G.edgesV[v_offset],&edgesV[v_clr_offset],v_deg,isZeroF(v_offset, colorsV));
-    //else {
       long idx = 0;
       for(long j=0; j < v_deg; ++j) {
         uintE u = G.edgesV[v_offset + j];
-        if (colorsV[v_offset + j] == 0) {edgesV[v_clr_offset + idx] = u; idx++;}
+        if (colorsV[v_offset + j] == 0) {
+          edgesV[v_clr_offset + idx] = u;
+          idx++;
+        }
       }
-    //}
   }
   parallel_for(long i=0; i<G.nu; ++i) {
     uintT u_offset = G.offsetsU[i];
     uintT u_deg = G.offsetsU[i+1] - u_offset;
     uintT u_clr_offset = offsetsU[i];
-    //if (u_deg > 10000) sequence::filter(&G.edgesU[u_offset],&edgesU[u_clr_offset],u_deg,isZeroF(u_offset, colorsU));
-    //else {
       long idx = 0;
       for(long j=0; j < u_deg; ++j) {
         uintE v = G.edgesU[u_offset + j];
-        if (colorsU[u_offset + j] == 0) {edgesU[u_clr_offset + idx] = v; idx++;}
+        if (colorsU[u_offset + j] == 0) {
+          edgesU[u_clr_offset + idx] = v;
+          idx++;
+        }
       }
-    //}
   }
   free(colorsV); free(colorsU);
+
+  // Create new bipartite graph with filtered edges
   auto tmp = bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);
-  auto ret = delZeroDeg(tmp); tmp.del();
+  // Remove singleton vertices
+  auto ret = delZeroDeg(tmp);
+  tmp.del();
+
   return ret;
 }
 
+/*
+ *  Color-sparsify G.
+ * 
+ *  G    : Bipartite graph in CSR format
+ *  denom: Number of colors used to color G
+ *  seed : Random seed
+ * 
+ *  Returns a sparsified bipartite graph in CSR format.
+ */
 bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   double p = 1/denom;
+  // Color vertices with denom colors
   uintT numColors = max<uintT>(1,denom);
   uintT* colorsV = newA(uintT,G.nv);
   uintT* colorsU = newA(uintT, G.nu);
   parallel_for(long i=0;i<G.nv;i++) colorsV[i] = hashInt((ulong) seed+i) % numColors;
   parallel_for(long i=0;i<G.nu;i++) colorsU[i] = hashInt((ulong) seed+i) % numColors;
 
+  // Compute new offsets after filtering out edges whose endpoints don't share the same color
   uintT* offsetsV = newA(uintT,G.nv+1);
   uintT* offsetsU = newA(uintT,G.nu+1);
   offsetsV[G.nv] = 0; offsetsU[G.nu] = 0;
   parallel_for(long i=0; i < G.nv; ++i) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
-    if (v_deg > 10000) offsetsV[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), clrF<uintT>(G.edgesV, v_offset, colorsV[i], colorsU));
+    if (v_deg > 10000) offsetsV[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(),
+                                                             clrF<uintT>(G.edgesV, v_offset, colorsV[i], colorsU));
     else {
       offsetsV[i] = 0;
       for(long j=0; j < v_deg; ++j) {
@@ -877,7 +924,8 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   parallel_for(long i=0; i < G.nu; ++i) {
     uintT v_offset = G.offsetsU[i];
     uintT v_deg = G.offsetsU[i+1] - v_offset;
-    if (v_deg > 10000) offsetsU[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(), clrF<uintT>(G.edgesU, v_offset, colorsU[i], colorsV));
+    if (v_deg > 10000) offsetsU[i] = sequence::reduce<uintT>((uintT) 0, v_deg, addF<uintT>(),
+                                                             clrF<uintT>(G.edgesU, v_offset, colorsU[i], colorsV));
     else {
       offsetsU[i] = 0;
       for(long j=0; j < v_deg; ++j) {
@@ -888,18 +936,24 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
   }
   long mv = sequence::plusScan(offsetsV,offsetsV,G.nv+1);
   long mu = sequence::plusScan(offsetsU,offsetsU,G.nu+1);
+
+  // Compute new adjacency lists after filtering out edges whose endpoints don't share the same color
   uintE* edgesV = newA(uintE,mv);
   uintE* edgesU = newA(uintE,mu);
   parallel_for(long i=0; i<G.nv; ++i) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
     uintT v_clr_offset = offsetsV[i];
-    if (v_deg > 10000) sequence::filter(&G.edgesV[v_offset],&edgesV[v_clr_offset],v_deg,isSameColor(colorsV[i],colorsU));
+    if (v_deg > 10000) sequence::filter(&G.edgesV[v_offset], &edgesV[v_clr_offset], v_deg,
+                                        isSameColor(colorsV[i],colorsU));
     else {
       long idx = 0;
       for(long j=0; j < v_deg; ++j) {
         uintE u = G.edgesV[v_offset + j];
-        if (colorsU[u] == colorsV[i]) {edgesV[v_clr_offset + idx] = u; idx++;}
+        if (colorsU[u] == colorsV[i]) {
+          edgesV[v_clr_offset + idx] = u;
+          idx++;
+        }
       }
     }
   }
@@ -907,21 +961,40 @@ bipartiteCSR clrSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     uintT v_offset = G.offsetsU[i];
     uintT v_deg = G.offsetsU[i+1] - v_offset;
     uintT v_clr_offset = offsetsU[i];
-    if (v_deg > 10000) sequence::filter(&G.edgesU[v_offset],&edgesU[v_clr_offset],v_deg,isSameColor(colorsU[i],colorsV));
+    if (v_deg > 10000) sequence::filter(&G.edgesU[v_offset], &edgesU[v_clr_offset], v_deg,
+                                        isSameColor(colorsU[i],colorsV));
     else {
       long idx = 0;
       for(long j=0; j < v_deg; ++j) {
         uintE u = G.edgesU[v_offset + j];
-        if (colorsV[u] == colorsU[i]) {edgesU[v_clr_offset + idx] = u; idx++;}
+        if (colorsV[u] == colorsU[i]) {
+          edgesU[v_clr_offset + idx] = u;
+          idx++;
+        }
       }
     }
   }
   free(colorsV); free(colorsU);
+
+  // Create new bipartite graph with filtered edges
   auto tmp = bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,G.nv,G.nu,mv);
-  auto ret = delZeroDeg(tmp); tmp.del();
+  // Remove singleton vertices
+  auto ret = delZeroDeg(tmp);
+  tmp.del();
+
   return ret;
 }
 
+//********************************************************************************************
+//********************************************************************************************
+
+/*
+ *  Read bipartite graph from file fname, in Ligra hypergraph format.
+ * 
+ *  fname: File containing bipartite graph
+ * 
+ *  Returns a bipartite graph in CSR format.
+ */
 bipartiteCSR readBipartite(char* fname) {
   words W;
   _seq<char> S = readStringFromFile(fname);
@@ -952,17 +1025,21 @@ bipartiteCSR readBipartite(char* fname) {
   offsetsV[nv] = mv;
   
   {parallel_for(long i=0; i<mv; i++) {
-      edgesV[i] = atol(W.Strings[i+nv+5]);
-      if(edgesV[i] < 0 || edgesV[i] >= nu) { cout << "edgesV out of range: nu = " << nu << " edge = " << edgesV[i] << endl; exit(0); }
-    }}
+    edgesV[i] = atol(W.Strings[i+nv+5]);
+    if(edgesV[i] < 0 || edgesV[i] >= nu) {
+      cout << "edgesV out of range: nu = " << nu << " edge = " << edgesV[i] << endl; exit(0);
+    }
+  }}
 
   {parallel_for(long i=0; i < nu; i++) offsetsU[i] = atol(W.Strings[i + nv + mv + 5]);}
   offsetsU[nu] = mu;
   
   {parallel_for(long i=0; i<mu; i++) {
-      edgesU[i] = atol(W.Strings[i+nv+mv+nu+5]);
-      if(edgesU[i] < 0 || edgesU[i] >= nv) { cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0); }
-    }}
+    edgesU[i] = atol(W.Strings[i+nv+mv+nu+5]);
+    if(edgesU[i] < 0 || edgesU[i] >= nv) {
+      cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0);
+    }
+  }}
 
   S.del();
   free(W.Strings);
@@ -970,45 +1047,27 @@ bipartiteCSR readBipartite(char* fname) {
   return bipartiteCSR(offsetsV,offsetsU,edgesV,edgesU,nv,nu,mv);  
 }
 
-// Takes the elements of a vertex array, and returns the out degree choose 2
+// Returns the outdegree choose 2 of a given vertex
 template <class E>
 struct wedgeF { 
   uintT* offsets;
-wedgeF(uintT* _offsets) : offsets(_offsets) {}
+  wedgeF(uintT* _offsets) : offsets(_offsets) {}
   inline E operator() (const uintT& i) const {
     uintE v_deg = offsets[i+1]-offsets[i];
     return (E) ((v_deg * (v_deg-1)) / 2); 
   }
 };
 
-long* computeWorkPrefixSum(bipartiteCSR & GA, bool use_v) {
-  const long nv = use_v ? GA.nv : GA.nu;
-  const long nu = use_v ? GA.nu : GA.nv;
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
-  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  long* workPrefixSum;
-  workPrefixSum = newA(long,nu);
-  parallel_for(intT i=0;i<nu;i++) {
-    long u_work = 0;
-    intT u_offset = offsetsU[i];
-    intT u_deg = offsetsU[i+1]-offsetsU[i];
-    for(intT j=0; j<u_deg;j++) {
-      uintE v = edgesU[u_offset+j];
-      intT v_offset = offsetsV[v];
-      intT v_deg = offsetsV[v+1]-offsetsV[v];
-
-      u_work += offsetsV[v+1]-offsetsV[v];
-    }
-    workPrefixSum[i] = u_work;
-  }
-  sequence::plusScan(workPrefixSum,workPrefixSum,nu);
-  return workPrefixSum;
-}
-
-tuple<bool,long> cmpWedgeCounts(bipartiteCSR & GA, long type=0) {
+/*
+ *  Computes the number of wedges given by each bipartition.
+ * 
+ *  GA: Bipartite graph in CSR format
+ * 
+ *  Returns a bool indicating which bipartition gives the least number of wedges
+ *  when considered as center vertices (true means GA.V, false means GA.U),
+ *  and the corresponding number of wedges produced.
+ */
+tuple<bool,long> cmpWedgeCounts(bipartiteCSR & GA) {
   const long nv = GA.nv, nu = GA.nu;
   long num_wedges_v = sequence::reduce<long>((long) 0, nv, addF<long>(), wedgeF<long>(GA.offsetsV));
   long num_wedges_u = sequence::reduce<long>((long) 0, nu, addF<long>(), wedgeF<long>(GA.offsetsU));
@@ -1016,22 +1075,6 @@ tuple<bool,long> cmpWedgeCounts(bipartiteCSR & GA, long type=0) {
   return make_tuple((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
 }
 
-pair<bool,long> cmpWedgeCountsSeq(bipartiteCSR & GA) {
-  const long nv = GA.nv, nu = GA.nu;
-
-  long num_wedges_v = 0;
-  for(long i=0; i < nv; ++i) {
-    uintE deg_v = GA.offsetsV[i+1]-GA.offsetsV[i];
-    num_wedges_v += deg_v * (deg_v - 1) / 2;
-  }
-
-  long num_wedges_u = 0;
-  for(long i=0; i < nu; ++i) {
-    uintE deg_u = GA.offsetsU[i+1]-GA.offsetsU[i];
-    num_wedges_u += deg_u * (deg_u - 1) / 2;
-  }
-  return make_pair((num_wedges_v <= num_wedges_u), num_wedges_v <= num_wedges_u ? num_wedges_v : num_wedges_u);
-}
 //***********************************************************************************************
 //***********************************************************************************************
 
