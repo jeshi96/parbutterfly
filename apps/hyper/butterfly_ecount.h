@@ -1601,7 +1601,7 @@ long* CountERank(uintE* eti, bipartiteCSR& GA, bool use_v, long num_wedges, long
   if (type != BATCHS && type != SERIAL) free(wedge_idxs);
 
   #ifdef VERBOSE
-  if (type != BATCHS && type != BATCHWA && type != SERIAL) t_time2.reportTotal("counting")
+  if (type != BATCHS && type != BATCHWA && type != SERIAL) t_time2.reportTotal("counting");
   timer t_convert;
   t_convert.start();
   #endif

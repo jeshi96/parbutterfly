@@ -116,8 +116,8 @@ struct UWSecond { uintE operator() (const UWedge& x) {return x.v2;}};
 // Tuple functions
 template<class T, class X>
 struct tupleFirst {T operator() (tuple<T,X> a) {return get<0>(a);} };
-struct nonZeroF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}}
-struct greaterOneLongF{inline bool operator() (tuple<long,uintE> &a) {return (get<1>(a) > 1);}}
+struct nonZeroF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}};
+struct greaterOneLongF{inline bool operator() (tuple<long,uintE> &a) {return (get<1>(a) > 1);}};
 struct nonMaxTupleF{
   inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != UINT_E_MAX || get<0>(a) != UINT_E_MAX);}
 };
