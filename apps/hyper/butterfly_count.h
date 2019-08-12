@@ -1388,13 +1388,13 @@ long* CountRank(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   // Initialize array to hold butterfly counts per vertex, as indexed by rank
   const size_t eltsPerCacheLine = 64/sizeof(long);
   long* rank_butterflies = newA(long,eltsPerCacheLine*g.n);
-  granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
   #ifdef VERBOSE
   t_malloc.reportTotal("preprocess (malloc)");
   timer t_time;
   t_time.start();
   #endif
+  granular_for(i,0,g.n,g.n > 10000, { rank_butterflies[eltsPerCacheLine*i] = 0; });
 
   // Compute wedge indices so that wedges can be stored in parallel (for any
   // aggregation type except simple batching)
