@@ -67,4 +67,5 @@ apps/hyper/.vscode/
 lib/.vscode/
 apps/hyper/out.*
 apps/hyper/a.out
+.DS_Store
 apps/hyper/._butterfly_count_total.h
