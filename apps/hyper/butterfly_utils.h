@@ -374,12 +374,12 @@ struct BipartiteProp {
   bipartiteCSR GA;
   pbbs::hist_table<K, Val> ht;
 
-BipartiteProp(bipartiteCSR& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
-  if (ht_size == numeric_limits<size_t>::max()) {
-    ht_size = 1L << pbbs::log2_up(GA.numEdges/20);
-  } else { ht_size = 1L << pbbs::log2_up(ht_size); }
-  ht = pbbs::hist_table<K, Val>(_empty, ht_size);
-}
+  BipartiteProp(bipartiteCSR& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
+    if (ht_size == numeric_limits<size_t>::max()) {
+      ht_size = 1L << pbbs::log2_up(GA.numEdges/20);
+    } else { ht_size = 1L << pbbs::log2_up(ht_size); }
+    ht = pbbs::hist_table<K, Val>(_empty, ht_size);
+  }
 
   /*
    *  Collates the one-hop neighbors of vertices in vs, using reduce_f to
@@ -1084,10 +1084,10 @@ struct nonMaxLongF{bool operator() (long &a) {return (a != LONG_MAX);}};
 /*
  *  Given a sorted array objs, retrieve indices of where consecutive objects are
  *  not equal (as given by eq) to give frequency counts of each object in objs.
- *  In other words, if we let arr be the returned array, arr[i+1] - arr[i] is the 
- *  frequency of objs[arr[i]] (objs[arr[i]] = ... = objs[arr[i+1]-1]).
- *  Iterating from 0 (inclusive) to the returned length - 1 (exclusive) will give
- *  all frequency counts.
+ *  In other words, if we let arr be the returned array, arr[i+1] - arr[i] is
+ *  the frequency of objs[arr[i]] (objs[arr[i]] = ... = objs[arr[i+1]-1]).
+ *  Iterating from 0 (inclusive) to the returned length - 1 (exclusive) will
+ *  give all frequency counts.
  * 
  *  objs: Objects to count frequencies of
  *  num : Length of objs
@@ -1097,7 +1097,7 @@ struct nonMaxLongF{bool operator() (long &a) {return (a != LONG_MAX);}};
  *  nonF: Function that filters out all elements equal to maxL
  *  sort: Deprecated
  * 
- *  Returns: Array and length of array with frequency counts (as described above)
+ *  Returns frequency array and length of array (as described above)
  */
 template <class L, class T, class Cmp, class Eq, class F>
 pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool sort=true) {
@@ -1118,15 +1118,39 @@ pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool 
   return make_pair(freqs_f, num_freqs_f);
 }
 
+/*
+ *  Given a sorted array objs, retrieve indices of where consecutive objects are
+ *  not equal (as given by eq) to give frequency counts of each object in objs.
+ *  In other words, if we let arr be the returned array,
+ *  get<1>(arr[i+1]) - get<1>(arr[i]) is the frequency of get<0>(arr[i]).
+ *  Note that the first element of each tuple in the returned array is the
+ *  original object, with opt applied. Frequency counts are given using opcount
+ *  and opuinte, as described below.
+ *  Iterating from 0 (inclusive) to the returned length - 1 (exclusive) will
+ *  give all frequency counts.
+ * 
+ *  objs   : Objects to count frequencies of
+ *  num    : Length of objs
+ *  cmp    : Comparator for T objects
+ *  eq     : Equality comparator for T objects
+ *  sort   : Deprecated
+ *  opt    : Function applied to each object in objs to save in a tuple returned frequency array
+ *  opuinte: Function to transform total frequency count and save in a tuple in returned frequency array
+ *  opcount: Function to apply to object to increment frequency counts by (default is to add 1)
+ * 
+ *  Returns frequency array and length of array (as described above)
+ */
 template <class L, class S, class T, class Cmp, class Eq, class OpT, class OpuintE, class OpCount>
-  pair<tuple<S,L>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
-               OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
+pair<tuple<S,L>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
+                                     OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
   using X = tuple<S,L>;
   X* freqs = newA(X, num);
   T prev = objs[0];
   T curr = objs[0];
   long idx = 0;
   long count = opcount(prev);
+
+  // Retrieve frequency counts of each object
   for(long i=1; i < num; ++i) {
     curr = objs[i];
     if (!eq(prev, curr)) {
@@ -1140,24 +1164,33 @@ template <class L, class S, class T, class Cmp, class Eq, class OpT, class Opuin
     }
   }
   freqs[idx] = make_tuple(opt(curr), opuinte(count));
+
   return make_pair(freqs, idx + 1);
 }
 
 //********************************************************************************************
 //********************************************************************************************
 
+/*
+ *  Computes indices of all wedges originating from each vertex, so that
+ *  they can be retrieved in parallel.
+ * 
+ *  G: Ranked graph in CSR format
+ * 
+ *  Returns wedge indices to allow for wedge retrieval in parallel
+ */
 long* countWedgesScan(graphCSR& G) {
   long* idxs = newA(long, G.n + 1);
   idxs[G.n] = 0;
-
   using T = long*;
   T* nbhd_idxs = newA(T, G.n);
-
+  // Iterate through each vertex i
   parallel_for(intT i=0; i < G.n; ++i) {
     idxs[i] = 0;
     intT offset = G.offsets[i];
     intT deg = G.offsets[i+1] - offset;
 
+    // Construct a new array to keep track of two-hop degrees
     nbhd_idxs[i] = newA(long, deg + 1);
     (nbhd_idxs[i])[deg] = 0;
 
@@ -1167,22 +1200,37 @@ long* countWedgesScan(graphCSR& G) {
       intT v_offset = G.offsets[v];
       intT v_deg = G.offsets[v+1] - v_offset;
       if (v > i) {
+  // Iterate through all two-hop neighbors and increment degrees
   for (intT k = 0; k < v_deg; ++k) {
     if ((G.edges[v_offset + k] >> 1) > i) (nbhd_idxs[i][j])++;
     else break;
   }
       }
     }
+
+    // Compute total number of two-hop neighbors
     idxs[i] = sequence::plusReduce(nbhd_idxs[i], deg + 1);
     free(nbhd_idxs[i]);
   }
   free(nbhd_idxs);
 
+  // Use a scan to compute indices
   sequence::plusScan(idxs, idxs, G.n + 1);
   return idxs;
 }
 
-//TODO we don't use nbhrs or save nbhrs -- delete from everything
+/*
+ *  Computes indices of all wedges originating from each vertex, so that
+ *  they can be retrieved in parallel.
+ * 
+ *  GA   : Bipartite graph in CSR format
+ *  use_v: Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U produces
+ *         the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  half : Denotes whether to consider all two-hop neighbors (including duplicates, i.e. u is a two-hop neighbor of v 
+ *         and as such v is also a two-hop neighbor of u), or only distinct two-hop neighbors
+ * 
+ *  Returns wedge indices to allow for wedge retrieval in parallel
+ */
 long* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -1196,93 +1244,110 @@ long* countWedgesScan(bipartiteCSR& GA, bool use_v, bool half=false) {
   using T = long*;
   T* nbhd_idxs = newA(T, nu);
 
+  // Iterate through each vertex i
   parallel_for(intT i=0; i < nu; ++i) {
     idxs[i] = 0;
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
 
+    // Construct a new array to keep track of two-hop degrees
     nbhd_idxs[i] = newA(long, u_deg + 1);
-    parallel_for(intT j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;} //JS: granular_for
+    parallel_for(intT j=0; j < u_deg+1; ++j) {(nbhd_idxs[i])[j] = 0;}
 
-    parallel_for(intT j=0; j < u_deg; ++j) { //TODO can parallelize this too technically //JS: granular_for
+    // Iterate through all two-hop neighbors and increment degrees
+    parallel_for(intT j=0; j < u_deg; ++j) {
       if (!half) {
         uintE v = edgesU[u_offset + j];
-        (nbhd_idxs[i])[j] = offsetsV[v+1] - offsetsV[v] - 1;//V[U[i].getOutNeighbor(j)].getOutDegree() - 1;
+        (nbhd_idxs[i])[j] = offsetsV[v+1] - offsetsV[v] - 1;
       }
       else {
         (nbhd_idxs[i])[j] = 0;
         uintE v = edgesU[u_offset + j];
         intT v_offset = offsetsV[v];
         intT v_deg = offsetsV[v+1] - v_offset;
-        for (intT k = 0; k < v_deg; ++k) { //TODO can parallelize this too technically
+        for (intT k = 0; k < v_deg; ++k) {
           if (edgesV[v_offset + k] < i) nbhd_idxs[i][j] ++;
           else break;
         }
       }
     }
 
+    // Compute total number of two-hop neighbors
     idxs[i] = sequence::plusReduce(nbhd_idxs[i], u_deg + 1);
     free(nbhd_idxs[i]);
   }
   free(nbhd_idxs);
+
+  // Use a scan to compute indices
   sequence::plusScan(idxs, idxs, nu + 1);
 
   return idxs;
 }
 
+//********************************************************************************************
+//********************************************************************************************
+
+// Allocates and keeps all space needed for edge counting algorithms, so that
+// space can be reused between batches
 struct CountESpace {
   CountType type; long nu; bool rank;
-  // for sort: 0, 1
+  // Sort, ASort
   _seq<UWedge> wedges_seq_uw;
-  // for sort: 1; for hist: 6
+  // Sort, Hist
   _seq<tuple<uintE,long>> butterflies_seq_intt;
-  // for hist: 6
+  // Hist
   pbbsa::sequence<tuple<uintE, long>> tmp_uint;
   pbbsa::sequence<tuple<uintE, long>> out_uint;
-  // for hist: 4
+  // AHist
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
   _seq<long> wedges_seq_int;
-  // for hist: 4, for hash: 2, 3
+  // AHist, Hash, AHash
   sparseAdditiveSet<long, long> wedges_hash;
-  // for hash: 3
+  // Hash
   _seq<pair<long, long>> wedges_seq_intp;
   sparseAdditiveSet<long, long> butterflies_hash;
 
 
-CountESpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
-  using T = pair<long,long>;
-  using X = tuple<uintE,long>;
-  using E = pair<long, uintE>;
-  if (type == HASH || type == AHASH) {
-    wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-    if (type == HASH) {
-      wedges_seq_intp = _seq<T>(newA(T, nu), nu);
-      butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
+  CountESpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
+    using T = pair<long,long>;
+    using X = tuple<uintE,long>;
+    using E = pair<long, uintE>;
+    if (type == HASH || type == AHASH) {
+      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
+      if (type == HASH) {
+        wedges_seq_intp = _seq<T>(newA(T, nu), nu);
+        butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
+      }
+    }
+    else if (type == HIST || type == AHIST) {
+      tmp = pbbsa::sequence<tuple<long, uintE>>();
+      out = pbbsa::sequence<tuple<long, uintE>>();
+      wedges_seq_int = _seq<long>(newA(long, nu), nu);
+      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
+      if (type == HIST) {
+        butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+        tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
+        out_uint = pbbsa::sequence<tuple<uintE, long>>();
+      }
+    }
+    else if (type == SORT || type == ASORT) {
+      if (type == SORT) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+     wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
     }
   }
-  else if (type == HIST || type == AHIST) {
-    tmp = pbbsa::sequence<tuple<long, uintE>>();
-    out = pbbsa::sequence<tuple<long, uintE>>();
-    wedges_seq_int = _seq<long>(newA(long, nu), nu);
-    wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-    if (type == HIST) {
-      butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
-      tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
-      out_uint = pbbsa::sequence<tuple<uintE, long>>();
-    }
-  }
-  else if (type == SORT || type == ASORT) {
-    if (type == SORT) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
-    wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
-  }
-}
 
+  /*
+   *  Clears necessary space, to be reused.
+   */
   void clear() {
     if (type == HASH || type == AHASH || type == HIST || type == AHIST) wedges_hash.clear();
     if (type == HASH) butterflies_hash.clear();
   }
 
+  /*
+   *  Frees all space.
+   */
   void del() {
     if (type == HASH || type == AHASH) {
       wedges_hash.del();
@@ -1300,60 +1365,65 @@ CountESpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(
   }
 };
 
+// Allocates and keeps all space needed for vertex counting algorithms, so that
+// space can be reused between batches
 struct CountSpace {
   CountType type; long nu; bool rank;
-  // for hash: 2, 3
+  // Hash, AHash
   sparseAdditiveSet<long, long> wedges_hash;
   _seq<pair<long,long>> wedges_seq_intp;
-  // for hash: 3
+  // Hash
   sparseAdditiveSet<long, long> butterflies_hash;
   _seq<pair<long,long>> butterflies_seq_intp;
-  // for hist: 4, 6
+  // Hist, AHist
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
   _seq<long> wedges_seq_int;
-  // for hist: 6
+  // Hist
   _seq<tuple<uintE,long>> butterflies_seq_intt;
   pbbsa::sequence<tuple<uintE, long>> tmp_uint;
   pbbsa::sequence<tuple<uintE, long>> out_uint;
-  // for sort: 0, 1
+  // Sort, ASort
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<UWedge> wedges_seq_uw;
 
-CountSpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
-  using T = pair<uintE,long>;
-  using X = tuple<uintE,uintE>;
-  using E = pair<long,long>;
-  using L = tuple<uintE,long>;
-  if (type == HASH || type == AHASH) {
-    wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-    wedges_seq_intp = _seq<E>(newA(E, nu), nu);
-    if (type == HASH) {
-      butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
-      butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
-    }
-  }
-  else if (type == HIST || type == AHIST) {
-    tmp = pbbsa::sequence<tuple<long, uintE>>();
-    out = pbbsa::sequence<tuple<long, uintE>>();
-    wedges_seq_int = _seq<long>(newA(long, nu), nu);
-    if (rank) {
+  CountSpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
+    using T = pair<uintE,long>;
+    using X = tuple<uintE,uintE>;
+    using E = pair<long,long>;
+    using L = tuple<uintE,long>;
+    if (type == HASH || type == AHASH) {
       wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
       wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+      if (type == HASH) {
+        butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
+        butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
+      }
     }
-    if (type == HIST) {
-      butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
-      tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
-      out_uint = pbbsa::sequence<tuple<uintE, long>>();
+    else if (type == HIST || type == AHIST) {
+      tmp = pbbsa::sequence<tuple<long, uintE>>();
+      out = pbbsa::sequence<tuple<long, uintE>>();
+      wedges_seq_int = _seq<long>(newA(long, nu), nu);
+      if (rank) {
+        wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
+        wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+      }
+      if (type == HIST) {
+        butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
+        tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
+        out_uint = pbbsa::sequence<tuple<uintE, long>>();
+      }
+    }
+    else if (type == SORT || type == ASORT) {
+      if (type == SORT) butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
+      if (!rank) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+      else wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
     }
   }
-  else if (type == SORT || type == ASORT) {
-    if (type == SORT) butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
-    if (!rank) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-    else wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
-  }
-}
 
+  /*
+   *  Clears necessary space, to be reused.
+   */
   void clear() {
     if (type == HASH || type == AHASH) {
       wedges_hash.clear();
@@ -1363,6 +1433,9 @@ CountSpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_
 
   }
 
+  /*
+   *  Frees all space.
+   */
   void del() {
     if (type == HASH || type == AHASH) {
       wedges_hash.del(); wedges_seq_intp.del(); 
