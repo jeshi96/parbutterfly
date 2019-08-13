@@ -1078,8 +1078,11 @@ tuple<bool,long> cmpWedgeCounts(bipartiteCSR & GA) {
 //***********************************************************************************************
 //***********************************************************************************************
 
+// Function that returns true if given long isn't max
+struct nonMaxLongF{bool operator() (long &a) {return (a != LONG_MAX);}};
+
 /*
- *  Sort objects using cmp, and then retrieve indices of where consecutive objects are
+ *  Given a sorted array objs, retrieve indices of where consecutive objects are
  *  not equal (as given by eq) to give frequency counts of each object in objs.
  *  In other words, if we let arr be the returned array, arr[i+1] - arr[i] is the 
  *  frequency of objs[arr[i]] (objs[arr[i]] = ... = objs[arr[i+1]-1]).
@@ -1090,19 +1093,14 @@ tuple<bool,long> cmpWedgeCounts(bipartiteCSR & GA) {
  *  num : Length of objs
  *  cmp : Comparator for T objects
  *  eq  : Equality comparator for T objects
- *  sort: If objs is already sorted, then this should be set to false so we don't resort;
- *        by default, we assume objs is not sorted.
+ *  maxL: A count of type L that exceeds the maximum frequency of elements in objs
+ *  nonF: Function that filters out all elements equal to maxL
+ *  sort: Deprecated
  * 
  *  Returns: Array and length of array with frequency counts (as described above)
  */
-// TODO turn cmp into extract
-struct nonMaxLongF{bool operator() (long &a) {return (a != LONG_MAX);}};
-
 template <class L, class T, class Cmp, class Eq, class F>
-  pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool sort=true) {
-  // Sort objects
-  //if (sort) parallelIntegerSort(objs, num, cmp); //sampleSort(objs, num, cmp);
-
+pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool sort=true) {
   L* freqs = newA(L, num + 1);
   freqs[0] = 0;
   freqs[num] = num;
@@ -1114,15 +1112,15 @@ template <class L, class T, class Cmp, class Eq, class F>
   }
   L* freqs_f = newA(L, num+1);
   long num_freqs_f = sequence::filter(freqs, freqs_f, num+1, nonF);
+
   free(freqs);
+
   return make_pair(freqs_f, num_freqs_f);
 }
 
 template <class L, class S, class T, class Cmp, class Eq, class OpT, class OpuintE, class OpCount>
   pair<tuple<S,L>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
                OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
-  //if(sort) parallelIntegerSort(objs, num, cmp); //sampleSort(objs, num, cmp);
-
   using X = tuple<S,L>;
   X* freqs = newA(X, num);
   T prev = objs[0];

@@ -912,7 +912,7 @@ intT CountEHashCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 //********************************************************************************************
 
 /*
- *  Computes butterfly counts per vertex, using by side ranking and wedge-aware
+ *  Computes butterfly counts per edge, using by side ranking and wedge-aware
  *  batching.
  * 
  *  GA             : Bipartite graph in CSR format
