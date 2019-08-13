@@ -1459,8 +1459,22 @@ struct CountSpace {
 //***************************************************************************************************
 //***************************************************************************************************
 
+/*
+ *  Retrieve all wedges in this batch, sequentially.
+ * 
+ *  wedges    : Array to store wedges
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  curr_idx  : Starting vertex of this batch
+ *  next_idx  : Ending vertex of this batch
+ */
 template<class wedge, class wedgeCons>
-  void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx, intT next_idx) {
+void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx,
+                    intT next_idx) {
   const long nu = use_v ? GA.nu : GA.nv;
   const long nv = use_v ? GA.nv : GA.nu;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -1469,6 +1483,7 @@ template<class wedge, class wedgeCons>
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   long idx = 0;
+  // Iterate through all vertices i in this batch
   for(intT i=curr_idx; i < next_idx; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
@@ -1476,11 +1491,12 @@ template<class wedge, class wedgeCons>
       uintE v = edgesU[u_offset+j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
-      // Find neighbors (not equal to u) of v
+      // Find two-hop neighbors of i
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = edgesV[v_offset+k];
         if (u2 < i) {
-          wedges[idx] = cons(i, u2, v, j, k); //TODO here: also store j, k; so we can do offsetsV[v] + k and eti[offsetsU[i] + j]
+          // Store wedge
+          wedges[idx] = cons(i, u2, v, j, k);
           ++idx;
         }
         else break; 
@@ -1489,36 +1505,53 @@ template<class wedge, class wedgeCons>
   }
 }
 
+/*
+ *  Retrieve all wedges in this batch, in parallel.
+ * 
+ *  wedges_seq: Array to store wedges
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  wedge_idxs: Wedge indices so that wedges can be stored in parallel
+ *  curr_idx  : Starting vertex of this batch
+ *  next_idx  : Ending vertex of this batch
+ */
 template<class wedge, class wedgeCons>
-  void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
+void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
+                long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  // Allocate space for seagull storage
+  // Allocate space for wedge storage
   if (wedges_seq.n < num_wedges) {
     free(wedges_seq.A);
     wedges_seq.A = newA(wedge, num_wedges);
     wedges_seq.n = num_wedges;
   }
 
+  // Set next index in batch
   if (next_idx == INT_T_MAX) next_idx = nu;
+  // Run sequentially if batch is small enough
   if (num_wedges < 10000) return _getWedges_seq<wedge>(wedges_seq.A, GA, use_v, cons, num_wedges, curr_idx, next_idx);
  
-  // Store seagulls in parallel
+  // Store wedges in parallel
+  // Iterate through each vertex i in this batch
   parallel_for(intT i=curr_idx; i < next_idx; ++i) {
     long wedge_idx = wedge_idxs[i] - wedge_idxs[curr_idx];
-    // Consider each neighbor v of active vertex u
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
     long idx = 0;
-    for(intT j=0; j < u_deg; ++j) { //JS: test granular_for
+    for(intT j=0; j < u_deg; ++j) {
       uintE v = edgesU[u_offset+j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
-      // Find neighbors (not equal to u) of v
+      // Find two-hop neighbors of i
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = edgesV[v_offset+k];
         if (u2 < i) {
@@ -1531,28 +1564,43 @@ template<class wedge, class wedgeCons>
   }
 }
 
+/*
+ *  Retrieve and hash all wedges in this batch, in parallel.
+ * 
+ *  wedges    : Hash table to store wedges
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  curr_idx  : Starting vertex of this batch
+ *  next_idx  : Ending vertex of this batch
+ */
 template<class wedgeCons, class T>
-  void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx=0, intT next_idx=INT_T_MAX) {
+void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx=0,
+                    intT next_idx=INT_T_MAX) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
+  // Set next index in batch
   if (next_idx == INT_T_MAX) next_idx = nu;
-
+  // Allocate space for wedge storage
   wedges.resize(num_wedges);
 
-  //hashInsertTimer.start();
+  // Store wedges in parallel
+  // Iterate through each vertex i in this batch
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
-    // Set up for each active vertex
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
-    parallel_for(intT j=0;j<u_deg;j++) { //JS: test granular_for
+    parallel_for(intT j=0;j<u_deg;j++) {
   uintE v = edgesU[u_offset+j];
   intT v_offset = offsetsV[v];
   intT v_deg = offsetsV[v+1] - v_offset;
-  // Find all seagulls with center v and endpoint u
+  // Find two-hop neighbors of i
   for (long k=0; k < v_deg; ++k) { 
     uintE u2 = edgesV[v_offset+k];
     if (u2 < i) wedges.insert(make_pair(cons(i, u2, v, j, k),1));
@@ -1560,9 +1608,20 @@ template<class wedgeCons, class T>
   }
     }
   }
-  //hashInsertTimer.stop();
 }
 
+/*
+ *  Identify the last vertex index of the batch of wedges to be processed,
+ *  sequentially.
+ * 
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  max_wedges: Maximum number of wedges in a batch
+ *  curr_idx  : Starting vertex of this batch
+ * 
+ *  Returns the vertex index starting the next batch.
+ */
 intT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -1571,6 +1630,7 @@ intT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, intT cur
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   long orig = max_wedges;
+  // Iterate through each vertex i starting with curr_idx
   for(intT i=curr_idx; i < nu; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
@@ -1579,12 +1639,14 @@ intT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, intT cur
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
       long num = 0;
+      // Determine the number of wedges that i contributes to the batch
       for (intT k=0; k < v_deg; ++k) {
         if (edgesV[v_offset+k] < i) num ++;
         else break;
       }
+      // If we have exceeded the max batch size, end the batch here
       if (num > max_wedges) {
-        if (i == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
+        if (i == curr_idx) { cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
         return i;
       }
       else { max_wedges -= num; }
@@ -1593,23 +1655,56 @@ intT getNextWedgeIdx_seq(bipartiteCSR& GA, bool use_v, long max_wedges, intT cur
   return nu;
 }
 
-// TODO doubling search
+/*
+ *  Identify the last vertex index of the batch of wedges to be processed,
+ *  in parallel.
+ * 
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  max_wedges: Maximum number of wedges in a batch
+ *  curr_idx  : Starting vertex of this batch
+ *  wedge_idxs: Wedge indices so that wedges can be stored in parallel
+ * 
+ *  Returns the vertex index starting the next batch.
+ */
 intT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx, long* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
-  //nextWedgeTimer.start();
+  // Determine if the remaining number of vertices is small enough to process sequentially
   if (nu - curr_idx < 2000) return getNextWedgeIdx_seq(GA, use_v, max_wedges, curr_idx);
 
-  auto idx_map = make_in_imap<long>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
+  auto idx_map =
+    make_in_imap<long>(nu - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
   auto lte = [] (const long& l, const long& r) { return l <= r; };
-  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
+
+  // Binary search for the first index that exceeds the max number of wedges in a batch, using wedge_idxs
+  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx;
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
-  //nextWedgeTimer.stop();
-  return find_idx; //TODO make sure right
+
+  return find_idx;
 }
 
-//TODO 3 tuple instead of nested pairs
+/*
+ *  Retrieve all wedges in this batch.
+ * 
+ *  wedges    : Array to store wedges
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  max_wedges: Max number of wedges in a batch
+ *  curr_idx  : Starting vertex of this batch
+ *  num_wedges: Number of wedges left in the graph total
+ *  wedge_idxs: Wedge indices so that wedges can be stored in parallel
+ * 
+ *  Returns a pair, the first of which indicates the number of wedges in this
+ *  batch and the second of which indicates the vertex starting the next
+ *  batch.
+ */
 template<class wedge, class wedgeCons>
-  pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, long* wedge_idxs) {
+pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges,
+                           intT curr_idx, long num_wedges, long* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   if (max_wedges >= num_wedges) {
     _getWedges<wedge>(wedges, GA, use_v, cons, num_wedges, wedge_idxs);
@@ -1621,8 +1716,27 @@ template<class wedge, class wedgeCons>
   return make_pair(num_wedges, next_idx);
 }
 
+/*
+ *  Retrieve all wedges in this batch and store them in a hash table.
+ * 
+ *  wedges    : Hash table to store wedges
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  max_wedges: Max number of wedges in a batch
+ *  curr_idx  : Starting vertex of this batch
+ *  num_wedges: Number of wedges left in the graph total
+ *  wedge_idxs: Wedge indices so that wedges can be stored in parallel
+ * 
+ *  Returns a pair, the first of which indicates the number of wedges in this
+ *  batch and the second of which indicates the vertex starting the next
+ *  batch.
+ */
 template<class wedgeCons, class T>
-  intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, long* wedge_idxs) {
+intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx,
+                   long num_wedges, long* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   if (max_wedges >= num_wedges) {
     _getWedgesHash(wedges, GA, use_v, cons, num_wedges);
