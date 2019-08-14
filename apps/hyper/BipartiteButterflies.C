@@ -222,7 +222,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   }
 
   // Type for peeling
-  long peel_type_long = P.getOptionLongValue("-tp",0);
+  long peel_type_long = P.getOptionLongValue("-tp", LONG_MAX);
   string peel_type_str = P.getOptionValue("-peelType","");
   PeelType tp;
   if (peel_type_long == LONG_MAX) {
