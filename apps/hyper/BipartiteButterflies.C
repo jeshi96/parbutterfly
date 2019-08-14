@@ -154,6 +154,18 @@ string CountTypeToStr(CountType ty) {
   return "";
 }
 
+string PeelTypeToStr(PeelType ty) {
+  switch(ty) {
+    case PSORT: return "SortCE Peel"; break;
+    case PHASH: return "HashCE Peel"; break;
+    case PHIST: return "HistCE Peel"; break;
+    case PBATCHS: return "Par Peel"; break;
+    case PBATCHWA: return "WedgePar Peel"; break;
+    default: break;
+  }
+  return "";
+}
+
 void Compute(bipartiteCSR& GA, commandLine P) {
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
@@ -193,9 +205,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   RankType tw;
   if (rank_type_long == LONG_MAX) {
     if (rank_type_str == "SIDE") tw = SIDE;
-    else if (count_type_str == "COCORE") tw = COCORE;
-    else if (count_type_str == "ACOCORE") tw = ACOCORE;
-    else if (count_type_str == "DEG") tw = DEG;
+    else if (rank_type_str == "COCORE") tw = COCORE;
+    else if (rank_type_str == "ACOCORE") tw = ACOCORE;
+    else if (rank_type_str == "DEG") tw = DEG;
     else tw = ADEG;
   }
   else {
@@ -209,7 +221,28 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     }
   }
 
-  long tp = P.getOptionLongValue("-tp",0);
+  // Type for peeling
+  long peel_type_long = P.getOptionLongValue("-tp",0);
+  string peel_type_str = P.getOptionValue("-peelType","");
+  PeelType tp;
+  if (peel_type_long == LONG_MAX) {
+    if (peel_type_str == "SORT") tp = PSORT;
+    else if (count_type_str == "HASH") tp = PHASH;
+    else if (count_type_str == "HIST") tp = PHIST;
+    else if (count_type_str == "BATCHS") tp = PBATCHS;
+    else tp = PBATCHWA;
+  }
+  else {
+    switch(peel_type_long) {
+      case 0: tp = PHASH; break;
+      case 1: tp = PSORT; break;
+      case 2: tp = PHIST; break;
+      case 3: case 4: tp = PBATCHS; break;
+      case 5: tp = PBATCHWA; break;
+      default: break;
+    }
+  }
+
   long te = P.getOptionLongValue("-e",0);
   bool nopeel = P.getOptionValue("-nopeel");
   bool total = P.getOptionValue("-total");
@@ -234,8 +267,8 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   // if you only want total counts
   if (total) {
-    if (tw == SIDE && (ty == SERIAL)) CountOrigCompactSerialTotal(GA,use_v);
-    if (tw == SIDE && (ty == SERIAL)) return;
+    if (tw == SIDE && ty == SERIAL) CountOrigCompactSerialTotal(GA,use_v);
+    if (tw == SIDE && ty == SERIAL) return;
 
     timer t;
     t.start();
@@ -277,16 +310,11 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       t2.start();
       auto cores = Peel(GA, use_v, butterflies, max_wedges, tp, max_array_size);
       t2.stop();
-      if (tp ==0) t2.reportTotal("Hash Peel:");
-      else if (tp==1) t2.reportTotal("Sort Peel:");
-      else if (tp==2) t2.reportTotal("Hist Peel:");
-      else if (tp == 3) t2.reportTotal("Par Peel:");
-      else if (tp == 5) t2.reportTotal("WedgePar Peel:");
+      t2.reportTotal(PeelTypeToStr(tp));
     }
     free(butterflies);
   }
   else {
-  
     timer t3,t4;
     t4.start();
     auto eti = edgeToIdxs(GA, use_v);
@@ -310,14 +338,9 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       t2.start();
       auto ite = idxsToEdge(GA, use_v);
       auto cores = PeelE(eti, ite, GA, use_v, ebutterflies, max_wedges, tp);
-      free(ite);	    
+      free(ite);      
       t2.stop();
-      if (tp ==0) t2.reportTotal("Hash E Peel:");
-      else if (tp==1) t2.reportTotal("Sort E Peel:");
-      else if (tp == 2) t2.reportTotal("Hist E Peel:");
-      else if (tp == 3) t2.reportTotal("Par E Peel:");
-      else if (tp == 4) t2.reportTotal("NoUpdatePar E Peel:");
-      else if (tp == 5) t2.reportTotal("WedgePar E Peel:");
+      t2.reportTotal(PeelTypeToStr(tp));
     }
     free(eti);
 

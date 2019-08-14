@@ -20,20 +20,21 @@
 #include "sparseSet.h"
 #include "sampleSort.h"
 #include "../../lib/histogram.h"
-//#include "../../lib/gbbs-histogram.h"
 #include "../../lib/sample_sort.h"
 #include "../../radixsort/RadixSort/radixSort.h"
 
 #include "butterfly_putils.h"
 #include "butterfly_utils.h"
 
+// Helper function for seagullSum that sums two-hop degrees
 template <class E>
 struct seagullSumHelper { 
   uintE u;
   uintT* offsetsU;
   uintT* offsetsV;
   uintE* edgesU;
-seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) : u(_u), offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU) {}
+  seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) :
+    u(_u), offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU) {}
   inline E operator() (const E& i) const {
     intT u_offset = offsetsU[u];
     uintE v = edgesU[u_offset + i];
@@ -41,37 +42,30 @@ seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) :
   }
 };
 
+// Computes the number of wedges that each vertex in active contributes
 template <class E>
 struct seagullSum { 
   uintT* offsetsU;
   uintT* offsetsV;
   uintE* edgesU;
   uintE* active;
-seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) : offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
+  seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) :
+    offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
   inline E operator() (const E& i) const {
-    /*uintE u = active[i];
-      intT u_offset = offsetsU[u];
-      intT u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
-      E ret=0;
-      for (long k=0; k < u_deg; ++k) {
-      uintE v = edgesU[u_offset + k];
-      ret += (offsetsV[v+1] - offsetsV[v] - 1);
-      }
-      return ret;*/
     E u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
     return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
   }
 };
 
 /*
- *  Counts the number of seagulls on vertices in active. The vertices in active are assumed to
- *  be a subset of U, and V represents the other bipartition of the bipartite graph.
+ *  Counts the number of wedges on vertices in active, sequentially.
  * 
- *  V     : One bipartition of vertices
- *  U     : The other bipartition of vertices
- *  active: Set of active vertices (subset of U)
+ *  GA    : Bipartite graph in CSR format
+ *  use_v : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *          produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  active: Set of active vertices
  * 
- *  Returns: Number of seagulls on vertices in active
+ *  Returns: Number of wedges on vertices in active
  */
 long countSeagulls_seq(bipartiteCSR& GA, bool use_v, vertexSubset active) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -91,6 +85,16 @@ long countSeagulls_seq(bipartiteCSR& GA, bool use_v, vertexSubset active) {
   return num_sg;
 }
 
+/*
+ *  Counts the number of wedges on vertices in active, in parallel.
+ * 
+ *  GA    : Bipartite graph in CSR format
+ *  use_v : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *          produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  active: Set of active vertices
+ * 
+ *  Returns: Number of wedges on vertices in active
+ */
 long countSeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active) {
   if (active.size() < 1000) return countSeagulls_seq(GA, use_v, active);
 
@@ -98,7 +102,8 @@ long countSeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active) {
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  return sequence::reduce<long>((long) 0, (long) active.size(), addF<long>(), seagullSum<long>(offsetsU, offsetsV, edgesU, active.s));
+  return sequence::reduce<long>((long) 0, (long) active.size(), addF<long>(),
+                                seagullSum<long>(offsetsU, offsetsV, edgesU, active.s));
 }
 
 
@@ -106,30 +111,24 @@ long countSeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active) {
 //***************************************************************************************************
 
 /*
- *  Retrieves the number of butterflies remaining on each non-active vertex (where the number of 
- *  butterflies has changed), given an array of seagulls (constructed from some set of active vertices).
- *  Uses sorting to obtain these counts.
+ *  Retrieve updated butterfly counts given wedges, using sort aggregation.
  * 
- *  nu         : The number of vertices in U, which represents one bipartition of vertices, of which 
- *               the active vertices are taken to be a subset of
- *  seagulls   : Array of seagulls constructed from some set of active vertices. The active vertex that
- *               forms the endpoint of a seagull is assumed to be the first vertex in the unordered
- *               vertex pair, and the non-active vertex is assumed to be the second vertex.
- *  num_sgs    : The number of seagulls
- *  butterflies: An updated array containing the number of butterflies on each vertex in U (where
- *               the vertex is given by the index in butterflies)
+ *  nu      : Number of vertices on the bipartition we're peeling from
+ *  seagulls: Array of wedges
+ *  num_sgs : Number of wedges
  * 
- *  Returns: Array of butterfly count changes, including both vertex indices and the changed values
+ *  Returns an array of updated butterfly counts associated with the
+ *  corresponding vertices, and the number of elements in this array.
  */
 pair<tuple<uintE,long>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs) {
   using X = tuple<uintE,long>;
-  // Sort seagulls (considering both active + non-active endpoints), and retrieve frequency counts
-  //radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPFirst());
-  //radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPSecond());
+  // Sort wedges (considering both active + non-active endpoints), and retrieve frequency counts
   pbbs::sample_sort(seagulls, num_sgs, UVertexPairCmp2());
-  pair<long*, long> freq_pair = getFreqs<long>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), LONG_MAX, nonMaxLongF());
+  pair<long*, long> freq_pair = getFreqs<long>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), LONG_MAX,
+                                               nonMaxLongF());
   long num_sg_freqs = freq_pair.second - 1;
   X* sg_freqs = newA(X, num_sg_freqs);
+
   // When retrieving frequency counts, store the frequency choose 2 with the non-active endpoint
   // This gives us the number of butterflies to be removed on the non-active endpoint
   parallel_for(long i=1; i < freq_pair.second; ++i) {
@@ -139,74 +138,90 @@ pair<tuple<uintE,long>*, long> getSeagullFreqs(const long nu, UVertexPair* seagu
   }
   free(freq_pair.first);
 
-  // Filter out any entries that have 0 butterflies to be removed (bucketing cannot handle these)
-  //X* sg_freqs_filter = newA(X,num_sg_freqs);
-  //num_sg_freqs = sequence::filter(sg_freqs,sg_freqs_filter,num_sg_freqs,nonZeroF());
-
-  //free(sg_freqs);
-  //return make_pair(sg_freqs_filter,num_sg_freqs);
   return make_pair(sg_freqs,num_sg_freqs);
 }
 
+/*
+ *  Retrieve updated butterfly counts sequentially given wedges, using sort
+ *  aggregation.
+ * 
+ *  nu      : Number of vertices on the bipartition we're peeling from
+ *  seagulls: Array of wedges
+ *  num_sgs : Number of wedges
+ * 
+ *  Returns an array of updated butterfly counts associated with the
+ *  corresponding vertices, and the number of elements in this array.
+ */
 pair<tuple<uintE,long>*, long> getSeagullFreqs_seq(const long nu, UVertexPair* seagulls, long num_sgs) {
-  //radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPFirst());
-  //radix::parallelIntegerSort<uintE>(seagulls, num_sgs, UVPSecond());
   pbbs::sample_sort(seagulls, num_sgs, UVertexPairCmp2());
   return getFreqs_seq<long,uintE>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), true,
-				  UVertexPairV2(), choose2(), reflCount<UVertexPair>());
+                                  UVertexPairV2(), choose2(), reflCount<UVertexPair>());
 }
 
+/*
+ *  Aggregate updated butterfly counts sequentially, using sort aggregation.
+ * 
+ *  ps          : Holds all array space needed, to be reused between buckets
+ *  sg_freqs    : Array of butterfly counts to be removed from corresponding vertex indices. Vertex indices are not
+ *                necessarily distinct amongst entries.
+ *  num_sg_freqs: Size of sg_freqs
+ *  butterflies : Butterfly counts per vertex
+ * 
+ *  Returns the number of vertices with updated butterfly counts.
+ */
 long getUpdates_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, long* butterflies) {
   using X = tuple<uintE,long>;
-  //radix::parallelIntegerSort<uintE>(sg_freqs, num_sg_freqs, tupleFirst<uintE,long>());
+  // Collate all butterflies to be removed with the same non-active endpoint
+  // Do this by sorting on the non-active endpoint, and summing the frequencies
   pbbs::sample_sort(sg_freqs, num_sg_freqs, tupleLt<uintE,long>());
-  pair<X*, long> b_freq_pair = getFreqs_seq<long,uintE>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), false,
-							uintETupleGet0(), refl<long>(), uintECount());
+  pair<X*, long> b_freq_pair =
+    getFreqs_seq<long,uintE>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), false,
+                             uintETupleGet0(), refl<long>(), uintECount());
   long num_updates = b_freq_pair.second;
-  //uintE* update = newA(uintE, num_updates);
+
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
   X* b_updates = b_freq_pair.first;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
+  // Remove these butterflies from our array of butterfly counts, and record
+  // the vertex whose count has been updated
   for(long i=0; i<num_updates; ++i) {
     uintE u_idx = get<0>(b_updates[i]);
     butterflies[eltsPerCacheLine*u_idx] -= get<1>(b_updates[i]);
-    //update_dense[eltsPerCacheLine*u_idx] = get<1>(b_updates[i]) > 0 ? true : false; //this is b/c seq doesn't filter
     update[i] = u_idx;
   }
   free(b_updates);
+
   return num_updates;
 }
 
-
 /*
- *  Collates butterfly count updates on each non-active vertex, and updates butterflies with
- *  these values.
- *  Uses sorting to collate these updated counts.
+ *  Aggregate updated butterfly counts, using sort aggregation.
  * 
- *  sg_freqs    : Array of butterfly counts to be removed from corresponding vertex indices.
- *                Vertex indices are not necessarily distinct amongst entries.
- *  num_sg_freqs: Length of sg_freqs
- *  butterflies : An updated array containing the number of butterflies on each vertex in U (where
- *                the vertex is given by the index in butterflies)
+ *  ps          : Holds all array space needed, to be reused between buckets
+ *  sg_freqs    : Array of butterfly counts to be removed from corresponding vertex indices. Vertex indices are not
+ *                necessarily distinct amongst entries.
+ *  num_sg_freqs: Size of sg_freqs
+ *  butterflies : Butterfly counts per vertex
  * 
- *  Returns: Array of vertex indices on which the butterfly counts change
+ *  Returns the number of vertices with updated butterfly counts.
  */
 long getUpdates(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, long* butterflies) {
   using X = tuple<uintE,long>;
-  // Now, collate all butterflies to be removed with the same non-active endpoint
+  // Collate all butterflies to be removed with the same non-active endpoint
   // Do this by sorting on the non-active endpoint, and summing the frequencies
-  //radix::parallelIntegerSort<uintE>(sg_freqs, num_sg_freqs, tupleFirst<uintE,long>());
   pbbs::sample_sort(sg_freqs, num_sg_freqs, tupleLt<uintE,long>());
-  auto b_freq_pair = getFreqs<long>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF(), false);
+  auto b_freq_pair = getFreqs<long>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX,
+                                    nonMaxLongF(), false);
   long num_updates = b_freq_pair.second - 1;
-  //uintE* update = newA(uintE, num_updates);
+
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
-  //uintE* update = newA(uintE, num_updates);
+  // Remove these butterflies from our array of butterfly counts, and record
+  // the vertex whose count has been updated
   parallel_for(long i=1; i < num_updates + 1; ++i) {
     long num_freq = b_freq_pair.first[i] - b_freq_pair.first[i-1];
     // Reduce to sum the butterflies over the necessary range
@@ -214,8 +229,7 @@ long getUpdates(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, l
     uintE u_idx = get<0>(reduce);
     // Remove these butterflies from our array of butterfly counts
     butterflies[eltsPerCacheLine*u_idx] -= get<1>(reduce);
-    // Add the updated index to an update array, to be returned
-    //update_dense[eltsPerCacheLine*u_idx] = get<1>(reduce) > 0 ? true : false;
+    // Add the updated index to an update array
     update[i-1] = u_idx;
   }
   free(b_freq_pair.first);
@@ -224,22 +238,29 @@ long getUpdates(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, l
 }
 
 /*
- *  Precisely getSeagullFreqs, but using histograms instead of sorting.
+ *  Retrieve updated butterfly counts given wedges, using histogram aggregation.
+ * 
+ *  ps      : Holds all array space needed, to be reused between buckets
+ *  nu      : Number of vertices on the bipartition we're peeling from
+ *  seagulls: Array of wedges
+ *  num_sgs : Number of wedges
+ * 
+ *  Returns an array of updated butterfly counts associated with the
+ *  corresponding vertices, and the number of elements in this array.
  */
 pair<tuple<uintE,long>*, long> getSeagullFreqsHist(PeelSpace& ps, const long nu, long* seagulls, long num_sgs) {
   using X = tuple<long,uintE>;
   using T = tuple<uintE,long>;
-  // TODO integrate sequence into histogram code (so we don't have to convert?)
   pbbsa::sequence<long> sg_seq = pbbsa::sequence<long>(seagulls,num_sgs);
 
-  // Place seagulls into a histogram to retrieve frequency counts (considering both active + non-active endpoints)
+  // Place wedges into a histogram to retrieve frequency counts (considering both active + non-active endpoints)
   tuple<size_t,X*> sg_hist_tuple = pbbsa::sparse_histogram<long,uintE>(sg_seq,nu*nu+nu,ps.tmp,ps.out);
   X* sg_freqs = get<1>(sg_hist_tuple);
 
   // Filter out any frequency count <= 1, since these won't contribute towards a butterfly
   X* sg_freqs_filter = newA(X,get<0>(sg_hist_tuple));
   size_t num_sg_freqs = sequence::filter(sg_freqs, sg_freqs_filter, get<0>(sg_hist_tuple), greaterOneLongF());
-  //free(sg_freqs);
+
   T* sg_freqs_ret = newA(T, num_sg_freqs);
 
   // Update our frequency counts to represent the number of butterflies to remove on each
@@ -247,22 +268,39 @@ pair<tuple<uintE,long>*, long> getSeagullFreqsHist(PeelSpace& ps, const long nu,
   // Do this by storing the frequency choose 2 on the non-active endpoint
   parallel_for(long i=0; i < num_sg_freqs; ++i) {
     long num = get<1>(sg_freqs_filter[i]);
-    // The non-active endpoint is given by our seagull id % nu, because it is always the second endpoint
+    // The non-active endpoint is given by our wedge id % nu, because it is always the second endpoint
     sg_freqs_ret[i] = make_tuple(get<0>(sg_freqs_filter[i]) % nu, num * (num-1) / 2);
   }
   free(sg_freqs_filter);
+
   return make_pair(sg_freqs_ret, num_sg_freqs);
 }
 
+/*
+ *  Retrieve updated butterfly counts sequentially given wedges, using histogram
+ *  aggregation.
+ * 
+ *  ps      : Holds all array space needed, to be reused between buckets
+ *  nu      : Number of vertices on the bipartition we're peeling from
+ *  seagulls: Array of wedges
+ *  num_sgs : Number of wedges
+ * 
+ *  Returns an array of updated butterfly counts associated with the
+ *  corresponding vertices, and the number of elements in this array.
+ */
 pair<tuple<uintE,long>*, long> getSeagullFreqsHist_seq(PeelSpace& ps, const long nu, long* seagulls, long num_sgs) {
   using X = tuple<long,uintE>;
   using T = tuple<uintE,long>;
+  // Aggregate wedges using a histogram
   pbbsa::sequence<long> sg_seq = pbbsa::sequence<long>(seagulls,num_sgs);
   tuple<size_t,X*> sg_hist_tuple = pbbsa::sparse_histogram<long,uintE>(sg_seq,nu*nu+nu,ps.tmp,ps.out);
   X* sg_freqs = get<1>(sg_hist_tuple);
   size_t num_sg_freqs = get<0>(sg_hist_tuple);
+
   T* sg_freqs_ret = newA(T, num_sg_freqs);
   long idx = 0;
+
+  // Retrive the butterfly contributions of these wedges
   for(long i=0; i < num_sg_freqs; ++i) {
     long num = get<1>(sg_freqs[i]);
     if (num > 1) {
@@ -270,56 +308,82 @@ pair<tuple<uintE,long>*, long> getSeagullFreqsHist_seq(PeelSpace& ps, const long
       idx++;
     }
   }
-  //free(sg_freqs);
+
   return make_pair(sg_freqs_ret, idx);
 }
 
-// TODO just use granular for on getUpdatesHis?
-long getUpdatesHist_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, const long nu, long* butterflies) {
+/*
+ *  Aggregate updated butterfly counts sequentially, using histogram aggregation.
+ * 
+ *  ps          : Holds all array space needed, to be reused between buckets
+ *  sg_freqs    : Array of butterfly counts to be removed from corresponding vertex indices. Vertex indices are not
+ *                necessarily distinct amongst entries.
+ *  num_sg_freqs: Size of sg_freqs
+ *  nu          : Number of vertices on the bipartition we're peeling from
+ *  butterflies : Butterfly counts per vertex
+ * 
+ *  Returns the number of vertices with updated butterfly counts.
+ */
+long getUpdatesHist_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, const long nu,
+                        long* butterflies) {
   using X = tuple<uintE, long>;
   using T = tuple<long, uintE>;
+
+  // Collate all butterflies to be removed with the same non-active endpoint
+  // Do this by using a histogram to sum frequencies on the non-active endpoint
   pbbsa::sequence<X> sg_freqs_seq = pbbsa::sequence<X>(sg_freqs,num_sg_freqs);
   tuple<size_t,X*> b_hist_tuple = 
     pbbsa::sparse_histogram_f<uintE,long>(sg_freqs_seq,nu,getAdd<uintE,long>,getAddReduce<uintE,long>);
   X* b_freqs = get<1>(b_hist_tuple);
   const size_t eltsPerCacheLine = 64/sizeof(long);
   size_t num_updates = get<0>(b_hist_tuple);
-  //uintE* update = newA(uintE, num_updates);
+
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
+
+  // Remove these butterflies from our array of butterfly counts, and record
+  // the vertex whose count has been updated
   for(long i=0; i < num_updates; ++i) {
     uintE u_idx = get<0>(b_freqs[i]);
     butterflies[eltsPerCacheLine*u_idx] -=get<1>(b_freqs[i]);
-    //update_dense[eltsPerCacheLine*u_idx] = true;
     update[i] = u_idx;
   }
   free(b_freqs);
+
   return (long) num_updates;
 }
 
 /*
- *  Precisely getUpdates, but using histograms instead of sorting.
+ *  Aggregate updated butterfly counts, using histogram aggregation.
+ * 
+ *  ps          : Holds all array space needed, to be reused between buckets
+ *  sg_freqs    : Array of butterfly counts to be removed from corresponding vertex indices. Vertex indices are not
+ *                necessarily distinct amongst entries.
+ *  num_sg_freqs: Size of sg_freqs
+ *  nu          : Number of vertices on the bipartition we're peeling from
+ *  butterflies : Butterfly counts per vertex
+ * 
+ *  Returns the number of vertices with updated butterfly counts.
  */
 long getUpdatesHist(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, const long nu, long* butterflies) {
   using X = tuple<uintE,long>;
-  // Now, collate all butterflies to be removed with the same non-active endpoint
+  // Collate all butterflies to be removed with the same non-active endpoint
   // Do this by using a histogram to sum frequencies on the non-active endpoint
   pbbsa::sequence<X> sg_freqs_seq = pbbsa::sequence<X>(sg_freqs,num_sg_freqs);
   tuple<size_t,X*> b_hist_tuple = 
     pbbsa::sparse_histogram_f<uintE,long>(sg_freqs_seq,nu,getAdd<uintE,long>,getAddReduce<uintE,long>);
   X* b_freqs = get<1>(b_hist_tuple);
   size_t num_updates = get<0>(b_hist_tuple);
-  //uintE* update = newA(uintE, num_updates);
+
   ps.resize_update(num_updates);
   uintE* update = ps.update_seq_int.A;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
-  // Remove these butterflies from our array of butterfly counts, and change our frequency
-  // array to be an update array on the new number of butterflies on our non-active endpoint
+  // Remove these butterflies from our array of butterfly counts, and record
+  // the vertex whose count has been updated
   parallel_for(long i=0; i < num_updates; ++i) {
     uintE u_idx = get<0>(b_freqs[i]);
-    butterflies[eltsPerCacheLine*u_idx] -=get<1>(b_freqs[i]);
-    //update_dense[eltsPerCacheLine*u_idx] = true;
+    butterflies[eltsPerCacheLine*u_idx] -= get<1>(b_freqs[i]);
     update[i] = u_idx;
   }
   free(b_freqs);
@@ -331,27 +395,33 @@ long getUpdatesHist(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freq
 //***************************************************************************************************
 
 /*
- *  Computes updated butterfly counts after active vertices are removed. The vertices in active are
- *  assumed to be a subset of U, and V represents the other bipartition of the bipartite graph.
- *  Uses sorting to obtain counts.
+ *  Peels butterflies given bucket of active vertices, using sort
+ *  aggregation.
  * 
- *  active     : Set of active vertices (subset of U)
- *  butterflies: An updated array containing the number of butterflies on each vertex in U (where
- *               the vertex is given by the index in butterflies)
- *  V          : One bipartition of vertices
- *  U          : The other bipartition of vertices
- *  nu         : The number of vertices in U
+ *  ps         : Holds all array space needed, to be reused between buckets
+ *  active     : Set of active vertices
+ *  butterflies: Butterfly counts per vertex
+ *  GA         : Bipartite graph in CSR format
+ *  use_v      : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *               produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  num_wedges : Number of wedges produced by the active set
+ *  max_wedges : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *               memory
+ *  curr_idx   : Denotes the starting vertex in this batch
  * 
- *  Returns: Array of butterfly counts to be changed with corresponding vertex, and the number of
- *           such changes
+ *  Returns the next vertex to process for the next batch, and the number of
+ *  vertices with updated butterfly counts.
  */
-pair<long, long> PeelSort(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
-  // Retrieve all seagulls
+pair<long, long> PeelSort(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+                          long num_wedges, long max_wedges, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
+  // Retrieve all wedges on active vertices
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  auto sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
+  auto sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v,
+                                              UVertexPairCons(), max_wedges, curr_idx, num_wedges);
  long next_idx = sg_pair.second;
 
+  // Aggregate wedges by endpoints by sorting
   auto sg_freqs_pair = getSeagullFreqs(nu, ps.wedges_seq_uvp.A, sg_pair.first);
 
   // Compute updated butterfly counts
@@ -361,14 +431,34 @@ pair<long, long> PeelSort(PeelSpace& ps, vertexSubset& active, long* butterflies
   return make_pair(next_idx, ret);
 }
 
-//TODO these are all CE versions -- do version where we don't use getUpdates_seq, and we writeadd (ish) to update
-pair<long, long> PeelSort_seq(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
-  // Retrieve all seagulls
+/*
+ *  Peels butterflies sequentially given bucket of active vertices, using
+ *  sort aggregation.
+ * 
+ *  ps         : Holds all array space needed, to be reused between buckets
+ *  active     : Set of active vertices
+ *  butterflies: Butterfly counts per vertex
+ *  GA         : Bipartite graph in CSR format
+ *  use_v      : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *               produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  num_wedges : Number of wedges produced by the active set
+ *  max_wedges : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *               memory
+ *  curr_idx   : Denotes the starting vertex in this batch
+ * 
+ *  Returns the next vertex to process for the next batch, and the number of
+ *  vertices with updated butterfly counts.
+ */
+pair<long, long> PeelSort_seq(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+                              long num_wedges, long max_wedges, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
+  // Retrieve all wedges on active vertices
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  auto sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v, UVertexPairCons(), max_wedges, curr_idx, num_wedges);
+  auto sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v,
+                                              UVertexPairCons(), max_wedges, curr_idx, num_wedges);
   long next_idx = sg_pair.second;
 
+  // Aggregate wedges by endpoints by sorting
   auto sg_freqs_pair = getSeagullFreqs_seq(nu, ps.wedges_seq_uvp.A, sg_pair.first);
 
   // Compute updated butterfly counts
@@ -379,16 +469,35 @@ pair<long, long> PeelSort_seq(PeelSpace& ps, vertexSubset& active, long* butterf
 }
 
 /*
- *  Precisely PeelSort, but using histograms instead of repeated sortings.
+ *  Peels butterflies given bucket of active vertices, using histogram
+ *  aggregation.
+ * 
+ *  ps         : Holds all array space needed, to be reused between buckets
+ *  active     : Set of active vertices
+ *  butterflies: Butterfly counts per vertex
+ *  GA         : Bipartite graph in CSR format
+ *  use_v      : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *               produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  num_wedges : Number of wedges produced by the active set
+ *  max_wedges : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *               memory
+ *  curr_idx   : Denotes the starting vertex in this batch
+ * 
+ *  Returns the next vertex to process for the next batch, and the number of
+ *  vertices with updated butterfly counts.
  */
-pair<long, long> PeelHist(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
-  // Retrieve all seagulls
+pair<long, long> PeelHist(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+                          long num_wedges, long max_wedges, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
+  // Retrieve all wedges on active vertices
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  auto sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+  auto sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu),
+                                       max_wedges, curr_idx, num_wedges);
   long next_idx = sg_pair.second;
 
+  // Aggregate wedges by endpoints using a histogram
   auto sg_freqs_pair = getSeagullFreqsHist(ps, nu, ps.wedges_seq_long.A, sg_pair.first);
+
   // Compute updated butterfly counts
   auto ret = getUpdatesHist(ps, sg_freqs_pair.first, sg_freqs_pair.second, nu, butterflies);
 
@@ -396,44 +505,84 @@ pair<long, long> PeelHist(PeelSpace& ps, vertexSubset& active, long* butterflies
   return make_pair(next_idx, ret);
 }
 
-pair<long, long> PeelHist_seq(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
-  // Retrieve all seagulls
+/*
+ *  Peels butterflies sequentially given bucket of active vertices, using
+ *  histogram aggregation.
+ * 
+ *  ps         : Holds all array space needed, to be reused between buckets
+ *  active     : Set of active vertices
+ *  butterflies: Butterfly counts per vertex
+ *  GA         : Bipartite graph in CSR format
+ *  use_v      : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *               produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  num_wedges : Number of wedges produced by the active set
+ *  max_wedges : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *               memory
+ *  curr_idx   : Denotes the starting vertex in this batch
+ * 
+ *  Returns the next vertex to process for the next batch, and the number of
+ *  vertices with updated butterfly counts.
+ */
+pair<long, long> PeelHist_seq(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+                              long num_wedges, long max_wedges, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
+  // Retrieve all wedges on active vertices
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  auto sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+  auto sg_pair = getActiveWedges<long>(ps.wedges_seq_long, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu),
+                                       max_wedges, curr_idx, num_wedges);
   long next_idx = sg_pair.second;
 
+  // Aggregate wedges by endpoints using a histogram
   auto sg_freqs_pair = getSeagullFreqsHist_seq(ps, nu, ps.wedges_seq_long.A, sg_pair.first);
+
   // Compute updated butterfly counts
   auto ret = getUpdatesHist_seq(ps, sg_freqs_pair.first, sg_freqs_pair.second, nu, butterflies);
 
   free(sg_freqs_pair.first);
+
   return make_pair(next_idx, ret);
 }
 
 /*
- *  Precisely PeelSort, but using hash tables instead of repeated sortings.
+ *  Peels butterflies given bucket of active vertices, using hash aggregation.
+ * 
+ *  ps         : Holds all array space needed, to be reused between buckets
+ *  active     : Set of active vertices
+ *  butterflies: Butterfly counts per vertex
+ *  GA         : Bipartite graph in CSR format
+ *  use_v      : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *               produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  num_wedges : Number of wedges produced by the active set
+ *  max_wedges : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *               memory
+ *  curr_idx   : Denotes the starting vertex in this batch
+ * 
+ *  Returns the next vertex to process for the next batch, and the number of
+ *  vertices with updated butterfly counts.
  */
-pair<long, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, intT curr_idx=0) {
+pair<long, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies, bipartiteCSR& GA, bool use_v,
+                          long num_wedges, long max_wedges, intT curr_idx=0) {
   const long nu = use_v ? GA.nu : GA.nv;
   const size_t eltsPerCacheLine = 64/sizeof(long);
-  // Retrieve all seagulls
+
+  // Hash wedges on active vertices, by endpoints
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
-  long next_idx = getActiveWedgesHash(ps, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges, curr_idx, num_wedges);
+  long next_idx = getActiveWedgesHash(ps, active_map, active.size(), GA, use_v, UVertexPairIntCons(nu), max_wedges,
+                                      curr_idx, num_wedges);
 
   auto wedges_seq_num = ps.wedges_hash->entries_no_init(ps.wedges_seq_intp);
 
   using T = pair<long,long>;
+  // Compute butterflies on active vertices and store in another hash table
   granular_for ( j, 0, wedges_seq_num, (wedges_seq_num > 1000), {
-      auto sg_freq_pair = ps.wedges_seq_intp.A[j];
-      long num = sg_freq_pair.second;
-      if (num > 1) {ps.update_hash.insert(T(((long) sg_freq_pair.first % nu), (num * (num - 1)/2)));}
-    });
-
-  // Compute updated butterfly counts
+    auto sg_freq_pair = ps.wedges_seq_intp.A[j];
+    long num = sg_freq_pair.second;
+    if (num > 1) {ps.update_hash.insert(T(((long) sg_freq_pair.first % nu), (num * (num - 1)/2)));}
+  });
   auto num_updates = ps.update_hash.entries_no_init(ps.butterflies_seq_intp);
   ps.resize_update(num_updates);
 
+  // Update butterfly counts for those vertices
   granular_for(i, 0, num_updates, (num_updates>1000), {
       auto update_pair = ps.butterflies_seq_intp.A[i];
       butterflies[eltsPerCacheLine*update_pair.first] -= update_pair.second;
@@ -443,8 +592,22 @@ pair<long, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies
   return make_pair(next_idx, num_updates);
 }
 
-pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v,
-array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
+/*
+ *  Peels butterflies given bucket of active vertices, using simple batching.
+ * 
+ *  ps            : Holds all array space needed, to be reused between buckets
+ *  active        : Set of active vertices
+ *  butterflies   : Butterfly counts per vertex
+ *  update_dense  : Keeps track of vertices with updated butterfly counts
+ *  GA            : Bipartite graph in CSR format
+ *  use_v         : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *                  produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ * 
+ *  Returns an array of vertices with updated butterfly counts and the size of
+ *  that array.
+ */
+pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense,
+                                    bipartiteCSR& GA, bool use_v) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -452,18 +615,20 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  long stepSize = active.size() < ps.stepSize ? active.size() : ps.stepSize; //tunable parameter
+  long stepSize = active.size() < ps.stepSize ? active.size() : ps.stepSize; // tunable parameter
 
   auto wedges_seq = ps.wedges_seq_int;
   auto used_seq = ps.used_seq_int;
 
+  // Stores number of wedges per endpoints
   auto wedges = wedges_seq.A;
+  // Keeps track of entries used in the wedges array
   auto used = used_seq.A;
-  //long* update_idx = ps.update_idx_seq_int.A;
 
   const size_t eltsPerCacheLine = 64/sizeof(long);
   granular_for(i,0,nu,nu > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
+  // Consider active vertices i in batches
   for(long step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
     parallel_for_1(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
       intT used_idx = 0;
@@ -472,49 +637,57 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
       intT u_offset  = offsetsU[u_idx];
       intT u_deg = offsetsU[u_idx+1]-u_offset;
       for (intT j=0; j < u_deg; ++j ) {
-	uintE v = edgesU[u_offset+j];
-	intT v_offset = offsetsV[v];
-	intT v_deg = offsetsV[v+1]-offsetsV[v];
-	for (intT k=0; k < v_deg; ++k) { 
-	  uintE u2_idx = edgesV[v_offset+k];
-	  if (u2_idx != u_idx) {
-	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
-	    // alternatively, at end before clear do this
-	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) {
+  uintE v = edgesU[u_offset+j];
+  intT v_offset = offsetsV[v];
+  intT v_deg = offsetsV[v+1]-offsetsV[v];
+  // Iterate through all two-hop neighbors of u_idx
+  for (intT k=0; k < v_deg; ++k) { 
+    uintE u2_idx = edgesV[v_offset+k];
+    if (u2_idx != u_idx) {
+      // Subtract the contributing butterfly count from u2_idx
+      if (wedges[shift+u2_idx] > 0)
+        writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
+      // Increment number of wedges on second endpoint
+      wedges[shift+u2_idx]++;
+      // Keep track of used second endpoints
+      if (wedges[shift+u2_idx] == 1) {
         used[shift+used_idx++] = u2_idx;
-        if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);
+        // Keep track that u2_idx has an updated butterfly count
+        if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx], false, true);
       }
     }
-	}
-      }
-      granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
-      //update_idx[i-step*stepSize] = used_idx;
-    }
-    // used[shift+j] for relevant j as indicated by update contain all of the indices to be updated; must call update here
-    /*long use_stepSize = active.size() < (step+1)*stepSize ? active.size() - step*stepSize : stepSize;
-    update_idx[use_stepSize] = 0;
-    sequence::plusScan(update_idx,update_idx,use_stepSize+1);
-    ps.resize_update(update_idx[use_stepSize]);
-    auto update_seq = ps.update_seq_int.A;
-    parallel_for(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
-      long shift = nu*(i-step*stepSize);
-      granular_for(j,0,update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize],update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize] > 10000, { 
-      //parallel_for(long j=0; j < update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize]; ++j) {
-        update_seq[update_idx[i-step*stepSize]+j] = used[shift+j];
-      });
-    }
-    updateBuckets(D, b, k2, butterflies, (stepSize < 1000), nu, update_seq, update_idx[use_stepSize]);*/
   }
+      }
+      // Clear wedges array for reuse
+      granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
+    }
+  }
+
+  // Collate edges with updated butterfly counts
   auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
   auto f_in = make_in_imap<bool>(nu, f);
   auto out = pbbs::pack_index<uintE>(f_in);
   out.alloc = false;
+
   return make_pair(out.s, out.size());
 }
 
-pair<uintE*, long> PeelOrigParallel_WedgeAware(PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense, bipartiteCSR& GA, bool use_v,
-array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
+/*
+ *  Peels butterflies given bucket of active vertices, using wedge-aware batching.
+ * 
+ *  ps            : Holds all array space needed, to be reused between buckets
+ *  active        : Set of active vertices
+ *  butterflies   : Butterfly counts per vertex
+ *  update_dense  : Keeps track of vertices with updated butterfly counts
+ *  GA            : Bipartite graph in CSR format
+ *  use_v         : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *                  produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ * 
+ *  Returns an array of vertices with updated butterfly counts and the size of
+ *  that array.
+ */
+pair<uintE*, long> PeelOrigParallel_WedgeAware(PeelSpace& ps, vertexSubset& active, long* butterflies,
+                                               bool* update_dense, bipartiteCSR& GA, bool use_v) {
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -522,111 +695,129 @@ array_imap<long>& D, buckets<array_imap<long>>& b, uintE k2) {
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
-  long stepSize = active.size() < ps.stepSize ? active.size() : ps.stepSize; //tunable parameter
+  long stepSize = active.size() < ps.stepSize ? active.size() : ps.stepSize; // tunable parameter
 
   auto wedges_seq = ps.wedges_seq_int;
   auto used_seq = ps.used_seq_int;
 
+  // Stores number of wedges per endpoints
   auto wedges = wedges_seq.A;
+  // Keeps track of entries used in the wedges array
   uintE* used = used_seq.A;
-  //long* update_idx = ps.update_idx_seq_int.A;
 
+  // Compute the indices of wedges given by the active subset, so that batches can be set accordingly
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   long* wedgesPrefixSum = getActiveWedgeIdxs(active_map,active.size(),GA,use_v);
 
   const size_t eltsPerCacheLine = 64/sizeof(long);
   granular_for(i,0,nu,nu > 10000, { update_dense[eltsPerCacheLine*i] = false; });
 
+  // Consider active vertices i in batches, as given by wedgesPrefixSum
   for(intT step = 0; step < (active.size()+stepSize-1)/stepSize; step++) {
     std::function<void(intT,intT)> recursive_lambda =
       [&]
       (intT start, intT end){
       if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
-	for (intT i = start; i < end; i++){
-      intT used_idx = 0;
-      long shift = nu*(i-step*stepSize);
-      intT u_idx = active.vtx(i);
-      intT u_offset  = offsetsU[u_idx];
-      intT u_deg = offsetsU[u_idx+1]-u_offset;
-      for (intT j=0; j < u_deg; ++j ) {
-	uintE v = edgesU[u_offset+j];
-	intT v_offset = offsetsV[v];
-	intT v_deg = offsetsV[v+1]-offsetsV[v];
-	for (intT k=0; k < v_deg; ++k) { 
-	  uintE u2_idx = edgesV[v_offset+k];
-	  if (u2_idx != u_idx) {
-	    if (wedges[shift+u2_idx] > 0) writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
-	    // alternatively, at end before clear do this
-	    wedges[shift+u2_idx]++;
-	    if (wedges[shift+u2_idx] == 1) {
-        used[shift+used_idx++] = u2_idx; 
-        if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx],false,true);
+  for (intT i = start; i < end; i++){
+    intT used_idx = 0;
+    long shift = nu*(i-step*stepSize);
+    intT u_idx = active.vtx(i);
+    intT u_offset  = offsetsU[u_idx];
+    intT u_deg = offsetsU[u_idx+1]-u_offset;
+    for (intT j=0; j < u_deg; ++j ) {
+  uintE v = edgesU[u_offset+j];
+  intT v_offset = offsetsV[v];
+  intT v_deg = offsetsV[v+1]-offsetsV[v];
+  // Iterate through all two-hop neighbors of u_idx
+  for (intT k=0; k < v_deg; ++k) { 
+    uintE u2_idx = edgesV[v_offset+k];
+    if (u2_idx != u_idx) {
+      // Subtract the contributing butterfly count from u2_idx
+      if (wedges[shift+u2_idx] > 0)
+         writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
+      // Increment number of wedges on second endpoint
+      wedges[shift+u2_idx]++;
+      // Keep track of used second endpoints
+      if (wedges[shift+u2_idx] == 1) {
+        used[shift+used_idx++] = u2_idx;
+        // Keep track that u2_idx has an updated butterfly count
+        if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx], false, true);
       }
     }
-	}
-      }
-      granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
-      //update_idx[i-step*stepSize] = used_idx;
+  }
     }
-
+    // Clear wedges array for reuse
+    granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
+  }
     } else {
-	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
-	recursive_lambda(start + ((end-start)>>1), end);
+  cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+  recursive_lambda(start + ((end-start)>>1), end);
       }
     }; 
     recursive_lambda(step*stepSize,min((step+1)*stepSize,active.size()));
-    
-// used[shift+j] for relevant j as indicated by update contain all of the indices to be updated; must call update here
-    /* long use_stepSize = active.size() < (step+1)*stepSize ? active.size() - step*stepSize : stepSize;
-    update_idx[use_stepSize] = 0;
-    sequence::plusScan(update_idx,update_idx,use_stepSize+1);
-    ps.resize_update(update_idx[use_stepSize]);
-    auto update_seq = ps.update_seq_int.A;
-    parallel_for(long i=step*stepSize; i < min((step+1)*stepSize,active.size()); ++i){
-      long shift = nu*(i-step*stepSize);
-      granular_for(j,0,update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize],update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize] > 10000, { 
-      //parallel_for(long j=0; j < update_idx[i+1-step*stepSize] - update_idx[i-step*stepSize]; ++j) {
-        update_seq[update_idx[i-step*stepSize]+j] = used[shift+j];
-      });
-    }
-    updateBuckets(D, b, k2, butterflies, (stepSize < 1000), nu, update_seq, update_idx[use_stepSize]);*/
+
   }
   free(wedgesPrefixSum);
+
+  // Collate edges with updated butterfly counts
   auto f = [&] (size_t i) { return update_dense[eltsPerCacheLine*i]; };
   auto f_in = make_in_imap<bool>(nu, f);
   auto out = pbbs::pack_index<uintE>(f_in);
   out.alloc = false;
+
   return make_pair(out.s, out.size());
 }
 
 //***************************************************************************************************
 //***************************************************************************************************
 
+/*
+ *  Peels butterflies given bucket of active vertices, and updates the bucketing
+ *  structure appropriately.
+ * 
+ *  ps          : Holds all array space needed, to be reused between buckets
+ *  active      : Set of active vertices
+ *  butterflies : Butterfly counts per edge
+ *  update_dense: Depending on aggregation type, keeps track of vertices with updated butterfly counts
+ *  GA          : Bipartite graph in CSR format
+ *  use_v       : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *                produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  max_wedges  : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *                memory
+ *  type        : Wedge aggregation type
+ *  D           : Map of vertices to the buckets that they're in
+ *  b           : Bucketing structure
+ *  k           : ID of current bucket
+ */
 void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* update_dense,
-		  bipartiteCSR& GA, bool use_v, long max_wedges, long type, array_imap<long>& D, buckets<array_imap<long>>& b, long k) {
+                  bipartiteCSR& GA, bool use_v, long max_wedges, PeelType type, array_imap<long>& D,
+                  buckets<array_imap<long>>& b, long k) {
   const long nu = use_v ? GA.nu : GA.nv;
   bool is_seq = (active.size() < 1000);
-  if (type == 3) {
-    auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v, D, b, k);
+
+  // Choose wedge aggregation type
+  if (type == PBATCHS) {
+    auto ret = PeelOrigParallel(ps, active, butterflies, update_dense, GA, use_v);
     updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
     free(ret.first);
     return;
   }
-  else if (type == 5) {
-    auto ret = PeelOrigParallel_WedgeAware(ps, active, butterflies, update_dense, GA, use_v, D, b, k);
+  else if (type == PBATCHWA) {
+    auto ret = PeelOrigParallel_WedgeAware(ps, active, butterflies, update_dense, GA, use_v);
     updateBuckets(D, b, k, butterflies, is_seq, nu, ret.first, ret.second);
     free(ret.first);
     return;
   }
   
+  // Compute the number of wedges given by the active subset
   long num_wedges = countSeagulls(GA, use_v, active);
   pair<long, long> ret;
-  //TODO remove update dense from all of these
+
   if (max_wedges >= num_wedges) {
-    if (type == 0) ret = PeelHash(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
-    else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
-    else if (type == 1) ret = PeelSort(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
-    else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
+    if (type == PHASH) ret = PeelHash(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
+    else if (type == PSORT && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
+    else if (type == PSORT) ret = PeelSort(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
+    else if (type == PHIST && is_seq) ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
     else ret = PeelHist(ps, active, butterflies, GA, use_v, num_wedges, max_wedges);
 
     updateBuckets(D, b, k, butterflies, is_seq, nu, ps.update_seq_int.A, ret.second);
@@ -635,10 +826,12 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* 
   }
   long curr_idx = 0;
   while(curr_idx < active.size()) {
-    if (type == 0) ret = PeelHash(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
-    else if (type == 1 && is_seq) ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
-    else if (type == 1) ret = PeelSort(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
-    else if (type == 2 && is_seq) ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+    if (type == PHASH) ret = PeelHash(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else if (type == PSORT && is_seq)
+      ret = PeelSort_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else if (type == PSORT) ret = PeelSort(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
+    else if (type == PHIST && is_seq)
+      ret = PeelHist_seq(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
     else ret = PeelHist(ps, active, butterflies, GA, use_v, num_wedges, max_wedges, curr_idx);
 
     curr_idx = ret.first;
@@ -647,48 +840,57 @@ void Peel_helper (PeelSpace& ps, vertexSubset& active, long* butterflies, bool* 
   }
 }
 
-array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_wedges, long type, long max_array_size, size_t num_buckets=128) {
-  // Butterflies are assumed to be stored on U
+/*
+ *  Peels butterflies per vertex.
+ * 
+ *  GA            : Bipartite graph in CSR format
+ *  use_v         : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *                  produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  butterflies   : Butterfly counts per vertex
+ *  max_wedges    : Max number of wedges (consisting of two endpoint indices and a center) that the system can hold in
+ *                  memory
+ *  type          : Wedge aggregation type
+ *  max_array_size:
+ *  num_buckets   : Number of buckets to initialize bucketing structure with
+ * 
+ *  Returns a map of vertices to the buckets they were peeled in.
+ */
+array_imap<long> Peel(bipartiteCSR& GA, bool use_v, long* butterflies, long max_wedges, PeelType type,
+                      long max_array_size, size_t num_buckets=128) {
+  // Butterflies are stored on GA.U if use_v is true, and on GA.V otherwise
   const long nu = use_v ? GA.nu : GA.nv;
-  
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
+  // Construct initial buckets based on butterfly counts
   auto D = array_imap<long>(nu, [&] (size_t i) { return butterflies[eltsPerCacheLine*i]; });
-
   auto b = make_buckets(nu, D, increasing, num_buckets); // TODO may also have to fix buckets to use long
   
   long stepSize = min<long>(getWorkers() * 60, max_array_size/nu);
+  // Set up space for peeling algorithms
   PeelSpace ps = PeelSpace(type, nu, stepSize);
-
   bool* update_dense = nullptr;
-  if (type == 3 || type == 5) update_dense = newA(bool, eltsPerCacheLine*nu);
+  if (type == PBATCHS || type == PBATCHWA) update_dense = newA(bool, eltsPerCacheLine*nu);
 
   size_t finished = 0;
-  //long nonZeroRounds = 0;
-  //long totalRounds = 0;
-  timer t;
+  // Peel each bucket
   while (finished != nu) {
-    t.start();
+    // Retrieve next bucket
     auto bkt = b.next_bucket();
-    t.stop();
     auto active = bkt.identifiers;
     if (active.size() == 0) {active.del(); continue;}
     long k = bkt.id;
     finished += active.size();
-    //totalRounds++;
-    //if(active.size() > 0) {nonZeroRounds++; }
     bool is_seq = (active.size() < 1000);
 
+    // Peel butterflies
     Peel_helper(ps, active, butterflies, update_dense, GA, use_v, max_wedges, type, D, b, k);
 
     active.del();
   }
-  t.reportTotal("next bucket");
+
   ps.del();
   b.del();
-  if (type == 3 || type == 5) free(update_dense);
-  //cout << "totalRounds = " << totalRounds << endl;
-  //cout << "nonZeroRounds = " << nonZeroRounds << endl;
-  
+  if (type == PBATCHS || type == PBATCHWA) free(update_dense);
+
   return D;
 }

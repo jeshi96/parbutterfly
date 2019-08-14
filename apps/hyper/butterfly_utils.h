@@ -1751,9 +1751,21 @@ intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long
 //***************************************************************************************************
 //***************************************************************************************************
 
+/*
+ *  Retrieve all wedges in this batch, sequentially.
+ * 
+ *  wedges    : Array to store wedges
+ *  GA        : Ranked graph in CSR format
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  curr_idx  : Starting vertex of this batch
+ *  next_idx  : Ending vertex of this batch
+ */
 template<class wedge, class wedgeCons>
-  void _getWedges_seq(wedge* wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx, intT next_idx) {
+void _getWedges_seq(wedge* wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx, intT next_idx) {
   long idx = 0;
+  // Iterate through all vertices i in this batch
   for(intT i=curr_idx; i < next_idx; ++i) {
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
@@ -1762,10 +1774,11 @@ template<class wedge, class wedgeCons>
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
       if (v <= i) break;
-      // Find neighbors (not equal to u) of v
+      // Find two-hop neighbors of i
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = GA.edges[v_offset+k] >> 1;
         if (u2 > i) {
+          // Store wedge
           wedges[idx] = cons(i, GA.edges[v_offset+k], v, j, k);
           ++idx;
         }
@@ -1775,51 +1788,81 @@ template<class wedge, class wedgeCons>
   }
 }
 
+/*
+ *  Retrieve all wedges in this batch, in parallel.
+ * 
+ *  wedges_seq: Array to store wedges
+ *  GA        : Ranked graph in CSR format
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  wedge_idxs: Wedge indices so that wedges can be stored in parallel
+ *  curr_idx  : Starting vertex of this batch
+ *  next_idx  : Ending vertex of this batch
+ */
 template<class wedge, class wedgeCons>
-  void _getWedges(_seq<wedge>& wedges_seq, graphCSR& GA, wedgeCons cons, long num_wedges, 
-      long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
-  // Allocate space for seagull storage
+void _getWedges(_seq<wedge>& wedges_seq, graphCSR& GA, wedgeCons cons, long num_wedges, long* wedge_idxs,
+                intT curr_idx=0, intT next_idx=INT_T_MAX) {
+  // Allocate space for wedge storage
   if (wedges_seq.n < num_wedges) {
     free(wedges_seq.A);
     wedges_seq.A = newA(wedge, num_wedges);
     wedges_seq.n = num_wedges;
   }
 
+  // Set up next index in batch
   if (next_idx == INT_T_MAX) next_idx = GA.n;
-  //if (num_wedges < 10000)
+  // Run sequentially if batch is small enough
   return _getWedges_seq<wedge>(wedges_seq.A, GA, cons, num_wedges, curr_idx, next_idx);
  
-  // Store seagulls in parallel
+  // Store wedges in parallel
+  // Iterate through each vertex i in this batch
   parallel_for(intT i=curr_idx; i < next_idx; ++i) {
     long wedge_idx = wedge_idxs[i] - wedge_idxs[curr_idx];
-    // Consider each neighbor v of active vertex u
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
     long idx = 0;
-    for(intT j=0; j < u_deg; ++j) { //JS: test granular_fr
+    for(intT j=0; j < u_deg; ++j) {
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
       if (v <= i) break;
-      // Find neighbors (not equal to u) of v
+      // Find two-hop neighbors of i
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = GA.edges[v_offset+k] >> 1;
         if (u2 > i) {
+          // Store wedge
           wedges_seq.A[wedge_idx+idx] = cons(i, GA.edges[v_offset+k], v, j, k);
           ++idx;
         }
-        else break; //{if (i < next_idx-1) assertf(wedge_idx+idx == wedge_idxs[i+1] - wedge_idxs[curr_idx], "%d, %d", wedge_idx+idx,wedge_idxs[i+1] - wedge_idxs[curr_idx] ); break;}
+        else break;
       }
     }
   }
 }
 
-// Note: 1 in LSB if we store i/u2, 0 if we store v
+/*
+ *  Retrieve and hash all wedges in this batch, in parallel.
+ * 
+ *  wedges    : Hash table to store wedges
+ *  GA        : Ranked graph in CSR format
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  curr_idx  : Starting vertex of this batch
+ *  next_idx  : Ending vertex of this batch
+ */
 template<class wedgeCons, class T>
-  void _getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx=0, intT next_idx=INT_T_MAX) {
+void _getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx=0,
+                    intT next_idx=INT_T_MAX) {
+  // Set up next index in batch
   if (next_idx == INT_T_MAX) next_idx = GA.n;
 
+  // Allocate space for wedge storage
   wedges.resize(num_wedges);
+
+  // Store wedges in parallel
+  // Iterate through each vertex i in this batch
   parallel_for(intT i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
     intT u_offset = GA.offsets[i];
@@ -1829,30 +1872,61 @@ template<class wedgeCons, class T>
   intT v_offset = GA.offsets[v];
   intT v_deg = GA.offsets[v+1] - v_offset;
   if (v > i) {
-    // Find all seagulls with center v and endpoint u
+    // Find two-hop neighbors of i
     for (intT k=0; k < v_deg; ++k) { 
       uintE u2 = GA.edges[v_offset+k] >> 1;
+      // Store wedge in hash table
       if (u2 > i) wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
       else break;
     }
   } 
-      });
+    });
   }
 }
 
+/*
+ *  Identify the last vertex index of the batch of wedges to be processed,
+ *  in parallel.
+ * 
+ *  GA        : Ranked graph in CSR format
+ *  max_wedges: Maximum number of wedges in a batch
+ *  curr_idx  : Starting vertex of this batch
+ *  wedge_idxs: Wedge indices so that wedges can be stored in parallel
+ * 
+ *  Returns the vertex index starting the next batch.
+ */
 intT getNextWedgeIdx(graphCSR& GA, long max_wedges, intT curr_idx, long* wedge_idxs) {
-  //if (GA.n - curr_idx < 2000) return getNextWedgeIdx_seq(GA, use_v, max_wedges, curr_idx);
-  auto idx_map = make_in_imap<long>(GA.n - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
+  auto idx_map = 
+    make_in_imap<long>(GA.n - curr_idx, [&] (size_t i) { return wedge_idxs[curr_idx+i+1] - wedge_idxs[curr_idx]; });
   auto lte = [] (const long& l, const long& r) { return l <= r; };
-  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx; //this rets first # > searched num
+
+  // Binary search for the first index that exceeds the max number of wedges in a batch, using wedge_idxs
+  size_t find_idx = pbbs::binary_search(idx_map, max_wedges, lte) + curr_idx;
+
   if (find_idx == curr_idx) {cout << "Space must accomodate seagulls originating from one vertex\n"; exit(0); }
 
   return find_idx;
 }
 
+/*
+ *  Retrieve all wedges in this batch and store them in a hash table.
+ * 
+ *  wedges    : Hash table to store wedges
+ *  GA        : Ranked graph in CSR format
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  max_wedges: Max number of wedges in a batch
+ *  curr_idx  : Starting vertex of this batch
+ *  num_wedges: Number of wedges left in the graph total
+ *  wedge_idxs: Wedge indices so that wedges can be stored in parallel
+ * 
+ *  Returns a pair, the first of which indicates the number of wedges in this
+ *  batch and the second of which indicates the vertex starting the next
+ *  batch.
+ */
 template<class wedgeCons, class T>
-  intT getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, 
-         intT curr_idx, long num_wedges, long* wedge_idxs) {
+intT getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges,
+                   long* wedge_idxs) {
   if (max_wedges >= num_wedges) {
     _getWedgesHash(wedges, GA, cons, num_wedges);
     return GA.n;
@@ -1863,8 +1937,25 @@ template<class wedgeCons, class T>
   return next_idx;
 }
 
+/*
+ *  Retrieve all wedges in this batch.
+ * 
+ *  wedges    : Array to store wedges
+ *  GA        : Ranked graph in CSR format
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  max_wedges: Max number of wedges in a batch
+ *  curr_idx  : Starting vertex of this batch
+ *  num_wedges: Number of wedges left in the graph total
+ *  wedge_idxs: Wedge indices so that wedges can be stored in parallel
+ * 
+ *  Returns a pair, the first of which indicates the number of wedges in this
+ *  batch and the second of which indicates the vertex starting the next
+ *  batch.
+ */
 template<class wedge, class wedgeCons>
-  pair<long, intT> getWedges(_seq<wedge>& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges, long* wedge_idxs) {
+pair<long, intT> getWedges(_seq<wedge>& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx,
+                           long num_wedges, long* wedge_idxs) {
   if (max_wedges >= num_wedges) {
     _getWedges<wedge>(wedges, GA, cons, num_wedges, wedge_idxs);
     return make_pair(num_wedges, GA.n);
@@ -1878,8 +1969,18 @@ template<class wedge, class wedgeCons>
 //***************************************************************************************************
 //***************************************************************************************************
 
-
-// eti[u_offset + j] = v_offset + i, where i refers to u and j refers to v
+/*
+ *  Construct an array that converts edge indices from one orientation (as
+ *  given by use_v) to the other. If use_v is true, then the array
+ *  takes edges indexed through GA.edgesU and maps them to edges indexed
+ *  through GA.edgesV. Otherwise, the mapping is the opposite way around.
+ * 
+ *  GA   : Bipartite graph in CSR format
+ *  use_v: Denotes which orientation to map edge indices
+ * 
+ *  Returns an array that converts edge indices from one orientation to the
+ *  other, as given by use_v.
+ */
 uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
   long nu = use_v ? GA.nu : GA.nv;
   long nv = use_v ? GA.nv : GA.nu;
@@ -1890,25 +1991,27 @@ uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
 
   uintE* eti = newA(uintE, GA.numEdges);
 
+  // Iterate through all edges
   parallel_for(intT i=0; i < nu; ++i) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
-    granular_for(j,0,u_deg,u_deg>1000,{ // (intT j = 0; j < u_deg; ++j) { //JS: test granular_for
-      
+    granular_for(j,0,u_deg,u_deg>1000,{
       uintE v = edgesU[u_offset + j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
-      // find k such that edgesV[v_offset + k] = i
+      // Find the corresponding edge from the other orientation
+      // Find find_idx such that edgesV[v_offset + k] = i
       auto idx_map = make_in_imap<uintE>(v_deg, [&] (size_t k) { return edgesV[v_offset + k]; });
       auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
       size_t find_idx = pbbs::binary_search(idx_map, i, lte); 
       eti[u_offset+j] = v_offset + find_idx;
-      });
+    });
   }
 
   return eti;
 }
 
+// Precisely edgeToIdxs, but inverting use_v
 uintE* idxsToEdge(bipartiteCSR& G, bool use_v) {
   return edgeToIdxs(G, !use_v);
 }

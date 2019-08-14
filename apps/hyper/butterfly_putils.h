@@ -23,8 +23,10 @@
 
 using namespace std;
 
+// Allocates and keeps all space needed for edge peeling algorithms, so that
+// space can be reused between batches
 struct PeelESpace {
-  long type;
+  PeelType type;
   long nu;
   long stepSize;
   long n_side;
@@ -34,33 +36,25 @@ struct PeelESpace {
   sparseAdditiveSet<long, long> update_hash;
   _seq<uintE> wedges_seq_int;
   _seq<uintE> used_seq_int;
-  _seq<long> update_v_idx_seq_int;
-  _seq<long> update_u_idx_seq_int;
-  _seq<long> used_u_seq_int;
-PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
-  using X = tuple<uintE,long>;
-  if (type != 3 && type != 5) update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
-  if (type == 0) update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
-  else if (type == 1 || type == 2) {
-    wedges_seq_tup = _seq<X>(newA(X, nu), nu);
-    wedges_seq_tup_fil = _seq<X>(newA(X, nu), nu);
+
+  PeelESpace(PeelType _type, long _nu, long _stepSize, long _n_side) :
+    type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
+    using X = tuple<uintE,long>;
+    if (type != PBATCHS && type != PBATCHWA) update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+    if (type == PHASH) update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
+    else if (type == PHIST || type == PSORT) {
+      wedges_seq_tup = _seq<X>(newA(X, nu), nu);
+      wedges_seq_tup_fil = _seq<X>(newA(X, nu), nu);
+    }
+    else if (type == PBATCHS || type == PBATCHWA) {
+      wedges_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
+      granular_for(i,0,n_side*stepSize,n_side*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
+      used_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
+    }
   }
-  else if (type == 3 || type == 5) {
-    wedges_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
-    granular_for(i,0,n_side*stepSize,n_side*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
-    used_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
-  }
-  else if (type == 4){
-    wedges_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
-    granular_for(i,0,n_side*stepSize,n_side*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
-    used_seq_int = _seq<uintE>(newA(uintE, n_side*stepSize), n_side*stepSize);
-    update_v_idx_seq_int = _seq<long>(newA(long, stepSize+1), stepSize+1);
-    update_u_idx_seq_int = _seq<long>(newA(long, stepSize+1), stepSize+1);
-    used_u_seq_int = _seq<long>(newA(long, n_side), n_side);
-  }
-}
+
   void resize_update(size_t size) {
-  	if (update_seq_int.n < size) {
+    if (update_seq_int.n < size) {
       free(update_seq_int.A);
       update_seq_int.A = newA(uintE, size);
       update_seq_int.n = size;
@@ -72,16 +66,17 @@ PeelESpace(long _type, long _nu, long _stepSize, long _n_side) : type(_type), nu
   }
 
   void del() {
-  	if (type != 3 && type != 5) update_seq_int.del();
-    if (type == 0) update_hash.del();
-    else if (type == 1 || type == 2) { wedges_seq_tup.del(); wedges_seq_tup_fil.del(); }
-    else if (type == 3 || type == 5) {wedges_seq_int.del(); used_seq_int.del();}
-    else if (type == 4) {wedges_seq_int.del(); used_seq_int.del(); update_v_idx_seq_int.del(); update_u_idx_seq_int.del(); used_u_seq_int.del();}
+    if (type != PBATCHS && type != PBATCHWA) update_seq_int.del();
+    if (type == PHASH) update_hash.del();
+    else if (type == PHIST || type == PSORT) { wedges_seq_tup.del(); wedges_seq_tup_fil.del(); }
+    else if (type == PBATCHS || type == PBATCHWA) {wedges_seq_int.del(); used_seq_int.del();}
   }
 };
 
+// Allocates and keeps all space needed for vertex peeling algorithms, so that
+// space can be reused between batches
 struct PeelSpace {
-  long type;
+  PeelType type;
   long nu;
   long stepSize;
   _seq<UVertexPair> wedges_seq_uvp;
@@ -98,39 +93,36 @@ struct PeelSpace {
   long num_wedges_hash;
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
-PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
-  using E = pair<long, long>;
-  using X = pair<uintE,long>;
-  update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+  PeelSpace(PeelType _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
+    using E = pair<long, long>;
+    using X = pair<uintE,long>;
+    update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
 
-  if (type == 0) {
-    using T = sparseAdditiveSet<long, long>*;
-    wedges_hash = new sparseAdditiveSet<long, long>(1,1, LONG_MAX, LONG_MAX);
-    wedges_hash_list = newA(T, 1);
-    wedges_hash_list[0] = wedges_hash;
-    num_wedges_hash = 1;
-    update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
-    wedges_seq_intp = _seq<E>(newA(E, nu), nu);
-    butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
+    if (type == PHASH) {
+      using T = sparseAdditiveSet<long, long>*;
+      wedges_hash = new sparseAdditiveSet<long, long>(1,1, LONG_MAX, LONG_MAX);
+      wedges_hash_list = newA(T, 1);
+      wedges_hash_list[0] = wedges_hash;
+      num_wedges_hash = 1;
+      update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
+      wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+      butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
+    }
+    else if (type == PSORT) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+    else if (type == PHIST) {
+      wedges_seq_long = _seq<long>(newA(long, nu), nu);
+      tmp = pbbsa::sequence<tuple<long, uintE>>();
+      out = pbbsa::sequence<tuple<long, uintE>>();
+    }
+    else {
+      wedges_seq_int = _seq<long>(newA(long, nu*stepSize), nu*stepSize);
+      granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
+      used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
+    }
   }
-  else if (type == 1) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-  else if (type == 2) {
-    wedges_seq_long = _seq<long>(newA(long, nu), nu);
-    tmp = pbbsa::sequence<tuple<long, uintE>>();
-    out = pbbsa::sequence<tuple<long, uintE>>();
-  }
-  else {
-    //timer t1;
-    wedges_seq_int = _seq<long>(newA(long, nu*stepSize), nu*stepSize);
-    //t1.start();
-    granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
-    //t1.reportTotal("time for init wedges");
-    used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
-    //update_idx_seq_int = _seq<long>(newA(long, stepSize+1), stepSize+1);
-  }
-}
+
   void resize_update(size_t size) {
-  	if (update_seq_int.n < size) {
+    if (update_seq_int.n < size) {
       free(update_seq_int.A);
       update_seq_int.A = newA(uintE, size);
       update_seq_int.n = size;
@@ -152,7 +144,7 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
       new_wedges_hash_list[i] = wedges_hash_list[i];
     }
     parallel_for(long i=num_wedges_hash; i < find_idx+1; ++i) {
-      new_wedges_hash_list[i] = new sparseAdditiveSet<long, long>(1u << i,1, LONG_MAX, LONG_MAX);
+      new_wedges_hash_list[i] = new sparseAdditiveSet<long, long>(1u << i, 1, LONG_MAX, LONG_MAX);
     }
     free(wedges_hash_list);
     wedges_hash_list = new_wedges_hash_list;
@@ -164,26 +156,21 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
   }
 
   void clear() {
-    if (type == 0) update_hash.clear();
+    if (type == PHASH) update_hash.clear();
   }
 
   void del() {
-  	update_seq_int.del();
-    if (type == 0) {
+    update_seq_int.del();
+    if (type == PHASH) {
       parallel_for(long i=0; i < num_wedges_hash; ++i) { wedges_hash_list[i]->del(); free(wedges_hash_list[i]); }
       free(wedges_hash_list);
       update_hash.del();
       wedges_seq_intp.del(); 
       butterflies_seq_intp.del();
     }
-    else if (type == 1) wedges_seq_uvp.del();
-    else if (type == 2) {
-      wedges_seq_long.del();
-    }
-    else {
-      wedges_seq_int.del(); used_seq_int.del();
-      //update_idx_seq_int.del();
-    }
+    else if (type == PSORT) wedges_seq_uvp.del();
+    else if (type == PHIST) wedges_seq_long.del();
+    else { wedges_seq_int.del(); used_seq_int.del(); }
   }
 };
 
@@ -191,16 +178,32 @@ PeelSpace(long _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize
 //***************************************************************************************************
 //***************************************************************************************************
 
-
+/*
+ *  Retrieve all wedges in this batch based on active vertices, sequentially.
+ * 
+ *  wedges_seq: Array to store wedges
+ *  I         : Array that holds active vertices
+ *  num_I     : Length of I
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  curr_idx  : Starting index in I of this batch
+ *  next_idx  : Ending index in I of this batch
+ */
 template<class wedge, class wedgeCons, class Sequence>
-void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
-  long curr_idx, long next_idx) {
+void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+                          long num_wedges, long curr_idx, long next_idx) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
   long idx = 0;
+  // Store wedges sequentially
+  // Iterate through each index i in this batch
   for(long i=curr_idx; i < next_idx; ++i) {
     uintE u = I[i];
     intT u_offset = offsetsU[u];
@@ -209,7 +212,7 @@ void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipar
       uintE v = edgesU[u_offset + j];
       intT v_offset = offsetsV[v];
       intT v_deg = offsetsV[v+1] - v_offset;
-      // Find neighbors (not equal to u) of v
+      // Find two-hop neighbors of u
       for (long k = 0; k < v_deg; ++k) {
         uintE u2 = edgesV[v_offset + k];
         if (u2 != u) {
@@ -221,30 +224,48 @@ void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipar
   }
 }
 
+/*
+ *  Retrieve all wedges in this batch based on active vertices, in parallel.
+ * 
+ *  wedges_seq: Array to store wedges
+ *  I         : Array that holds active vertices
+ *  num_I     : Length of I
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  curr_idx  : Starting index in I of this batch
+ *  next_idx  : Ending index in I of this batch
+ */
 template<class wedge, class wedgeCons, class Sequence>
-void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I,long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
-  long curr_idx=0, long next_idx=LONG_MAX) {
-
+void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I,long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+                      long num_wedges, long curr_idx=0, long next_idx=LONG_MAX) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
+  // Allocate space for wedge storage
   if (wedges_seq.n < num_wedges) {
     free(wedges_seq.A);
     wedges_seq.A = newA(wedge, num_wedges);
     wedges_seq.n = num_wedges;
   }
 
+  // Set next index in batch
   if (next_idx == LONG_MAX) next_idx = num_I;
-  if (num_wedges < 10000) return _getActiveWedges_seq<wedge>(wedges_seq, I, num_I, GA, use_v, cons, num_wedges, curr_idx, next_idx);
+  // Run sequentially if batch is small enough
+  if (num_wedges < 10000) return _getActiveWedges_seq<wedge>(wedges_seq, I, num_I, GA, use_v, cons, num_wedges,
+                                                             curr_idx, next_idx);
 
-  // First, we must retrive the indices at which to store each seagull (so that storage can be parallelized)
-  // Array of indices associated with seagulls for each active vertex
+  // First, we must retrive the indices at which to store each wedge (so that storage can be parallelized)
+  // Array of indices associated with wedges for each active vertex
   long* sg_idxs = newA(long, next_idx - curr_idx + 1);
   sg_idxs[next_idx-curr_idx] = 0;
 
-  // 2D array of indices associated with seagulls for each neighbor of each active vertex
+  // 2D array of indices associated with wedges for each neighbor of each active vertex
   using T = long*;
   T* nbhd_idxs = newA(T, next_idx-curr_idx); 
 
@@ -268,7 +289,7 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I,long num_I, bipartiteC
   // Assign indices associated with each active vertex
   sequence::plusScan(sg_idxs, sg_idxs, next_idx-curr_idx + 1);
 
-  // Store seagulls in parallel
+  // Store wedges in parallel
   parallel_for(long i=curr_idx; i < next_idx; ++i) {
     uintE u = I[i];
     intT u_offset = offsetsU[u];
@@ -300,17 +321,35 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I,long num_I, bipartiteC
   free(sg_idxs);
 }
 
+/*
+ *  Retrieve and hash all wedges in this batch based on active vertices.
+ * 
+ *  ps        : Holds all array space needed, to be reused between buckets
+ *  I         : Array that holds active vertices
+ *  num_I     : Length of I
+ *  GA        : Bipartite graph in CSR format
+ *  use_v     : Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *              produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ *  cons      : Constructor for a wedge; takes as input i, u2, v, j, and k, where i and u2 are endpoints, v is the
+ *              center, and j and k are indices indicating the edge indices for (i, v) and (v, u2) respectively.
+ *  num_wedges: Number of wedges in this batch
+ *  curr_idx  : Starting index in I of this batch
+ *  next_idx  : Ending index in I of this batch
+ */
 template<class wedgeCons, class Sequence>
-void _getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, 
-  long curr_idx=0, long next_idx=INT_T_MAX) {
-
+void _getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+                          long num_wedges, long curr_idx=0, long next_idx=INT_T_MAX) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
   uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
 
+  // Set next index in batch
   if (next_idx == INT_T_MAX) next_idx = num_I;
+
+  // Allocate hash table space
   auto wedges = ps.resize(num_wedges);
+
   parallel_for(long i=curr_idx; i < next_idx; ++i){
     // Set up for each active vertex
     uintE u = I[i];
@@ -324,7 +363,7 @@ void _getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& G
       for (long k=0; k < v_deg; ++k) { 
         uintE u2 = edgesV[v_offset + k];
         if (u2 != u) wedges->insert(make_pair(cons(u, u2, v, j, k),1));
-	    }
+      }
     }
   }
 }
@@ -500,7 +539,7 @@ auto nonMaxLF = [] (const X& r) { return get<0>(r) != UINT_E_MAX || get<1>(r) !=
       if (u2 != u && u2 != UINT_E_MAX && (!current[v_offset+k] || idx < v_offset + k)) {//u2 != UINT_E_MAX - 1
         intersect(ps.wedges_seq_tup, eti, ite, current, GA, use_v, u, v, u2, idx, v_offset+k, idxs[i-curr_idx]*2 + i - curr_idx); //TODO make sure this is ok
       }
-	  }
+    }
   }
   long num_wedges_fil = sequence::filter(ps.wedges_seq_tup.A, ps.wedges_seq_tup_fil.A, num_wedges*2+next_idx-curr_idx, nonMaxLF);
   return num_wedges_fil;
@@ -683,7 +722,7 @@ void getIntersectWedgesHash(uintE* eti, uintE* ite, bool* current, PeelESpace& p
       if (u2 != u && u2 != UINT_E_MAX && (!current[v_offset+k] || idx < v_offset + k)) {//u2 != UINT_E_MAX - 1
         intersect_hash(eti, ite, current, ps, GA, use_v, u, v, u2, idx, v_offset+k);
       }
-	  }
+    }
   }
 
   parallel_for(intT i=0; i < num_I; ++i){
@@ -745,7 +784,7 @@ pair<tuple<uintE,long>*,long> _updateBuckets_seq(uintE* update_idxs, long num_up
 }
 
 void updateBuckets(array_imap<long>& D, buckets<array_imap<long>>& b, uintE k, long* butterflies, bool is_seq, long nu,
-  uintE* update_idxs, long num_updates) {
+                   uintE* update_idxs, long num_updates) {
   pair<tuple<uintE,long>*,long> bucket_pair;
   if (is_seq) bucket_pair = _updateBuckets_seq(update_idxs, num_updates, butterflies, D, b, k);
   else bucket_pair = _updateBuckets(update_idxs, num_updates, butterflies, D, b, k);
