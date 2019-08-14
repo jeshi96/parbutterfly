@@ -223,14 +223,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   // Type for peeling
   long peel_type_long = P.getOptionLongValue("-tp", LONG_MAX);
-  string peel_type_str = P.getOptionValue("-peelType","");
+  string peel_type_str = P.getOptionValue("-peelType", "");
   PeelType tp;
+  bool nopeel;
   if (peel_type_long == LONG_MAX) {
     if (peel_type_str == "SORT") tp = PSORT;
     else if (count_type_str == "HASH") tp = PHASH;
     else if (count_type_str == "HIST") tp = PHIST;
     else if (count_type_str == "BATCHS") tp = PBATCHS;
-    else tp = PBATCHWA;
+    else if (count_type_str == "BATCHWA") tp = PBATCHWA;
+    else nopeel = true;
   }
   else {
     switch(peel_type_long) {
@@ -241,32 +243,42 @@ void Compute(bipartiteCSR& GA, commandLine P) {
       case 5: tp = PBATCHWA; break;
       default: break;
     }
+    nopeel = P.getOptionValue("-nopeel");
   }
 
-  long te = P.getOptionLongValue("-e",0);
-  bool nopeel = P.getOptionValue("-nopeel");
-  bool total = P.getOptionValue("-total");
-  
+  // Type for per vert, edge, or total
+  string per_type_str = P.getOptionValue("-per","");
+  PerType per_type;
+  if (per_type_str == "VERT") per_type = VERT;
+  else if (per_type_str == "EDGE") per_type = EDGE;
+  else if (per_type_str == "TOTAL") per_type = TOTAL;
+  else {
+    long te = P.getOptionLongValue("-e",0);
+    bool total = P.getOptionValue("-total");
+    if (te == 0) per_type = VERT;
+    else if (total) per_type = TOTAL;
+    else per_type = EDGE;
+  }
+
   // # of max wedges
   long max_wedges = P.getOptionLongValue("-m",2577500000);
   long max_array_size = P.getOptionLongValue("-a",23090996160);
 
   long denom = P.getOptionLongValue("-d",25);
   long sparse = P.getOptionLongValue("-s",0); 
-  if (sparse > 0) {total=true;}
-  if (total) {nopeel = true;}
+  if (sparse > 0) {per_type = TOTAL;}
+  if (per_type == TOTAL) {nopeel = true;}
 
-  cout << "count " << ty << ", " << "peel " << tp << ", " << "edge " << te << ", " << "rank " << tw << ", " << "peel " << nopeel << "\n";
-
+  // Preprocessing
   timer t1;
   t1.start();
-  tuple<bool,long> use_v_tuple = cmpWedgeCounts(GA);
+  tuple<bool, long> use_v_tuple = cmpWedgeCounts(GA);
   bool use_v = get<0>(use_v_tuple);
   long num_wedges = get<1>(use_v_tuple);
   t1.reportTotal("preprocess (wedge counts)");
 
-  // if you only want total counts
-  if (total) {
+  // Choose per type
+  if (per_type == TOTAL) {
     if (tw == SIDE && ty == SERIAL) CountOrigCompactSerialTotal(GA,use_v);
     if (tw == SIDE && ty == SERIAL) return;
 
@@ -282,9 +294,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     cout << "number of butterflies: " << num_butterflies << "\n";
     return;
   }
-
- //TODO seq code integrate w/count
-  if (te == 0) {
+  else if (per_type == VERT) {
     if (tw == SIDE && ty == SERIAL) CountOrigCompactSerial(GA,use_v);
     if (tw == SIDE && ty == SERIAL) return;
 

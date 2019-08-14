@@ -24,6 +24,7 @@ using namespace std;
 enum CountType {SORT, ASORT, HASH, AHASH, HIST, AHIST, BATCHS, BATCHWA, SERIAL};
 enum RankType {SIDE, COCORE, ACOCORE, DEG, ADEG};
 enum PeelType {PSORT, PHASH, PHIST, PBATCHS, PBATCHWA};
+enum PerType {VERT, EDGE, TOTAL};
 
 // Represents a wedge, where v1 and v2 are the endpoints, u is the center, j is
 // the index of u as a neighbor of v1, and k is the index of v2 as a neighbor
