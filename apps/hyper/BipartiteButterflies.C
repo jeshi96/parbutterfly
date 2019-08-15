@@ -35,109 +35,6 @@
 
 using namespace std;
 
-//JS: to do: integrate into framework so that ranked versions work as well. also need one for edge counting.
-void CountOrigCompactSerial(bipartiteCSR& GA, bool use_v) {
-  timer t1,t2;
-  t1.start();
-  const long nv = use_v ? GA.nv : GA.nu;
-  const long nu = use_v ? GA.nu : GA.nv;
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
-  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  long results = 0;
-  uintE* wedges = newA(uintE, nu);
-  uintE* used = newA(uintE, nu);
-
-  for(long i=0; i < nu; ++i) { wedges[i] = 0; }
-
-  long* butterflies = newA(long,nu);
-  for(long i=0; i < nu; ++i) { butterflies[i] = 0; }
-
-  t1.reportTotal("preprocess");
-  t2.start();
-
-  for(intT i=0; i < nu; ++i){
-    intT used_idx = 0;
-    intT u_offset  = offsetsU[i];
-    intT u_deg = offsetsU[i+1]-u_offset;
-    for (intT j=0; j < u_deg; ++j ) {
-      uintE v = edgesU[u_offset+j];
-      intT v_offset = offsetsV[v];
-      intT v_deg = offsetsV[v+1]-offsetsV[v];
-      for (intT k=0; k < v_deg; ++k) { 
-        uintE u2_idx = edgesV[v_offset+k];
-        if (u2_idx < i) {
-          butterflies[i] += wedges[u2_idx];
-          butterflies[u2_idx] += wedges[u2_idx];
-          wedges[u2_idx]++;
-          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
-        }
-        else break;
-      }
-    }
-    for(intT j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
-  }
-  t2.reportTotal("main loop");
-  
-  free(wedges);
-  free(used);
-
-  for(long i=0;i<nu;i++) results += butterflies[i];
-  free(butterflies);
-  cout << "num: " << results/2 << "\n";
-}
-
-void CountOrigCompactSerialTotal(bipartiteCSR& GA, bool use_v) {
-  timer t1,t2;
-  t1.start();
-
-  const long nv = use_v ? GA.nv : GA.nu;
-  const long nu = use_v ? GA.nu : GA.nv;
-  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
-  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
-  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
-  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
-
-  long results = 0;
-  uintE* wedges = newA(uintE, nu);
-  uintE* used = newA(uintE, nu);
-
-  for(long i=0; i < nu; ++i) { wedges[i] = 0; }
-  long nb = 0;
-
-  t1.reportTotal("preprocess");
-  t2.start();
-
-  for(intT i=0; i < nu; ++i){
-    intT used_idx = 0;
-    intT u_offset  = offsetsU[i];
-    intT u_deg = offsetsU[i+1]-u_offset;
-    for (intT j=0; j < u_deg; ++j ) {
-      uintE v = edgesU[u_offset+j];
-      intT v_offset = offsetsV[v];
-      intT v_deg = offsetsV[v+1]-offsetsV[v];
-      for (intT k=0; k < v_deg; ++k) { 
-        uintE u2_idx = edgesV[v_offset+k];
-        if (u2_idx < i) {
-          nb += wedges[u2_idx];
-          wedges[u2_idx]++;
-          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
-        }
-        else break;
-      }
-    }
-    for(intT j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
-  }
-  t2.reportTotal("main loop");
-  
-  free(wedges);
-  free(used);
-
-  cout << "num: " << nb << "\n";
-}
-
 string CountTypeToStr(CountType ty) {
   switch(ty) {
   case ASORT: return "Sort"; break;
@@ -166,6 +63,12 @@ string PeelTypeToStr(PeelType ty) {
   return "";
 }
 
+/*
+ *  Butterfly counting/peeling framework
+ * 
+ *  GA: Bipartite graph in CSR format
+ *  P : Command line arguments
+ */
 void Compute(bipartiteCSR& GA, commandLine P) {
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
@@ -265,9 +168,25 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long max_array_size = P.getOptionLongValue("-a",23090996160);
 
   long denom = P.getOptionLongValue("-d",25);
-  long sparse = P.getOptionLongValue("-s",0); 
-  if (sparse > 0) {per_type = TOTAL;}
-  if (per_type == TOTAL) {nopeel = true;}
+
+  long sparse_type_long = P.getOptionLongValue("-s", LONG_MAX);
+  string sparse_type_str = P.getOptionValue("-sparseType", "");
+  SparseType sparse;
+  if (sparse_type_long == LONG_MAX) {
+    if (sparse_type_str == "NONE") sparse = NOSPARSE;
+    else if (sparse_type_str == "COLOR") sparse = CLRSPARSE;
+    else sparse = ESPARSE;
+  }
+  else {
+    switch(sparse_type_long) {
+    case 0: sparse = NOSPARSE; break;
+    case 1: sparse = CLRSPARSE; break;
+    case 2: sparse = ESPARSE; break;
+    default: break;
+    }
+  }
+  if (sparse != NOSPARSE) { per_type = TOTAL; }
+  if (per_type == TOTAL) { nopeel = true; }
 
   // Preprocessing
   timer t1;
@@ -279,9 +198,6 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   // Choose per type
   if (per_type == TOTAL) {
-    if (tw == SIDE && ty == SERIAL) CountOrigCompactSerialTotal(GA,use_v);
-    if (tw == SIDE && ty == SERIAL) return;
-
     timer t;
     t.start();
     long num_butterflies = CountTotal(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
@@ -295,9 +211,6 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     return;
   }
   else if (per_type == VERT) {
-    if (tw == SIDE && ty == SERIAL) CountOrigCompactSerial(GA,use_v);
-    if (tw == SIDE && ty == SERIAL) return;
-
     timer t;
     t.start();
     long* butterflies = Count(GA, use_v, num_wedges, max_wedges, max_array_size, ty, tw);
@@ -358,43 +271,75 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   }
 }
 
+/*
+ *  Butterfly counting/peeling framework; calls the framework (Compute) over
+ *  multiple rounds
+ */
 int parallel_main(int argc, char* argv[]) {
   commandLine P(argc,argv," <inFile>");
   char* iFile = P.getArgument(0);
-  long rounds = P.getOptionLongValue("-r",3);
-  long te = P.getOptionLongValue("-e",0);
+  long rounds = P.getOptionLongValue("-r", 3);
   bool nopeel = P.getOptionValue("-nopeel");
-  long denom = P.getOptionLongValue("-d",25);
-  long sparse = P.getOptionLongValue("-s",0); // 0 for not sparse, 1 for clr, 2 for edge
+  long denom = P.getOptionLongValue("-d", 25);
 
-  if ((te == 0 || nopeel) && sparse == 0) {
+  string per_type_str = P.getOptionValue("-per","");
+  PerType per_type;
+  if (per_type_str == "VERT") per_type = VERT;
+  else if (per_type_str == "EDGE") per_type = EDGE;
+  else if (per_type_str == "TOTAL") per_type = TOTAL;
+  else {
+    long te = P.getOptionLongValue("-e",0);
+    bool total = P.getOptionValue("-total");
+    if (te == 0) per_type = VERT;
+    else if (total) per_type = TOTAL;
+    else per_type = EDGE;
+  }
+
+  long sparse_type_long = P.getOptionLongValue("-s", LONG_MAX);
+  string sparse_type_str = P.getOptionValue("-sparseType", "");
+  SparseType sparse;
+  if (sparse_type_long == LONG_MAX) {
+    if (sparse_type_str == "NONE") sparse = NOSPARSE;
+    else if (sparse_type_str == "COLOR") sparse = CLRSPARSE;
+    else sparse = ESPARSE;
+  }
+  else {
+    switch(sparse_type_long) {
+    case 0: sparse = NOSPARSE; break;
+    case 1: sparse = CLRSPARSE; break;
+    case 2: sparse = ESPARSE; break;
+    default: break;
+    }
+  }
+
+  if ((per_type == EDGE || nopeel) && sparse == NOSPARSE) {
     bipartiteCSR G = readBipartite(iFile);
-
-    Compute(G,P);
-    for(int r=0;r<rounds;r++) {
-      Compute(G,P);
+    Compute(G, P);
+    for(int r = 0; r < rounds; r++) {
+      Compute(G, P);
     }
     G.del();
   }
   else {
     bipartiteCSR G;
-    if (sparse == 0) G = readBipartite(iFile);
+    if (sparse == NOSPARSE) G = readBipartite(iFile);
     else {
       auto tmp = readBipartite(iFile);
-      G = sparse == 1 ? clrSparseBipartite(tmp, denom, 0) : eSparseBipartite(tmp, denom, 0);
+      G = sparse == CLRSPARSE ? clrSparseBipartite(tmp, denom, 0) : eSparseBipartite(tmp, denom, 0);
       tmp.del();
     }
-    Compute(G,P);
+    Compute(G, P);
     G.del();
 
-    for(int r=0;r<rounds;r++) {
-      if (sparse == 0) G = readBipartite(iFile);
+    for(int r = 0; r < rounds; r++) {
+      if (sparse == NOSPARSE) G = readBipartite(iFile);
       else{
 	auto tmp = readBipartite(iFile);
-	G = sparse == 1 ? clrSparseBipartite(tmp, denom, (r+1)*(tmp.nv+tmp.nu)) : eSparseBipartite(tmp, denom, (r+1)*(tmp.nv+tmp.nu));
+	G = sparse == CLRSPARSE ? clrSparseBipartite(tmp, denom, (r + 1) * (tmp.nv + tmp.nu)) :
+    eSparseBipartite(tmp, denom, (r + 1) * (tmp.nv + tmp.nu));
 	tmp.del();
       }
-      Compute(G,P);
+      Compute(G, P);
       G.del();
     }
   }

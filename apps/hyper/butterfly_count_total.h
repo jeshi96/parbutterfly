@@ -716,6 +716,80 @@ long CountWorkEfficientParallelTotal(graphCSR& GA, long max_array_size) {
 }
 
 /*
+ *  Computes total butterfly count, using side ranking and a
+ *  work-efficient algorithm.
+ * 
+ *  GA   : Bipartite graph in CSR format
+ *  use_v: Denotes which bipartition produces the fewest wedges. If true, considering two-hop neighbors of U
+ *         produces the fewest wedges. If false, considering two-hop neighbors of V produces the fewest wedges.
+ * 
+ *  Returns total butterfly count.
+ */
+long CountOrigCompactSerialTotal(bipartiteCSR& GA, bool use_v) {
+  timer t1,t2;
+  t1.start();
+
+  const long nv = use_v ? GA.nv : GA.nu;
+  const long nu = use_v ? GA.nu : GA.nv;
+  uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
+  uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
+  uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
+  uintE* edgesU = use_v ? GA.edgesU : GA.edgesV;
+
+  long results = 0;
+  // Store number of wedges per endpoint
+  uintE* wedges = newA(uintE, nu);
+  // Keeps track of entries used in the wedges array
+  uintE* used = newA(uintE, nu);
+
+  // Initialize wedge counts
+  for(long i=0; i < nu; ++i) { wedges[i] = 0; }
+  long nb = 0;
+
+#ifdef VERBOSE
+  t1.reportTotal("preprocess");
+#endif
+  t2.start();
+
+  // Consider every vertex i
+  for(intT i=0; i < nu; ++i){
+    intT used_idx = 0;
+    intT u_offset  = offsetsU[i];
+    intT u_deg = offsetsU[i+1]-u_offset;
+    for (intT j=0; j < u_deg; ++j ) {
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1]-offsetsV[v];
+      // Iterate through all 2-hop neighbors of i
+      for (intT k=0; k < v_deg; ++k) { 
+        uintE u2_idx = edgesV[v_offset+k];
+        if (u2_idx < i) {
+          nb += wedges[u2_idx];
+          // Count wedges on the second endpoint
+          wedges[u2_idx]++;
+          // Keep track of used second endpoints
+          if (wedges[u2_idx] == 1) used[used_idx++] = u2_idx;
+        }
+        else break;
+      }
+    }
+
+    // Clear wedges array for reuse (only need to clear on used second
+    // endpoints)
+    for(intT j=0; j < used_idx; ++j) { wedges[used[j]] = 0; }
+  }
+
+#ifdef VERBOSE
+  t2.reportTotal("counting (main loop)");
+#endif
+  
+  free(wedges);
+  free(used);
+
+  return nb;
+}
+
+/*
  *  Computes total butterfly count, given a ranked graph and using a
  *  serial work-efficient algorithm.
  * 
@@ -943,7 +1017,7 @@ long CountTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
 
   // Compute wedge indices so that wedges can be stored in parallel (for any
   // aggregation type except simple batching)
-  long* wedge_idxs = (type == BATCHS) ? nullptr : countWedgesScan(GA, use_v, true);
+  long* wedge_idxs = (type == BATCHS || type == SERIAL) ? nullptr : countWedgesScan(GA, use_v, true);
 
   // Initialize structure that holds all space for counting algorithms, to be
   // reused with wedge batches
@@ -957,6 +1031,7 @@ long CountTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
   // Choose wedge/butterfly aggregation type
   if (type == BATCHS) num_butterflies = CountOrigCompactParallelTotal(GA, use_v, max_array_size);
   else if (type == BATCHWA) num_butterflies = CountOrigCompactParallel_WedgeAwareTotal(GA,use_v,max_array_size,wedge_idxs);
+  else if (type == SERIAL) num_butterflies = CountOrigCompactSerialTotal(GA, use_v);
   else {
     if (max_wedges >= num_wedges) {
       if (type == SORT) num_butterflies = CountSortTotal(cs, GA, use_v, num_wedges, max_wedges, wedge_idxs).second;
@@ -977,11 +1052,11 @@ long CountTotal(bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges, 
     }
   }
 
-  if (type != BATCHS) free(wedge_idxs);
+  if (type != BATCHS && type != SERIAL) free(wedge_idxs);
   cs.del();
 
 #ifdef VERBOSE
-  if (type != BATCHS && type != BATCHWA) t_time.reportTotal("counting");
+  if (type != BATCHS && type != BATCHWA && type != SERIAL) t_time.reportTotal("counting");
 #endif
 
   return num_butterflies;
