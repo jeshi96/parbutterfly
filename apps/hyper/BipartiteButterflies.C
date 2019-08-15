@@ -138,15 +138,15 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     else nopeel = true;
   }
   else {
+    nopeel = P.getOptionValue("-nopeel");
     switch(peel_type_long) {
     case 0: tp = PHASH; break;
     case 1: tp = PSORT; break;
     case 2: tp = PHIST; break;
     case 3: case 4: tp = PBATCHS; break;
     case 5: tp = PBATCHWA; break;
-    default: break;
+    default: nopeel = true; break;
     }
-    nopeel = P.getOptionValue("-nopeel");
   }
 
   // Type for per vert, edge, or total
