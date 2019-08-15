@@ -44,7 +44,7 @@ The application BipartiteButterflies in apps/hyper/ takes as input a bipartite
 graph in Ligra format, which is described in more detail in the next section.
 It also takes parameters for counting and peeling, as follows:
 
-| Parameter&nbsp;&nbsp;&nbsp;&nbsp;| Default     | Description                                      |
+| Parameter&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;| Default     | Description                                      |
 | ---------    | -------     | ------------------------------------------------ |
 | `-countType` | SERIAL      | Wedge/butterfly aggregation type for counting (ASORT, SORT, AHASH, HASH, AHIST, HIST, BATCHS, BATCHWA, or SERIAL) |
 | `-rankType`  | ADEG        | Vertex ordering (SIDE, COCORE, ACOCORE, DEG, or ADEG). The prefix A means approximate.                |
