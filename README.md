@@ -59,7 +59,7 @@ It also takes parameters for counting and peeling, as follows:
 For example:
 
 ```
-$ ./BipartiteButterflies -countType BATCHS -rankType ADEG -peelType NONE -per VERT <input file>
+$ ./BipartiteButterflies -countType BATCHS -rankType ACOCORE -peelType BATCHS -per EDGE <input file>
 ``` 
 
 On NUMA machines, adding the command "numactl -i all " when running
