@@ -59,14 +59,14 @@ It also takes parameters for counting and peeling, as follows:
 For example:
 
 ```
-$ ./BipartiteButterflies -countType BATCHS -rankType ADEG -peelType NONE -per VERT &lt;input file>
+$ ./BipartiteButterflies -countType BATCHS -rankType ADEG -peelType NONE -per VERT <input file>
 ``` 
 
 On NUMA machines, adding the command "numactl -i all " when running
 the program may improve performance for large graphs. For example:
 
 ```
-$ numactl -i all ./BipartiteButterflies -countType BATCHS -rankType ADEG -peelType NONE -per VERT &lt;input file>
+$ numactl -i all ./BipartiteButterflies <input file>
 ``` 
 
 
