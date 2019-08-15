@@ -151,15 +151,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
 
   // Type for per vert, edge, or total
   string per_type_str = P.getOptionValue("-per","");
+  long te = P.getOptionLongValue("-e", LONG_MAX);
+  bool total = P.getOptionValue("-total");
   PerType per_type;
-  if (per_type_str == "VERT") per_type = VERT;
-  else if (per_type_str == "EDGE") per_type = EDGE;
-  else if (per_type_str == "TOTAL") per_type = TOTAL;
-  else {
-    long te = P.getOptionLongValue("-e",0);
-    bool total = P.getOptionValue("-total");
-    if (te == 0) per_type = VERT;
-    else if (total) per_type = TOTAL;
+  if (te == LONG_MAX) {
+    if (per_type_str == "VERT") per_type = VERT;
+    else if (per_type_str == "EDGE") per_type = EDGE;
+    else if (per_type_str == "TOTAL") per_type = TOTAL;
+  } else {
+    if (total) per_type = TOTAL;
+    else if (te == 0) per_type = VERT;
     else per_type = EDGE;
   }
 
@@ -283,15 +284,16 @@ int parallel_main(int argc, char* argv[]) {
   long denom = P.getOptionLongValue("-d", 25);
 
   string per_type_str = P.getOptionValue("-per","");
+  long te = P.getOptionLongValue("-e", LONG_MAX);
+  bool total = P.getOptionValue("-total");
   PerType per_type;
-  if (per_type_str == "VERT") per_type = VERT;
-  else if (per_type_str == "EDGE") per_type = EDGE;
-  else if (per_type_str == "TOTAL") per_type = TOTAL;
-  else {
-    long te = P.getOptionLongValue("-e",0);
-    bool total = P.getOptionValue("-total");
-    if (te == 0) per_type = VERT;
-    else if (total) per_type = TOTAL;
+  if (te == LONG_MAX) {
+    if (per_type_str == "VERT") per_type = VERT;
+    else if (per_type_str == "EDGE") per_type = EDGE;
+    else if (per_type_str == "TOTAL") per_type = TOTAL;
+  } else {
+    if (total) per_type = TOTAL;
+    else if (te == 0) per_type = VERT;
     else per_type = EDGE;
   }
 
