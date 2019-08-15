@@ -107,3 +107,16 @@ AdjacencyHypergraph
 &lt;edgeu(1)>  
 ...  
 &lt;edgeu(mv-1)> 
+
+Graph Utilities
+---------
+
+Several graph utilities are provided in the utils/ directory and can
+be compiled using "make". Importantly, ParButterfly works only with 
+hypergraph formats as described in the previous section.
+
+**KONECTtoHyperAdj** converts a graph in [KONECT
+format](http://konect.cc/) and converts it to Ligra's
+adjacency hypergraph format. The first required parameter is the input
+(KONECT) file name and second required parameter is the output (Ligra)
+file name.
