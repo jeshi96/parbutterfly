@@ -33,8 +33,8 @@ struct seagullSumHelper {
   uintT* offsetsU;
   uintT* offsetsV;
   uintE* edgesU;
-  seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) :
-    u(_u), offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU) {}
+seagullSumHelper(uintE _u, uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU) :
+  u(_u), offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU) {}
   inline E operator() (const E& i) const {
     intT u_offset = offsetsU[u];
     uintE v = edgesU[u_offset + i];
@@ -49,8 +49,8 @@ struct seagullSum {
   uintT* offsetsV;
   uintE* edgesU;
   uintE* active;
-  seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) :
-    offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
+seagullSum(uintT* _offsetsU, uintT* _offsetsV, uintE* _edgesU, uintE* _active) :
+  offsetsU(_offsetsU), offsetsV(_offsetsV), edgesU(_edgesU), active(_active) {}
   inline E operator() (const E& i) const {
     E u_deg = offsetsU[active[i]+1] - offsetsU[active[i]];
     return sequence::reduce<E>((E) 0, u_deg, addF<E>(), seagullSumHelper<E>(active[i], offsetsU, offsetsV, edgesU));
@@ -419,7 +419,7 @@ pair<long, long> PeelSort(PeelSpace& ps, vertexSubset& active, long* butterflies
   auto active_map = make_in_imap<uintT>(active.size(), [&] (size_t i) { return active.vtx(i); });
   auto sg_pair = getActiveWedges<UVertexPair>(ps.wedges_seq_uvp, active_map, active.size(), GA, use_v,
                                               UVertexPairCons(), max_wedges, curr_idx, num_wedges);
- long next_idx = sg_pair.second;
+  long next_idx = sg_pair.second;
 
   // Aggregate wedges by endpoints by sorting
   auto sg_freqs_pair = getSeagullFreqs(nu, ps.wedges_seq_uvp.A, sg_pair.first);
@@ -575,10 +575,10 @@ pair<long, long> PeelHash(PeelSpace& ps, vertexSubset& active, long* butterflies
   using T = pair<long,long>;
   // Compute butterflies on active vertices and store in another hash table
   granular_for ( j, 0, wedges_seq_num, (wedges_seq_num > 1000), {
-    auto sg_freq_pair = ps.wedges_seq_intp.A[j];
-    long num = sg_freq_pair.second;
-    if (num > 1) {ps.update_hash.insert(T(((long) sg_freq_pair.first % nu), (num * (num - 1)/2)));}
-  });
+      auto sg_freq_pair = ps.wedges_seq_intp.A[j];
+      long num = sg_freq_pair.second;
+      if (num > 1) {ps.update_hash.insert(T(((long) sg_freq_pair.first % nu), (num * (num - 1)/2)));}
+    });
   auto num_updates = ps.update_hash.entries_no_init(ps.butterflies_seq_intp);
   ps.resize_update(num_updates);
 
@@ -637,26 +637,26 @@ pair<uintE*, long> PeelOrigParallel(PeelSpace& ps, vertexSubset& active, long* b
       intT u_offset  = offsetsU[u_idx];
       intT u_deg = offsetsU[u_idx+1]-u_offset;
       for (intT j=0; j < u_deg; ++j ) {
-  uintE v = edgesU[u_offset+j];
-  intT v_offset = offsetsV[v];
-  intT v_deg = offsetsV[v+1]-offsetsV[v];
-  // Iterate through all two-hop neighbors of u_idx
-  for (intT k=0; k < v_deg; ++k) { 
-    uintE u2_idx = edgesV[v_offset+k];
-    if (u2_idx != u_idx) {
-      // Subtract the contributing butterfly count from u2_idx
-      if (wedges[shift+u2_idx] > 0)
-        writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
-      // Increment number of wedges on second endpoint
-      wedges[shift+u2_idx]++;
-      // Keep track of used second endpoints
-      if (wedges[shift+u2_idx] == 1) {
-        used[shift+used_idx++] = u2_idx;
-        // Keep track that u2_idx has an updated butterfly count
-        if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx], false, true);
-      }
-    }
-  }
+	uintE v = edgesU[u_offset+j];
+	intT v_offset = offsetsV[v];
+	intT v_deg = offsetsV[v+1]-offsetsV[v];
+	// Iterate through all two-hop neighbors of u_idx
+	for (intT k=0; k < v_deg; ++k) { 
+	  uintE u2_idx = edgesV[v_offset+k];
+	  if (u2_idx != u_idx) {
+	    // Subtract the contributing butterfly count from u2_idx
+	    if (wedges[shift+u2_idx] > 0)
+	      writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
+	    // Increment number of wedges on second endpoint
+	    wedges[shift+u2_idx]++;
+	    // Keep track of used second endpoints
+	    if (wedges[shift+u2_idx] == 1) {
+	      used[shift+used_idx++] = u2_idx;
+	      // Keep track that u2_idx has an updated butterfly count
+	      if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx], false, true);
+	    }
+	  }
+	}
       }
       // Clear wedges array for reuse
       granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
@@ -718,40 +718,40 @@ pair<uintE*, long> PeelOrigParallel_WedgeAware(PeelSpace& ps, vertexSubset& acti
       [&]
       (intT start, intT end){
       if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
-  for (intT i = start; i < end; i++){
-    intT used_idx = 0;
-    long shift = nu*(i-step*stepSize);
-    intT u_idx = active.vtx(i);
-    intT u_offset  = offsetsU[u_idx];
-    intT u_deg = offsetsU[u_idx+1]-u_offset;
-    for (intT j=0; j < u_deg; ++j ) {
-  uintE v = edgesU[u_offset+j];
-  intT v_offset = offsetsV[v];
-  intT v_deg = offsetsV[v+1]-offsetsV[v];
-  // Iterate through all two-hop neighbors of u_idx
-  for (intT k=0; k < v_deg; ++k) { 
-    uintE u2_idx = edgesV[v_offset+k];
-    if (u2_idx != u_idx) {
-      // Subtract the contributing butterfly count from u2_idx
-      if (wedges[shift+u2_idx] > 0)
-         writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
-      // Increment number of wedges on second endpoint
-      wedges[shift+u2_idx]++;
-      // Keep track of used second endpoints
-      if (wedges[shift+u2_idx] == 1) {
-        used[shift+used_idx++] = u2_idx;
-        // Keep track that u2_idx has an updated butterfly count
-        if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx], false, true);
-      }
-    }
-  }
-    }
-    // Clear wedges array for reuse
-    granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
-  }
-    } else {
-  cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
-  recursive_lambda(start + ((end-start)>>1), end);
+	for (intT i = start; i < end; i++){
+	  intT used_idx = 0;
+	  long shift = nu*(i-step*stepSize);
+	  intT u_idx = active.vtx(i);
+	  intT u_offset  = offsetsU[u_idx];
+	  intT u_deg = offsetsU[u_idx+1]-u_offset;
+	  for (intT j=0; j < u_deg; ++j ) {
+	    uintE v = edgesU[u_offset+j];
+	    intT v_offset = offsetsV[v];
+	    intT v_deg = offsetsV[v+1]-offsetsV[v];
+	    // Iterate through all two-hop neighbors of u_idx
+	    for (intT k=0; k < v_deg; ++k) { 
+	      uintE u2_idx = edgesV[v_offset+k];
+	      if (u2_idx != u_idx) {
+		// Subtract the contributing butterfly count from u2_idx
+		if (wedges[shift+u2_idx] > 0)
+		  writeAdd(&butterflies[eltsPerCacheLine*u2_idx], (long) -1* ((long)wedges[shift+u2_idx]));
+		// Increment number of wedges on second endpoint
+		wedges[shift+u2_idx]++;
+		// Keep track of used second endpoints
+		if (wedges[shift+u2_idx] == 1) {
+		  used[shift+used_idx++] = u2_idx;
+		  // Keep track that u2_idx has an updated butterfly count
+		  if(!update_dense[eltsPerCacheLine*u2_idx]) CAS(&update_dense[eltsPerCacheLine*u2_idx], false, true);
+		}
+	      }
+	    }
+	  }
+	  // Clear wedges array for reuse
+	  granular_for(j,0,used_idx,used_idx > 10000, { wedges[shift+used[shift+j]] = 0; });
+	}
+      } else {
+	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	recursive_lambda(start + ((end-start)>>1), end);
       }
     }; 
     recursive_lambda(step*stepSize,min((step+1)*stepSize,active.size()));

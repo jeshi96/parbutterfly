@@ -37,8 +37,8 @@ struct PeelESpace {
   _seq<uintE> wedges_seq_int;
   _seq<uintE> used_seq_int;
 
-  PeelESpace(PeelType _type, long _nu, long _stepSize, long _n_side) :
-    type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
+PeelESpace(PeelType _type, long _nu, long _stepSize, long _n_side) :
+  type(_type), nu(_nu), stepSize(_stepSize), n_side(_n_side) {
     using X = tuple<uintE,long>;
     if (type != PBATCHS && type != PBATCHWA) update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
     if (type == PHASH) update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
@@ -93,33 +93,33 @@ struct PeelSpace {
   long num_wedges_hash;
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
-  PeelSpace(PeelType _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
-    using E = pair<long, long>;
-    using X = pair<uintE,long>;
-    update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
+PeelSpace(PeelType _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
+  using E = pair<long, long>;
+  using X = pair<uintE,long>;
+  update_seq_int = _seq<uintE>(newA(uintE, nu), nu);
 
-    if (type == PHASH) {
-      using T = sparseAdditiveSet<long, long>*;
-      wedges_hash = new sparseAdditiveSet<long, long>(1,1, LONG_MAX, LONG_MAX);
-      wedges_hash_list = newA(T, 1);
-      wedges_hash_list[0] = wedges_hash;
-      num_wedges_hash = 1;
-      update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
-      wedges_seq_intp = _seq<E>(newA(E, nu), nu);
-      butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
-    }
-    else if (type == PSORT) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-    else if (type == PHIST) {
-      wedges_seq_long = _seq<long>(newA(long, nu), nu);
-      tmp = pbbsa::sequence<tuple<long, uintE>>();
-      out = pbbsa::sequence<tuple<long, uintE>>();
-    }
-    else {
-      wedges_seq_int = _seq<long>(newA(long, nu*stepSize), nu*stepSize);
-      granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
-      used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
-    }
+  if (type == PHASH) {
+    using T = sparseAdditiveSet<long, long>*;
+    wedges_hash = new sparseAdditiveSet<long, long>(1,1, LONG_MAX, LONG_MAX);
+    wedges_hash_list = newA(T, 1);
+    wedges_hash_list[0] = wedges_hash;
+    num_wedges_hash = 1;
+    update_hash = sparseAdditiveSet<long, long>(nu, (float) 1, LONG_MAX, LONG_MAX);
+    wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+    butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
   }
+  else if (type == PSORT) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+  else if (type == PHIST) {
+    wedges_seq_long = _seq<long>(newA(long, nu), nu);
+    tmp = pbbsa::sequence<tuple<long, uintE>>();
+    out = pbbsa::sequence<tuple<long, uintE>>();
+  }
+  else {
+    wedges_seq_int = _seq<long>(newA(long, nu*stepSize), nu*stepSize);
+    granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });
+    used_seq_int = _seq<uintE>(newA(uintE, nu*stepSize), nu*stepSize);
+  }
+}
 
   void resize_update(size_t size) {
     if (update_seq_int.n < size) {
@@ -194,8 +194,8 @@ struct PeelSpace {
  *  next_idx  : Ending index in I of this batch
  */
 template<class wedge, class wedgeCons, class Sequence>
-void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
-                          long num_wedges, long curr_idx, long next_idx) {
+  void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+			    long num_wedges, long curr_idx, long next_idx) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
@@ -240,8 +240,8 @@ void _getActiveWedges_seq(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipar
  *  next_idx  : Ending index in I of this batch
  */
 template<class wedge, class wedgeCons, class Sequence>
-void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I,long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
-                      long num_wedges, long curr_idx=0, long next_idx=LONG_MAX) {
+  void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I,long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+			long num_wedges, long curr_idx=0, long next_idx=LONG_MAX) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
@@ -337,8 +337,8 @@ void _getActiveWedges(_seq<wedge>& wedges_seq, Sequence I,long num_I, bipartiteC
  *  next_idx  : Ending index in I of this batch
  */
 template<class wedgeCons, class Sequence>
-void _getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
-                          long num_wedges, long curr_idx=0, long next_idx=INT_T_MAX) {
+  void _getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+			    long num_wedges, long curr_idx=0, long next_idx=INT_T_MAX) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
@@ -508,8 +508,8 @@ pair<long, long> getNextActiveWedgeIdx(Sequence I, long num_I, bipartiteCSR& GA,
  *  batch.
  */
 template<class wedge, class wedgeCons, class Sequence>
-pair<long, long> getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipartiteCSR& GA, bool use_v,
-                                 wedgeCons cons, long max_wedges, long curr_idx, long num_wedges) {
+  pair<long, long> getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, long num_I, bipartiteCSR& GA, bool use_v,
+				   wedgeCons cons, long max_wedges, long curr_idx, long num_wedges) {
   if (max_wedges >= num_wedges) {
     _getActiveWedges<wedge>(wedges_seq, I, num_I, GA, use_v, cons, num_wedges);
     return make_pair(num_wedges, num_I);
@@ -541,8 +541,8 @@ pair<long, long> getActiveWedges(_seq<wedge>& wedges_seq, Sequence I, long num_I
  *  batch.
  */
 template<class wedgeCons, class Sequence>
-long getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
-                         long max_wedges, long curr_idx, long num_wedges) {
+  long getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA, bool use_v, wedgeCons cons,
+			   long max_wedges, long curr_idx, long num_wedges) {
   if (max_wedges >= num_wedges) {
     _getActiveWedgesHash(ps, I, num_I, GA, use_v, cons, num_wedges);
     return num_I;
@@ -576,7 +576,7 @@ long getActiveWedgesHash(PeelSpace& ps, Sequence I, long num_I, bipartiteCSR& GA
  *  wedges_idx: Index in the wedges_seq array to add butterfly counts to
  */
 void intersect(_seq<tuple<uintE,long>>& wedges_seq, uintE* eti, uintE* ite, bool* current, 
-  bipartiteCSR& GA, bool use_v, uintE u, uintE v, uintE u2, uintE idx_vu, uintE idx_vu2, intT wedges_idx) {
+	       bipartiteCSR& GA, bool use_v, uintE u, uintE v, uintE u2, uintE idx_vu, uintE idx_vu2, intT wedges_idx) {
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
   uintE* edgesV = use_v ? GA.edgesV : GA.edgesU;
@@ -603,7 +603,7 @@ void intersect(_seq<tuple<uintE,long>>& wedges_seq, uintE* eti, uintE* ite, bool
         int_offset++;
       }
       if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 &&
-        (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
+	  (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
         // Note the butterfly on (v2, u2) and (v2, u)
         same[j] = 1;
         wedges_seq.A[wedges_idx++] = make_tuple(eti[u2_offset + j], (long) 1);
@@ -868,14 +868,14 @@ pair<long, intT> getIntersectWedges(uintE* eti, uintE* ite, bool* current, PeelE
 
   auto p = getNextIntersectWedgeIdx(eti, ite, I, num_I, GA, use_v, max_wedges, curr_idx);
   long num_wedges = _getIntersectWedges(ps, eti, ite, current, I, num_I, GA, use_v, get<0>(p), get<2>(p), 
-    curr_idx, get<1>(p));
+					curr_idx, get<1>(p));
   free(get<2>(p));
 
   if (get<1>(p) == num_I) {
-  parallel_for(intT i=0; i < num_I; ++i){
-    edgesV[I[i]] = UINT_E_MAX; edgesU[ite[I[i]]] = UINT_E_MAX;
-    current[I[i]] = 0;
-  } }
+    parallel_for(intT i=0; i < num_I; ++i){
+      edgesV[I[i]] = UINT_E_MAX; edgesU[ite[I[i]]] = UINT_E_MAX;
+      current[I[i]] = 0;
+    } }
 
   return make_pair(num_wedges, get<1>(p));
 }
@@ -884,7 +884,7 @@ pair<long, intT> getIntersectWedges(uintE* eti, uintE* ite, bool* current, PeelE
 template <class E>
 struct oneMaxF { 
   uintE* same;
-  oneMaxF(uintE* _same) : same(_same) {}
+oneMaxF(uintE* _same) : same(_same) {}
   inline E operator() (const uintT& i) const {
     return (same[i] != UINT_E_MAX);
   }
@@ -935,7 +935,7 @@ void intersect_hash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, bipar
         int_offset++;
       }
       if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 &&
-        (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
+	  (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
         // Note the butterfly on (v2, u2) and (v2, u)
         same[j] = 1;
         ps.update_hash.insert(make_pair(eti[u2_offset + j],1));
@@ -1030,10 +1030,10 @@ pair<tuple<uintE,long>*,long> _updateBuckets(uintE* update_idxs, long num_update
     long old_b = D.s[u_idx];
     // Find updated buckets
     if (old_b > k) {
-        long new_b = max(butterflies[eltsPerCacheLine*u_idx],k);
-        D.s[u_idx] = new_b;
-        long new_bkt = b.get_bucket(old_b, new_b);
-        update[i] = make_tuple(u_idx, new_bkt);
+      long new_b = max(butterflies[eltsPerCacheLine*u_idx],k);
+      D.s[u_idx] = new_b;
+      long new_bkt = b.get_bucket(old_b, new_b);
+      update[i] = make_tuple(u_idx, new_bkt);
     }
     else { update[i] = make_tuple(UINT_E_MAX, LONG_MAX); }
   }

@@ -140,28 +140,28 @@ void CountOrigCompactSerialTotal(bipartiteCSR& GA, bool use_v) {
 
 string CountTypeToStr(CountType ty) {
   switch(ty) {
-    case ASORT: return "Sort"; break;
-    case SORT: return "SortCE"; break;
-    case AHASH: return "Hash"; break;
-    case HASH: return "HashCE"; break;
-    case AHIST: return "Hist"; break;
-    case HIST: return "HistCE"; break;
-    case BATCHS: return "Par"; break;
-    case SERIAL: return "Serial"; break;
-    case BATCHWA: return "WedgePar"; break;
-    default: break;
+  case ASORT: return "Sort"; break;
+  case SORT: return "SortCE"; break;
+  case AHASH: return "Hash"; break;
+  case HASH: return "HashCE"; break;
+  case AHIST: return "Hist"; break;
+  case HIST: return "HistCE"; break;
+  case BATCHS: return "Par"; break;
+  case SERIAL: return "Serial"; break;
+  case BATCHWA: return "WedgePar"; break;
+  default: break;
   }
   return "";
 }
 
 string PeelTypeToStr(PeelType ty) {
   switch(ty) {
-    case PSORT: return "SortCE Peel"; break;
-    case PHASH: return "HashCE Peel"; break;
-    case PHIST: return "HistCE Peel"; break;
-    case PBATCHS: return "Par Peel"; break;
-    case PBATCHWA: return "WedgePar Peel"; break;
-    default: break;
+  case PSORT: return "SortCE Peel"; break;
+  case PHASH: return "HashCE Peel"; break;
+  case PHIST: return "HistCE Peel"; break;
+  case PBATCHS: return "Par Peel"; break;
+  case PBATCHWA: return "WedgePar Peel"; break;
+  default: break;
   }
   return "";
 }
@@ -186,16 +186,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   }
   else {
     switch(count_type_long) {
-      case 0: ty = ASORT; break;
-      case 1: ty = SORT; break;
-      case 2: ty = AHASH; break;
-      case 3: ty = HASH; break;
-      case 4: ty = AHIST; break;
-      case 6: ty = HIST; break;
-      case 5: case 7: case 11: ty = BATCHS; break;
-      case 9: case 12: ty = SERIAL; break;
-      case 8: ty = BATCHWA; break;
-      default: break;
+    case 0: ty = ASORT; break;
+    case 1: ty = SORT; break;
+    case 2: ty = AHASH; break;
+    case 3: ty = HASH; break;
+    case 4: ty = AHIST; break;
+    case 6: ty = HIST; break;
+    case 5: case 7: case 11: ty = BATCHS; break;
+    case 9: case 12: ty = SERIAL; break;
+    case 8: ty = BATCHWA; break;
+    default: break;
     }
   }
 
@@ -212,12 +212,12 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   }
   else {
     switch(rank_type_long) {
-      case 0: tw = SIDE; break;
-      case 1: tw = COCORE; break;
-      case 2: tw = ACOCORE; break;
-      case 3: tw = DEG; break;
-      case 4: tw = ADEG; break;
-      default: break;
+    case 0: tw = SIDE; break;
+    case 1: tw = COCORE; break;
+    case 2: tw = ACOCORE; break;
+    case 3: tw = DEG; break;
+    case 4: tw = ADEG; break;
+    default: break;
     }
   }
 
@@ -236,12 +236,12 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   }
   else {
     switch(peel_type_long) {
-      case 0: tp = PHASH; break;
-      case 1: tp = PSORT; break;
-      case 2: tp = PHIST; break;
-      case 3: case 4: tp = PBATCHS; break;
-      case 5: tp = PBATCHWA; break;
-      default: break;
+    case 0: tp = PHASH; break;
+    case 1: tp = PSORT; break;
+    case 2: tp = PHIST; break;
+    case 3: case 4: tp = PBATCHS; break;
+    case 5: tp = PBATCHWA; break;
+    default: break;
     }
     nopeel = P.getOptionValue("-nopeel");
   }
@@ -377,26 +377,26 @@ int parallel_main(int argc, char* argv[]) {
     G.del();
   }
   else {
-  bipartiteCSR G;
-  if (sparse == 0) G = readBipartite(iFile);
-  else {
-    auto tmp = readBipartite(iFile);
-    G = sparse == 1 ? clrSparseBipartite(tmp, denom, 0) : eSparseBipartite(tmp, denom, 0);
-    tmp.del();
-  }
-  Compute(G,P);
-  G.del();
-
-  for(int r=0;r<rounds;r++) {
+    bipartiteCSR G;
     if (sparse == 0) G = readBipartite(iFile);
-    else{
+    else {
       auto tmp = readBipartite(iFile);
-      G = sparse == 1 ? clrSparseBipartite(tmp, denom, (r+1)*(tmp.nv+tmp.nu)) : eSparseBipartite(tmp, denom, (r+1)*(tmp.nv+tmp.nu));
+      G = sparse == 1 ? clrSparseBipartite(tmp, denom, 0) : eSparseBipartite(tmp, denom, 0);
       tmp.del();
     }
     Compute(G,P);
     G.del();
-  }
+
+    for(int r=0;r<rounds;r++) {
+      if (sparse == 0) G = readBipartite(iFile);
+      else{
+	auto tmp = readBipartite(iFile);
+	G = sparse == 1 ? clrSparseBipartite(tmp, denom, (r+1)*(tmp.nv+tmp.nu)) : eSparseBipartite(tmp, denom, (r+1)*(tmp.nv+tmp.nu));
+	tmp.del();
+      }
+      Compute(G,P);
+      G.del();
+    }
   }
 }
 

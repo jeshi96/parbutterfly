@@ -157,11 +157,11 @@ long PeelEHash(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubs
   const size_t eltsPerCacheLine = 64/sizeof(long);
   // Update butterfly counts for those edges
   granular_for(i, 0, num_updates, (num_updates>1000), {
-    auto update_pair = update_seq.A[i];
-    uintE idx = update_pair.first;
-    butterflies[eltsPerCacheLine*idx] -= update_pair.second;
-    update[i] = idx;
-  });
+      auto update_pair = update_seq.A[i];
+      uintE idx = update_pair.first;
+      butterflies[eltsPerCacheLine*idx] -= update_pair.second;
+      update[i] = idx;
+    });
 
   update_seq.del();
 
@@ -221,72 +221,72 @@ pair<uintE*, long> PeelEOrigParallel_WedgeAware(uintE* eti, uintE* ite, bool* cu
       [&]
       (intT start, intT end){
       if ((start == end-1) || (wedgesPrefixSum[end]-wedgesPrefixSum[start] < 1000)){ 
-  for (intT i = start; i < end; i++){
-    intT used_idx = 0;
-    intT shift = nu*(i-step*stepSize);
-    intT idx_vu = active.vtx(i);
+	for (intT i = start; i < end; i++){
+	  intT used_idx = 0;
+	  intT shift = nu*(i-step*stepSize);
+	  intT idx_vu = active.vtx(i);
 
-    // Retrieve active edge (u, v)
-    uintE u = edgesV[idx_vu];
-    intT u_offset = offsetsU[u];
-    intT u_deg = offsetsU[u+1] - u_offset;
+	  // Retrieve active edge (u, v)
+	  uintE u = edgesV[idx_vu];
+	  intT u_offset = offsetsU[u];
+	  intT u_deg = offsetsU[u+1] - u_offset;
 
-    uintE v = edgesU[ite[idx_vu]];
-    intT v_offset = offsetsV[v];
-    intT v_deg = offsetsV[v+1] - v_offset;
+	  uintE v = edgesU[ite[idx_vu]];
+	  intT v_offset = offsetsV[v];
+	  intT v_deg = offsetsV[v+1] - v_offset;
 
-    // Iterate through all neighbors of v
-    for (intT k=0; k < v_deg; ++k) {
-  uintE u2 = edgesV[v_offset + k];
-  // Check that the neighbor u2 hasn't been peeled before
-  if (u2 != u && u2 != UINT_E_MAX && (!current[v_offset+k] || idx_vu < v_offset + k)) {
-    intT u2_offset = offsetsU[u2];
-    intT u2_deg = offsetsU[u2+1] - u2_offset;
-    intT int_offset = 0;
+	  // Iterate through all neighbors of v
+	  for (intT k=0; k < v_deg; ++k) {
+	    uintE u2 = edgesV[v_offset + k];
+	    // Check that the neighbor u2 hasn't been peeled before
+	    if (u2 != u && u2 != UINT_E_MAX && (!current[v_offset+k] || idx_vu < v_offset + k)) {
+	      intT u2_offset = offsetsU[u2];
+	      intT u2_deg = offsetsU[u2+1] - u2_offset;
+	      intT int_offset = 0;
 
-    // Intersect N(u) with N(u2)
-    // Iterate through all neighbors of u2
-    for(intT j = 0; j < u2_deg; ++j) {
-      uintE v2 = edgesU[u2_offset + j];
-      uintE idx_v2u2 = eti[u2_offset + j];
-      // Check that the neighbor v2 hasn't been peeled before
-      if(v2 != UINT_E_MAX && v2 != v && (!current[idx_v2u2] || idx_v2u2 >= idx_vu)) {
-        // Check if v2 is also a a neighbor of u
-        while(int_offset < u_deg &&
-          (edgesU[u_offset + int_offset] == UINT_E_MAX || edgesU[u_offset + int_offset] < v2)) { int_offset++; }
-        if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 &&
-          (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
-  // If v2 is a neighbor of u and u2, then increment our count
-  wedges[shift+k]++;
-  // Subtract the butterfly from (v2, u2) and (v2, u)
-  writeAdd(&butterflies[eltsPerCacheLine*eti[u2_offset + j]], (long) -1);
-  writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + int_offset]], (long) -1);
-  // Ensure that  (v2, u2), (v2, u), and (v, u2) have been marked with changed butterfly counts
-  if(!update_dense[eltsPerCacheLine*eti[u2_offset + j]])
-    CAS(&update_dense[eltsPerCacheLine*eti[u2_offset + j]], false, true);
-  if(!update_dense[eltsPerCacheLine*eti[u_offset + int_offset]])
-    CAS(&update_dense[eltsPerCacheLine*eti[u_offset + int_offset]], false, true);
-  if (wedges[shift+k] == 1) {
-    used[shift+used_idx++] = k;
-    if(!update_dense[eltsPerCacheLine*(v_offset+k)]) CAS(&update_dense[eltsPerCacheLine*(v_offset+k)],false,true);
-  }
-        }
-        else if(int_offset >= u_deg) break;
-      }
-    }
-  }
-    }
+	      // Intersect N(u) with N(u2)
+	      // Iterate through all neighbors of u2
+	      for(intT j = 0; j < u2_deg; ++j) {
+		uintE v2 = edgesU[u2_offset + j];
+		uintE idx_v2u2 = eti[u2_offset + j];
+		// Check that the neighbor v2 hasn't been peeled before
+		if(v2 != UINT_E_MAX && v2 != v && (!current[idx_v2u2] || idx_v2u2 >= idx_vu)) {
+		  // Check if v2 is also a a neighbor of u
+		  while(int_offset < u_deg &&
+			(edgesU[u_offset + int_offset] == UINT_E_MAX || edgesU[u_offset + int_offset] < v2)) { int_offset++; }
+		  if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 &&
+		      (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
+		    // If v2 is a neighbor of u and u2, then increment our count
+		    wedges[shift+k]++;
+		    // Subtract the butterfly from (v2, u2) and (v2, u)
+		    writeAdd(&butterflies[eltsPerCacheLine*eti[u2_offset + j]], (long) -1);
+		    writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + int_offset]], (long) -1);
+		    // Ensure that  (v2, u2), (v2, u), and (v, u2) have been marked with changed butterfly counts
+		    if(!update_dense[eltsPerCacheLine*eti[u2_offset + j]])
+		      CAS(&update_dense[eltsPerCacheLine*eti[u2_offset + j]], false, true);
+		    if(!update_dense[eltsPerCacheLine*eti[u_offset + int_offset]])
+		      CAS(&update_dense[eltsPerCacheLine*eti[u_offset + int_offset]], false, true);
+		    if (wedges[shift+k] == 1) {
+		      used[shift+used_idx++] = k;
+		      if(!update_dense[eltsPerCacheLine*(v_offset+k)]) CAS(&update_dense[eltsPerCacheLine*(v_offset+k)],false,true);
+		    }
+		  }
+		  else if(int_offset >= u_deg) break;
+		}
+	      }
+	    }
+	  }
 
-      // Update the butterfly count on (v, u2) and clear the wedges array
-    granular_for(j,0,used_idx,used_idx > 10000, { 
-      intT k = used[shift+j];
-      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)],(long) -1* ((long)wedges[shift+k]));
-      wedges[shift+k] = 0;
-    });
-  }
-    } else {
-  cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
-  recursive_lambda(start + ((end-start)>>1), end);
+	  // Update the butterfly count on (v, u2) and clear the wedges array
+	  granular_for(j,0,used_idx,used_idx > 10000, { 
+	      intT k = used[shift+j];
+	      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)],(long) -1* ((long)wedges[shift+k]));
+	      wedges[shift+k] = 0;
+	    });
+	}
+      } else {
+	cilk_spawn recursive_lambda(start, start + ((end-start) >> 1));
+	recursive_lambda(start + ((end-start)>>1), end);
       }
     }; 
     recursive_lambda(step*stepSize,min((step+1)*stepSize,active.size()));
@@ -367,53 +367,53 @@ pair<uintE*, long> PeelEOrigParallel(uintE* eti, uintE* ite, bool* current, Peel
   
       // Iterate through all neighbors of v
       for (intT k=0; k < v_deg; ++k) { 
-  uintE u2 = edgesV[v_offset + k];
-  // Check that the neighbor u2 hasn't been peeled before
-  if (u2 != u && u2 != UINT_E_MAX && (!current[v_offset+k] || idx_vu < v_offset + k)) {
-    intT u2_offset = offsetsU[u2];
-    intT u2_deg = offsetsU[u2+1] - u2_offset;
-    intT int_offset = 0;
-    // Intersect N(u) with N(u2)
-    // Iterate through all neighbors of u2
-    for(intT j = 0; j < u2_deg; ++j) {
-      uintE v2 = edgesU[u2_offset + j];
-      uintE idx_v2u2 = eti[u2_offset + j];
-      // Check that the neighbor v2 hasn't been peeled before
-      if(v2 != UINT_E_MAX && v2 != v && (!current[idx_v2u2] || idx_v2u2 >= idx_vu)) {
-        // Check if v2 is also a a neighbor of u
-        while(int_offset < u_deg &&
-          (edgesU[u_offset + int_offset] == UINT_E_MAX || edgesU[u_offset + int_offset] < v2)) {
-          int_offset++;
-        }
-        if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 &&
-          (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
-  // If v2 is a neighbor of u and u2, then increment our count
-  wedges[shift+k]++;
-  // Subtract the butterfly from (v2, u2) and (v2, u)
-  writeAdd(&butterflies[eltsPerCacheLine*eti[u2_offset + j]], (long) -1);
-  writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + int_offset]], (long) -1);
-  // Ensure that  (v2, u2), (v2, u), and (v, u2) have been marked with changed butterfly counts
-  if(!update_dense[eltsPerCacheLine*eti[u2_offset + j]])
-    CAS(&update_dense[eltsPerCacheLine*eti[u2_offset + j]], false, true);
-  if(!update_dense[eltsPerCacheLine*eti[u_offset + int_offset]])
-    CAS(&update_dense[eltsPerCacheLine*eti[u_offset + int_offset]], false, true);
-  if (wedges[shift+k] == 1) {
-    used[shift+used_idx++] = k;
-    if(!update_dense[eltsPerCacheLine*(v_offset+k)]) CAS(&update_dense[eltsPerCacheLine*(v_offset+k)],false,true);
-  }
-        }
-        else if(int_offset >= u_deg) break;
-      }
-    }
-  }
+	uintE u2 = edgesV[v_offset + k];
+	// Check that the neighbor u2 hasn't been peeled before
+	if (u2 != u && u2 != UINT_E_MAX && (!current[v_offset+k] || idx_vu < v_offset + k)) {
+	  intT u2_offset = offsetsU[u2];
+	  intT u2_deg = offsetsU[u2+1] - u2_offset;
+	  intT int_offset = 0;
+	  // Intersect N(u) with N(u2)
+	  // Iterate through all neighbors of u2
+	  for(intT j = 0; j < u2_deg; ++j) {
+	    uintE v2 = edgesU[u2_offset + j];
+	    uintE idx_v2u2 = eti[u2_offset + j];
+	    // Check that the neighbor v2 hasn't been peeled before
+	    if(v2 != UINT_E_MAX && v2 != v && (!current[idx_v2u2] || idx_v2u2 >= idx_vu)) {
+	      // Check if v2 is also a a neighbor of u
+	      while(int_offset < u_deg &&
+		    (edgesU[u_offset + int_offset] == UINT_E_MAX || edgesU[u_offset + int_offset] < v2)) {
+		int_offset++;
+	      }
+	      if (int_offset < u_deg && edgesU[u_offset+int_offset] == v2 &&
+		  (!current[eti[u_offset + int_offset]] || idx_vu < eti[u_offset + int_offset])) {
+		// If v2 is a neighbor of u and u2, then increment our count
+		wedges[shift+k]++;
+		// Subtract the butterfly from (v2, u2) and (v2, u)
+		writeAdd(&butterflies[eltsPerCacheLine*eti[u2_offset + j]], (long) -1);
+		writeAdd(&butterflies[eltsPerCacheLine*eti[u_offset + int_offset]], (long) -1);
+		// Ensure that  (v2, u2), (v2, u), and (v, u2) have been marked with changed butterfly counts
+		if(!update_dense[eltsPerCacheLine*eti[u2_offset + j]])
+		  CAS(&update_dense[eltsPerCacheLine*eti[u2_offset + j]], false, true);
+		if(!update_dense[eltsPerCacheLine*eti[u_offset + int_offset]])
+		  CAS(&update_dense[eltsPerCacheLine*eti[u_offset + int_offset]], false, true);
+		if (wedges[shift+k] == 1) {
+		  used[shift+used_idx++] = k;
+		  if(!update_dense[eltsPerCacheLine*(v_offset+k)]) CAS(&update_dense[eltsPerCacheLine*(v_offset+k)],false,true);
+		}
+	      }
+	      else if(int_offset >= u_deg) break;
+	    }
+	  }
+	}
       }
 
       // Update the butterfly count on (v, u2) and clear the wedges array
       granular_for(j,0,used_idx,used_idx > 10000, { 
-  intT k = used[shift+j];
-  writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], (long) -1 * ((long)wedges[shift+k]));
-  wedges[shift+k] = 0;
-      });
+	  intT k = used[shift+j];
+	  writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], (long) -1 * ((long)wedges[shift+k]));
+	  wedges[shift+k] = 0;
+	});
     }
   }
 

@@ -35,7 +35,7 @@ struct UWedge {
   uintE u;
   intT j; intT k;
   UWedge() {}
-  UWedge(uintE _v1, uintE _v2, uintE _u, intT _j, intT _k) : v1(_v1), v2(_v2), u(_u), j(_j), k(_k) {}
+UWedge(uintE _v1, uintE _v2, uintE _u, intT _j, intT _k) : v1(_v1), v2(_v2), u(_u), j(_j), k(_k) {}
 };
 struct UWedgeCons {
   inline UWedge operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UWedge(v1, v2, c, j, k); }
@@ -52,21 +52,21 @@ struct UWedgeEq { inline bool operator() (UWedge vs1, UWedge vs2) { return (vs1.
 // Constructs a long representing the endpoints of a wedge
 struct UWedgeIntRankCons {
   long nu;
-  UWedgeIntRankCons(long _nu) : nu(_nu) {}
+UWedgeIntRankCons(long _nu) : nu(_nu) {}
   inline long operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
     return ((((long) v1) * nu + ((long) v2 >> 1)) << 1) + (v2 & 0b1);
   }
 };
 struct UVertexPairIntCons {
   long nu;
-  UVertexPairIntCons(long _nu) : nu(_nu) {}
+UVertexPairIntCons(long _nu) : nu(_nu) {}
   inline long operator() (uintE v1, uintE v2, uintE c, intT j, intT k) {
     return (long) v1 * nu + (long) v2;
   }
 };
 struct UVertexPairIntRankCons {
   long nu;
-  UVertexPairIntRankCons(long _nu) : nu(_nu) {}
+UVertexPairIntRankCons(long _nu) : nu(_nu) {}
   inline long operator() (uintE v1, uintE v2, bool b) {
     return ((((long) v1) * nu + (long) v2) << 1) + (b ? 0b1 : 0);
   }
@@ -80,7 +80,7 @@ struct UVertexPair {
   uintE v1;
   uintE v2;
   UVertexPair() {}
-  UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
+UVertexPair(uintE _v1, uintE _v2) : v1(_v1), v2(_v2) {}
 };
 struct UVertexPairCons {
   inline UVertexPair operator() (uintE v1, uintE v2, uintE c, intT j, intT k) { return UVertexPair(v1, v2); }
@@ -116,7 +116,7 @@ struct UWSecond { uintE operator() (const UWedge& x) {return x.v2;}};
 
 // Tuple functions
 template<class T, class X>
-struct tupleFirst {T operator() (tuple<T,X> a) {return get<0>(a);} };
+  struct tupleFirst {T operator() (tuple<T,X> a) {return get<0>(a);} };
 struct nonZeroF{inline bool operator() (tuple<uintE,uintE> &a) {return (get<1>(a) != 0);}};
 struct greaterOneLongF{inline bool operator() (tuple<long,uintE> &a) {return (get<1>(a) > 1);}};
 struct nonMaxTupleF{
@@ -124,15 +124,15 @@ struct nonMaxTupleF{
 };
 
 template<class T, class X>
-struct tupleLt {inline bool operator() (tuple<T,X> a, tuple<T,X> b) {return get<0>(a) < get<0>(b);} };
+  struct tupleLt {inline bool operator() (tuple<T,X> a, tuple<T,X> b) {return get<0>(a) < get<0>(b);} };
 template<class T, class X>
-struct tupleEq {inline bool operator() (tuple<T,X> a,tuple<T,X> b) {return get<0>(a) == get<0>(b); }};
+  struct tupleEq {inline bool operator() (tuple<T,X> a,tuple<T,X> b) {return get<0>(a) == get<0>(b); }};
 template<class T, class X>
-struct tupleAdd {
-  inline tuple<T,X> operator() (tuple<T,X> a, tuple<T,X> b) const {
-    return make_tuple(get<0>(a), get<1>(a) + get<1>(b));
+  struct tupleAdd {
+    inline tuple<T,X> operator() (tuple<T,X> a, tuple<T,X> b) const {
+      return make_tuple(get<0>(a), get<1>(a) + get<1>(b));
+    };
   };
-};
 
 struct uintETupleGet0{inline uintE operator() (tuple<uintE,long> obj) {return get<0>(obj);}};
 struct uintECount{inline long operator() (tuple<uintE,long> obj) {return get<1>(obj);}};
@@ -145,7 +145,7 @@ struct choose2{inline long operator() (long obj) {return obj*(obj-1)/2;}};
 template <class E>
 struct writeAddArr {
   E* arr;
-  writeAddArr(E* _arr) : arr(_arr) {}
+writeAddArr(E* _arr) : arr(_arr) {}
   inline void operator() (long idx, E num) {
     writeAdd(&arr[idx], num);
   }
@@ -154,7 +154,7 @@ struct writeAddArr {
 template <class E>
 struct writeAddSet {
   sparseAdditiveSet<E> set;
-  writeAddSet(sparseAdditiveSet<E> _set) : set(_set) {}
+writeAddSet(sparseAdditiveSet<E> _set) : set(_set) {}
   inline void operator() (long idx, E num) {
     set.insert(pair<uintE, E>(idx, num));
   }
@@ -186,9 +186,9 @@ struct bipartiteCSR {
   long nv, nu, numEdges;
 
   bipartiteCSR () {}
-  bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
-    offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
-    {}
+bipartiteCSR(uintT* _offsetsV, uintT* _offsetsU, uintE* _edgesV, uintE* _edgesU, long _nv, long _nu, long _ne) :
+  offsetsV(_offsetsV), offsetsU(_offsetsU), edgesV(_edgesV), edgesU(_edgesU), nv(_nv), nu(_nu), numEdges(_ne)
+  {}
   
   void del() {
     free(offsetsV); free(offsetsU); free(edgesV); free(edgesU);
@@ -201,9 +201,9 @@ struct graphCSR {
   uintE *edges;
   long n, numEdges;
 
-  graphCSR(uintT* _offsets, uintE* _edges, long _n, long _ne) :
-    offsets(_offsets), edges(_edges), n(_n), numEdges(_ne)
-    {}
+graphCSR(uintT* _offsets, uintE* _edges, long _n, long _ne) :
+  offsets(_offsets), edges(_edges), n(_n), numEdges(_ne)
+  {}
 
   void del() {
     free(offsets); free(edges);
@@ -218,8 +218,8 @@ struct rankWedgeF {
   uintE* rank;
   uintE* orank;
 
-  rankWedgeF(uintT* _offsets, uintE* _edges, uintE* _rank, uintE* _orank) :
-    offsets(_offsets), edges(_edges), rank(_rank), orank(_orank) {}
+rankWedgeF(uintT* _offsets, uintE* _edges, uintE* _rank, uintE* _orank) :
+  offsets(_offsets), edges(_edges), rank(_rank), orank(_orank) {}
 
   // Each vertex i contributes indegree * outdegree + (indegree choose 2) wedges
   inline E operator() (const uintT& i) const {
@@ -307,8 +307,8 @@ struct degF {
   uintT* offsetsU;
   vertexSubset active;
   long nv;
-  degF(long _nv, uintT* _offsetsV, uintT* _offsetsU, vertexSubset& _active) :
-    nv(_nv), offsetsV(_offsetsV), offsetsU(_offsetsU), active(_active) {}
+degF(long _nv, uintT* _offsetsV, uintT* _offsetsU, vertexSubset& _active) :
+  nv(_nv), offsetsV(_offsetsV), offsetsU(_offsetsU), active(_active) {}
   inline E operator() (const uintT& i) const {
     bool use_v = active.vtx(i) < nv;
     intT idx = use_v ? active.vtx(i) : active.vtx(i) - nv;
@@ -327,7 +327,7 @@ struct degF {
  *  form (neighbor, 1).
  */
 template <class E, class VS>
-vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
+  vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
   long nTo = GA.nv + GA.nu;
   uintT m = V.size();
   V.toSparse();
@@ -357,9 +357,9 @@ vertexSubsetData<E> edgeMapInduced(bipartiteCSR& GA, VS& V) {
     intT offset  = use_v ? GA.offsetsV[idx] : GA.offsetsU[idx];
     intT deg = (use_v ? GA.offsetsV[idx+1] : GA.offsetsU[idx+1]) - offset;
     granular_for(j,0,deg,deg > 10000, {
-      intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
-      // Store the one-hop neighbor of idx
-      outEdges[o+j] = make_tuple(nbhr, 1);
+	intT nbhr = use_v ? GA.edgesV[offset+j] + GA.nv : GA.edgesU[offset+j];
+	// Store the one-hop neighbor of idx
+	outEdges[o+j] = make_tuple(nbhr, 1);
       });
   }
   auto vs = vertexSubsetData<E>(nTo, outEdgeCount, outEdges);
@@ -375,12 +375,12 @@ struct BipartiteProp {
   bipartiteCSR GA;
   pbbs::hist_table<K, Val> ht;
 
-  BipartiteProp(bipartiteCSR& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
-    if (ht_size == numeric_limits<size_t>::max()) {
-      ht_size = 1L << pbbs::log2_up(GA.numEdges/20);
-    } else { ht_size = 1L << pbbs::log2_up(ht_size); }
-    ht = pbbs::hist_table<K, Val>(_empty, ht_size);
-  }
+BipartiteProp(bipartiteCSR& _GA, KV _empty, size_t ht_size=numeric_limits<size_t>::max()) : GA(_GA) {
+  if (ht_size == numeric_limits<size_t>::max()) {
+    ht_size = 1L << pbbs::log2_up(GA.numEdges/20);
+  } else { ht_size = 1L << pbbs::log2_up(ht_size); }
+  ht = pbbs::hist_table<K, Val>(_empty, ht_size);
+}
 
   /*
    *  Collates the one-hop neighbors of vertices in vs, using reduce_f to
@@ -395,7 +395,7 @@ struct BipartiteProp {
    *  format as specified by apply_f.
    */
   template <class O, class M, class Reduce, class Apply, class VS>
-  inline vertexSubsetData<O> edgeMapReduce(VS& vs, Reduce& reduce_f, Apply& apply_f) {
+    inline vertexSubsetData<O> edgeMapReduce(VS& vs, Reduce& reduce_f, Apply& apply_f) {
     size_t m = vs.size();
     if (m == 0) {
       return vertexSubsetData<O>(GA.nv+GA.nu);
@@ -597,17 +597,17 @@ graphCSR rankGraph(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uin
     intT offset  = use_v ? G.offsetsV[idx] : G.offsetsU[idx];
     intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
     granular_for(j,0,deg,deg > 10000, { 
-  // Fill in all neighbors of idx using G
-  intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
-  uintE r; 
-  // Each vertex is appended with a rightmost bit, which is 1 if 
-  // it is on the right bipartition to store butterfly counts on, and 0 
-  // otherwise.
-  // That is to say, we append a 1 if the vertex is in U and use_vb is true,
-  // or if the vertex is in V and use_vb is false. Otherwise, we append 0.
-  if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
-  else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
-  edges[offsets[i]+j] = r;
+	// Fill in all neighbors of idx using G
+	intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
+	uintE r; 
+	// Each vertex is appended with a rightmost bit, which is 1 if 
+	// it is on the right bipartition to store butterfly counts on, and 0 
+	// otherwise.
+	// That is to say, we append a 1 if the vertex is in U and use_vb is true,
+	// or if the vertex is in V and use_vb is false. Otherwise, we append 0.
+	if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
+	else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
+	edges[offsets[i]+j] = r;
       });
     // Sort adjacency list of idx
     sampleSort(&edges[offsets[i]], deg, lt);
@@ -666,24 +666,24 @@ pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, 
     intT deg = (use_v ? G.offsetsV[idx+1] : G.offsetsU[idx+1])-offset;
     // Fill in all neighbors of idx using G
     granular_for(j,0,deg,deg > 10000, { 
-  intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
-  uintE r;
-  // Each vertex is appended with a rightmost bit, which is 1 if 
-  // it is on the right bipartition to store butterfly counts on, and 0 
-  // otherwise.
-  // That is to say, we append a 1 if the vertex is in U and use_vb is true,
-  // or if the vertex is in V and use_vb is false. Otherwise, we append 0.
-  if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
-  else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
-  // Include offset+j to allow for translation back to the original graph
-  edges_convert[offsets[i]+j] = make_tuple(r,offset+j);
+	intT nbhr = use_v ? G.edgesV[offset+j] : G.edgesU[offset+j];
+	uintE r;
+	// Each vertex is appended with a rightmost bit, which is 1 if 
+	// it is on the right bipartition to store butterfly counts on, and 0 
+	// otherwise.
+	// That is to say, we append a 1 if the vertex is in U and use_vb is true,
+	// or if the vertex is in V and use_vb is false. Otherwise, we append 0.
+	if (use_vb) r = use_v ? (rankU[nbhr] << 1) + 0b1  : (rankV[nbhr] << 1);
+	else r = use_v ? (rankU[nbhr] << 1) : (rankV[nbhr] << 1) + 0b1;
+	// Include offset+j to allow for translation back to the original graph
+	edges_convert[offsets[i]+j] = make_tuple(r,offset+j);
       });
     // Sort adjacency list of idx
     sampleSort(&edges_convert[offsets[i]], deg, ltx);
     // Set sorted offsets in the edges array for the ranked graph
     granular_for(j,0,deg,deg > 10000, {
-  edges[offsets[i]+j] = get<0>(edges_convert[offsets[i]+j]); 
-    });
+	edges[offsets[i]+j] = get<0>(edges_convert[offsets[i]+j]); 
+      });
   }
 
   // Create sorted graph
@@ -697,8 +697,8 @@ pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, 
 template <class E>
 struct clrF { 
   uintE* edges; uintT offset; uintT color; uintT* colors;
-  clrF(uintE* _edges, uintT _offset, uintT _color, uintT* _colors) :
-    edges(_edges), offset(_offset), color(_color), colors(_colors) {}
+clrF(uintE* _edges, uintT _offset, uintT _color, uintT* _colors) :
+  edges(_edges), offset(_offset), color(_color), colors(_colors) {}
   inline E operator() (const uintT& i) const {
     return (E) (colors[edges[offset+i]] == color ? 1 : 0); 
   }
@@ -708,7 +708,7 @@ struct clrF {
 template <class E>
 struct eF { 
   uintT offset; uintE* colors;
-  eF(uintT _offset, uintE* _colors) : offset(_offset), colors(_colors) {}
+eF(uintT _offset, uintE* _colors) : offset(_offset), colors(_colors) {}
   inline E operator() (const uintT& i) const {
     return (E) (colors[offset+i] == 0);
   }
@@ -719,7 +719,7 @@ struct nonMaxUintTF{bool operator() (uintT &a) {return (a != UINT_T_MAX);}};
 
 // Determines if color of an indicated vertex is equal to the specified color
 struct isSameColor{
-  isSameColor(uintT mycolor, uintT *colors) : colors_(colors), me_(mycolor) {};
+isSameColor(uintT mycolor, uintT *colors) : colors_(colors), me_(mycolor) {};
   bool operator () (uintT v) {return me_ == colors_[v];};
   uintT me_;
   uintT *colors_;
@@ -806,14 +806,14 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     intT u_offset = G.offsetsU[i];
     intT u_deg = G.offsetsU[i+1] - u_offset;
     granular_for(j,0,u_deg,u_deg>1000,{
-      uintE v = G.edgesU[u_offset + j];
-      intT v_offset = G.offsetsV[v];
-      intT v_deg = G.offsetsV[v+1] - v_offset;
-      // Find find_idx such that edgesV[v_offset + find_idx] = i
-      auto idx_map = make_in_imap<uintE>(v_deg, [&] (size_t k) { return G.edgesV[v_offset + k]; });
-      auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
-      size_t find_idx = pbbs::binary_search(idx_map, i, lte);
-      colorsU[u_offset + j] = colorsV[v_offset + find_idx];
+	uintE v = G.edgesU[u_offset + j];
+	intT v_offset = G.offsetsV[v];
+	intT v_deg = G.offsetsV[v+1] - v_offset;
+	// Find find_idx such that edgesV[v_offset + find_idx] = i
+	auto idx_map = make_in_imap<uintE>(v_deg, [&] (size_t k) { return G.edgesV[v_offset + k]; });
+	auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
+	size_t find_idx = pbbs::binary_search(idx_map, i, lte);
+	colorsU[u_offset + j] = colorsV[v_offset + find_idx];
       });
   }
 
@@ -855,27 +855,27 @@ bipartiteCSR eSparseBipartite(bipartiteCSR& G, long denom, long seed) {
     uintT v_offset = G.offsetsV[i];
     uintT v_deg = G.offsetsV[i+1] - v_offset;
     uintT v_clr_offset = offsetsV[i];
-      long idx = 0;
-      for(long j=0; j < v_deg; ++j) {
-        uintE u = G.edgesV[v_offset + j];
-        if (colorsV[v_offset + j] == 0) {
-          edgesV[v_clr_offset + idx] = u;
-          idx++;
-        }
+    long idx = 0;
+    for(long j=0; j < v_deg; ++j) {
+      uintE u = G.edgesV[v_offset + j];
+      if (colorsV[v_offset + j] == 0) {
+	edgesV[v_clr_offset + idx] = u;
+	idx++;
       }
+    }
   }
   parallel_for(long i=0; i<G.nu; ++i) {
     uintT u_offset = G.offsetsU[i];
     uintT u_deg = G.offsetsU[i+1] - u_offset;
     uintT u_clr_offset = offsetsU[i];
-      long idx = 0;
-      for(long j=0; j < u_deg; ++j) {
-        uintE v = G.edgesU[u_offset + j];
-        if (colorsU[u_offset + j] == 0) {
-          edgesU[u_clr_offset + idx] = v;
-          idx++;
-        }
+    long idx = 0;
+    for(long j=0; j < u_deg; ++j) {
+      uintE v = G.edgesU[u_offset + j];
+      if (colorsU[u_offset + j] == 0) {
+	edgesU[u_clr_offset + idx] = v;
+	idx++;
       }
+    }
   }
   free(colorsV); free(colorsU);
 
@@ -1026,21 +1026,21 @@ bipartiteCSR readBipartite(char* fname) {
   offsetsV[nv] = mv;
   
   {parallel_for(long i=0; i<mv; i++) {
-    edgesV[i] = atol(W.Strings[i+nv+5]);
-    if(edgesV[i] < 0 || edgesV[i] >= nu) {
-      cout << "edgesV out of range: nu = " << nu << " edge = " << edgesV[i] << endl; exit(0);
-    }
-  }}
+      edgesV[i] = atol(W.Strings[i+nv+5]);
+      if(edgesV[i] < 0 || edgesV[i] >= nu) {
+	cout << "edgesV out of range: nu = " << nu << " edge = " << edgesV[i] << endl; exit(0);
+      }
+    }}
 
   {parallel_for(long i=0; i < nu; i++) offsetsU[i] = atol(W.Strings[i + nv + mv + 5]);}
   offsetsU[nu] = mu;
   
   {parallel_for(long i=0; i<mu; i++) {
-    edgesU[i] = atol(W.Strings[i+nv+mv+nu+5]);
-    if(edgesU[i] < 0 || edgesU[i] >= nv) {
-      cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0);
-    }
-  }}
+      edgesU[i] = atol(W.Strings[i+nv+mv+nu+5]);
+      if(edgesU[i] < 0 || edgesU[i] >= nv) {
+	cout << "edgesU out of range: nv = " << nv << " edge = " << edgesU[i] << endl; exit(0);
+      }
+    }}
 
   S.del();
   free(W.Strings);
@@ -1052,7 +1052,7 @@ bipartiteCSR readBipartite(char* fname) {
 template <class E>
 struct wedgeF { 
   uintT* offsets;
-  wedgeF(uintT* _offsets) : offsets(_offsets) {}
+wedgeF(uintT* _offsets) : offsets(_offsets) {}
   inline E operator() (const uintT& i) const {
     uintE v_deg = offsets[i+1]-offsets[i];
     return (E) ((v_deg * (v_deg-1)) / 2); 
@@ -1101,7 +1101,7 @@ struct nonMaxLongF{bool operator() (long &a) {return (a != LONG_MAX);}};
  *  Returns frequency array and length of array (as described above)
  */
 template <class L, class T, class Cmp, class Eq, class F>
-pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool sort=true) {
+  pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool sort=true) {
   L* freqs = newA(L, num + 1);
   freqs[0] = 0;
   freqs[num] = num;
@@ -1142,8 +1142,8 @@ pair<L*, long> getFreqs(T* objs, long num, Cmp cmp, Eq eq, L maxL, F nonF, bool 
  *  Returns frequency array and length of array (as described above)
  */
 template <class L, class S, class T, class Cmp, class Eq, class OpT, class OpuintE, class OpCount>
-pair<tuple<S,L>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
-                                     OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
+  pair<tuple<S,L>*, long> getFreqs_seq(T* objs, long num, Cmp cmp, Eq eq, bool sort=true, OpT opt=refl<T>(),
+				       OpuintE opuinte=refl<L>(), OpCount opcount=reflCount<T>()) {
   using X = tuple<S,L>;
   X* freqs = newA(X, num);
   T prev = objs[0];
@@ -1201,11 +1201,11 @@ long* countWedgesScan(graphCSR& G) {
       intT v_offset = G.offsets[v];
       intT v_deg = G.offsets[v+1] - v_offset;
       if (v > i) {
-  // Iterate through all two-hop neighbors and increment degrees
-  for (intT k = 0; k < v_deg; ++k) {
-    if ((G.edges[v_offset + k] >> 1) > i) (nbhd_idxs[i][j])++;
-    else break;
-  }
+	// Iterate through all two-hop neighbors and increment degrees
+	for (intT k = 0; k < v_deg; ++k) {
+	  if ((G.edges[v_offset + k] >> 1) > i) (nbhd_idxs[i][j])++;
+	  else break;
+	}
       }
     }
 
@@ -1310,33 +1310,33 @@ struct CountESpace {
   sparseAdditiveSet<long, long> butterflies_hash;
 
 
-  CountESpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
-    using T = pair<long,long>;
-    using X = tuple<uintE,long>;
-    using E = pair<long, uintE>;
-    if (type == HASH || type == AHASH) {
-      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-      if (type == HASH) {
-        wedges_seq_intp = _seq<T>(newA(T, nu), nu);
-        butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
-      }
-    }
-    else if (type == HIST || type == AHIST) {
-      tmp = pbbsa::sequence<tuple<long, uintE>>();
-      out = pbbsa::sequence<tuple<long, uintE>>();
-      wedges_seq_int = _seq<long>(newA(long, nu), nu);
-      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-      if (type == HIST) {
-        butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
-        tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
-        out_uint = pbbsa::sequence<tuple<uintE, long>>();
-      }
-    }
-    else if (type == SORT || type == ASORT) {
-      if (type == SORT) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
-     wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
+CountESpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
+  using T = pair<long,long>;
+  using X = tuple<uintE,long>;
+  using E = pair<long, uintE>;
+  if (type == HASH || type == AHASH) {
+    wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
+    if (type == HASH) {
+      wedges_seq_intp = _seq<T>(newA(T, nu), nu);
+      butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
     }
   }
+  else if (type == HIST || type == AHIST) {
+    tmp = pbbsa::sequence<tuple<long, uintE>>();
+    out = pbbsa::sequence<tuple<long, uintE>>();
+    wedges_seq_int = _seq<long>(newA(long, nu), nu);
+    wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
+    if (type == HIST) {
+      butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+      tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
+      out_uint = pbbsa::sequence<tuple<uintE, long>>();
+    }
+  }
+  else if (type == SORT || type == ASORT) {
+    if (type == SORT) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
+    wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
+  }
+}
 
   /*
    *  Clears necessary space, to be reused.
@@ -1388,39 +1388,39 @@ struct CountSpace {
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<UWedge> wedges_seq_uw;
 
-  CountSpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
-    using T = pair<uintE,long>;
-    using X = tuple<uintE,uintE>;
-    using E = pair<long,long>;
-    using L = tuple<uintE,long>;
-    if (type == HASH || type == AHASH) {
-      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-      wedges_seq_intp = _seq<E>(newA(E, nu), nu);
-      if (type == HASH) {
-        butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
-        butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
-      }
-    }
-    else if (type == HIST || type == AHIST) {
-      tmp = pbbsa::sequence<tuple<long, uintE>>();
-      out = pbbsa::sequence<tuple<long, uintE>>();
-      wedges_seq_int = _seq<long>(newA(long, nu), nu);
-      if (rank) {
-        wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
-        wedges_seq_intp = _seq<E>(newA(E, nu), nu);
-      }
-      if (type == HIST) {
-        butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
-        tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
-        out_uint = pbbsa::sequence<tuple<uintE, long>>();
-      }
-    }
-    else if (type == SORT || type == ASORT) {
-      if (type == SORT) butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
-      if (!rank) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
-      else wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
+CountSpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_rank) {
+  using T = pair<uintE,long>;
+  using X = tuple<uintE,uintE>;
+  using E = pair<long,long>;
+  using L = tuple<uintE,long>;
+  if (type == HASH || type == AHASH) {
+    wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
+    wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+    if (type == HASH) {
+      butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
+      butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
     }
   }
+  else if (type == HIST || type == AHIST) {
+    tmp = pbbsa::sequence<tuple<long, uintE>>();
+    out = pbbsa::sequence<tuple<long, uintE>>();
+    wedges_seq_int = _seq<long>(newA(long, nu), nu);
+    if (rank) {
+      wedges_hash = sparseAdditiveSet<long, long>(nu,1,LONG_MAX, LONG_MAX);
+      wedges_seq_intp = _seq<E>(newA(E, nu), nu);
+    }
+    if (type == HIST) {
+      butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
+      tmp_uint = pbbsa::sequence<tuple<uintE, long>>();
+      out_uint = pbbsa::sequence<tuple<uintE, long>>();
+    }
+  }
+  else if (type == SORT || type == ASORT) {
+    if (type == SORT) butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
+    if (!rank) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+    else wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
+  }
+}
 
   /*
    *  Clears necessary space, to be reused.
@@ -1474,8 +1474,8 @@ struct CountSpace {
  *  next_idx  : Ending vertex of this batch
  */
 template<class wedge, class wedgeCons>
-void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx,
-                    intT next_idx) {
+  void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx,
+		      intT next_idx) {
   const long nu = use_v ? GA.nu : GA.nv;
   const long nv = use_v ? GA.nv : GA.nu;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -1521,8 +1521,8 @@ void _getWedges_seq(wedge* wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons,
  *  next_idx  : Ending vertex of this batch
  */
 template<class wedge, class wedgeCons>
-void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
-                long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
+  void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges,
+		  long* wedge_idxs, intT curr_idx=0, intT next_idx=INT_T_MAX) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -1579,8 +1579,8 @@ void _getWedges(_seq<wedge>& wedges_seq, bipartiteCSR& GA, bool use_v, wedgeCons
  *  next_idx  : Ending vertex of this batch
  */
 template<class wedgeCons, class T>
-void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx=0,
-                    intT next_idx=INT_T_MAX) {
+  void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long num_wedges, intT curr_idx=0,
+		      intT next_idx=INT_T_MAX) {
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
   uintT* offsetsU = use_v ? GA.offsetsU : GA.offsetsV;
@@ -1598,15 +1598,15 @@ void _getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, lon
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
     parallel_for(intT j=0;j<u_deg;j++) {
-  uintE v = edgesU[u_offset+j];
-  intT v_offset = offsetsV[v];
-  intT v_deg = offsetsV[v+1] - v_offset;
-  // Find two-hop neighbors of i
-  for (long k=0; k < v_deg; ++k) { 
-    uintE u2 = edgesV[v_offset+k];
-    if (u2 < i) wedges.insert(make_pair(cons(i, u2, v, j, k),1));
-    else break;
-  }
+      uintE v = edgesU[u_offset+j];
+      intT v_offset = offsetsV[v];
+      intT v_deg = offsetsV[v+1] - v_offset;
+      // Find two-hop neighbors of i
+      for (long k=0; k < v_deg; ++k) { 
+	uintE u2 = edgesV[v_offset+k];
+	if (u2 < i) wedges.insert(make_pair(cons(i, u2, v, j, k),1));
+	else break;
+      }
     }
   }
 }
@@ -1704,8 +1704,8 @@ intT getNextWedgeIdx(bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_id
  *  batch.
  */
 template<class wedge, class wedgeCons>
-pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges,
-                           intT curr_idx, long num_wedges, long* wedge_idxs) {
+  pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges,
+			     intT curr_idx, long num_wedges, long* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   if (max_wedges >= num_wedges) {
     _getWedges<wedge>(wedges, GA, use_v, cons, num_wedges, wedge_idxs);
@@ -1736,8 +1736,8 @@ pair<long, intT> getWedges(_seq<wedge>& wedges, bipartiteCSR& GA, bool use_v, we
  *  batch.
  */
 template<class wedgeCons, class T>
-intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx,
-                   long num_wedges, long* wedge_idxs) {
+  intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long max_wedges, intT curr_idx,
+		     long num_wedges, long* wedge_idxs) {
   const long nu = use_v ? GA.nu : GA.nv;
   if (max_wedges >= num_wedges) {
     _getWedgesHash(wedges, GA, use_v, cons, num_wedges);
@@ -1764,7 +1764,7 @@ intT getWedgesHash(T& wedges, bipartiteCSR& GA, bool use_v, wedgeCons cons, long
  *  next_idx  : Ending vertex of this batch
  */
 template<class wedge, class wedgeCons>
-void _getWedges_seq(wedge* wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx, intT next_idx) {
+  void _getWedges_seq(wedge* wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx, intT next_idx) {
   long idx = 0;
   // Iterate through all vertices i in this batch
   for(intT i=curr_idx; i < next_idx; ++i) {
@@ -1802,8 +1802,8 @@ void _getWedges_seq(wedge* wedges, graphCSR& GA, wedgeCons cons, long num_wedges
  *  next_idx  : Ending vertex of this batch
  */
 template<class wedge, class wedgeCons>
-void _getWedges(_seq<wedge>& wedges_seq, graphCSR& GA, wedgeCons cons, long num_wedges, long* wedge_idxs,
-                intT curr_idx=0, intT next_idx=INT_T_MAX) {
+  void _getWedges(_seq<wedge>& wedges_seq, graphCSR& GA, wedgeCons cons, long num_wedges, long* wedge_idxs,
+		  intT curr_idx=0, intT next_idx=INT_T_MAX) {
   // Allocate space for wedge storage
   if (wedges_seq.n < num_wedges) {
     free(wedges_seq.A);
@@ -1854,8 +1854,8 @@ void _getWedges(_seq<wedge>& wedges_seq, graphCSR& GA, wedgeCons cons, long num_
  *  next_idx  : Ending vertex of this batch
  */
 template<class wedgeCons, class T>
-void _getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx=0,
-                    intT next_idx=INT_T_MAX) {
+  void _getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long num_wedges, intT curr_idx=0,
+		      intT next_idx=INT_T_MAX) {
   // Set up next index in batch
   if (next_idx == INT_T_MAX) next_idx = GA.n;
 
@@ -1869,19 +1869,19 @@ void _getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long num_wedges, in
     intT u_offset = GA.offsets[i];
     intT u_deg = GA.offsets[i+1] - u_offset;
     granular_for(j,0,u_deg,u_deg>1000,{
-  uintE v = GA.edges[u_offset+j] >> 1;
-  intT v_offset = GA.offsets[v];
-  intT v_deg = GA.offsets[v+1] - v_offset;
-  if (v > i) {
-    // Find two-hop neighbors of i
-    for (intT k=0; k < v_deg; ++k) { 
-      uintE u2 = GA.edges[v_offset+k] >> 1;
-      // Store wedge in hash table
-      if (u2 > i) wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
-      else break;
-    }
-  } 
-    });
+	uintE v = GA.edges[u_offset+j] >> 1;
+	intT v_offset = GA.offsets[v];
+	intT v_deg = GA.offsets[v+1] - v_offset;
+	if (v > i) {
+	  // Find two-hop neighbors of i
+	  for (intT k=0; k < v_deg; ++k) { 
+	    uintE u2 = GA.edges[v_offset+k] >> 1;
+	    // Store wedge in hash table
+	    if (u2 > i) wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
+	    else break;
+	  }
+	} 
+      });
   }
 }
 
@@ -1926,8 +1926,8 @@ intT getNextWedgeIdx(graphCSR& GA, long max_wedges, intT curr_idx, long* wedge_i
  *  batch.
  */
 template<class wedgeCons, class T>
-intT getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges,
-                   long* wedge_idxs) {
+  intT getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx, long num_wedges,
+		     long* wedge_idxs) {
   if (max_wedges >= num_wedges) {
     _getWedgesHash(wedges, GA, cons, num_wedges);
     return GA.n;
@@ -1955,8 +1955,8 @@ intT getWedgesHash(T& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, int
  *  batch.
  */
 template<class wedge, class wedgeCons>
-pair<long, intT> getWedges(_seq<wedge>& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx,
-                           long num_wedges, long* wedge_idxs) {
+  pair<long, intT> getWedges(_seq<wedge>& wedges, graphCSR& GA, wedgeCons cons, long max_wedges, intT curr_idx,
+			     long num_wedges, long* wedge_idxs) {
   if (max_wedges >= num_wedges) {
     _getWedges<wedge>(wedges, GA, cons, num_wedges, wedge_idxs);
     return make_pair(num_wedges, GA.n);
@@ -1997,16 +1997,16 @@ uintE* edgeToIdxs(bipartiteCSR& GA, bool use_v) {
     intT u_offset = offsetsU[i];
     intT u_deg = offsetsU[i+1] - u_offset;
     granular_for(j,0,u_deg,u_deg>1000,{
-      uintE v = edgesU[u_offset + j];
-      intT v_offset = offsetsV[v];
-      intT v_deg = offsetsV[v+1] - v_offset;
-      // Find the corresponding edge from the other orientation
-      // Find find_idx such that edgesV[v_offset + k] = i
-      auto idx_map = make_in_imap<uintE>(v_deg, [&] (size_t k) { return edgesV[v_offset + k]; });
-      auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
-      size_t find_idx = pbbs::binary_search(idx_map, i, lte); 
-      eti[u_offset+j] = v_offset + find_idx;
-    });
+	uintE v = edgesU[u_offset + j];
+	intT v_offset = offsetsV[v];
+	intT v_deg = offsetsV[v+1] - v_offset;
+	// Find the corresponding edge from the other orientation
+	// Find find_idx such that edgesV[v_offset + k] = i
+	auto idx_map = make_in_imap<uintE>(v_deg, [&] (size_t k) { return edgesV[v_offset + k]; });
+	auto lte = [] (const uintE& l, const uintE& r) { return l < r; };
+	size_t find_idx = pbbs::binary_search(idx_map, i, lte); 
+	eti[u_offset+j] = v_offset + find_idx;
+      });
   }
 
   return eti;
