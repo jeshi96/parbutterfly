@@ -91,7 +91,7 @@ AdjacencyHypergraph
 &lt;mv>  
 &lt;nu>  
 &lt;mu>  
-&lt;offsetv(0)> 
+&lt;offsetv(0)>   
 &lt;offsetv(1)>  
 ...  
 &lt;offsetv(nv-1)>  
