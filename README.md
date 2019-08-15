@@ -44,7 +44,7 @@ The application BipartiteButterflies in apps/hyper/ takes as input a bipartite
 graph in Ligra format, which is described in more detail in the next section.
 It also takes parameters for counting and peeling, as follows:
 
-| Parameter    | Default     | Description                                      |
+| Parameter &nbsp; &nbsp; &nbsp; &nbsp;   | Default     | Description                                      |
 | ---------    | -------     | ------------------------------------------------ |
 | `-countType` | SERIAL      | Wedge/butterfly aggregation type for counting (ASORT, SORT, AHASH, HASH, AHIST, HIST, BATCHS, BATCHWA, or SERIAL) |
 | `-rankType`  | ADEG        | Vertex ordering (SIDE, COCORE, ACOCORE, DEG, or ADEG). The prefix A means approximate.                |
@@ -56,6 +56,18 @@ It also takes parameters for counting and peeling, as follows:
 | `-d`         | 25          | If -sparseType is EDGE, then 1/d is the probability of keeping an edge. If -sparseType is COLOR, then d is the number of colors. |
 | `-r`         | 3           | Number of rounds to repeat butterfly counting/peeling. |
 
+For example:
+
+```
+$ ./BipartiteButterflies -countType BATCHS -rankType ADEG -peelType NONE -per VERT &lt;input file>
+``` 
+
+On NUMA machines, adding the command "numactl -i all " when running
+the program may improve performance for large graphs. For example:
+
+```
+$ numactl -i all ./BipartiteButterflies -countType BATCHS -rankType ADEG -peelType NONE -per VERT &lt;input file>
+``` 
 
 
 Input Format for ParButterfly
