@@ -86,19 +86,19 @@ starts with a sequence of offsets one for each vertex in one bipartition V,
  Let mv and mu denote the number of edges (mv = mu). 
  The specific format is as follows:
 
-AdjacencyHypergraph
-&lt;nv>
-&lt;mv>
-&lt;nu>
-&lt;mu>
-&lt;offsetv(0)>  
+AdjacencyHypergraph  
+&lt;nv>  
+&lt;mv>  
+&lt;nu>  
+&lt;mu>  
+&lt;offsetv(0)> 
 &lt;offsetv(1)>  
 ...  
 &lt;offsetv(nv-1)>  
 &lt;edgev(0)>  
 &lt;edgev(1)>  
 ...  
-&lt;edgev(mv-1)> 
+&lt;edgev(mv-1)>   
 &lt;offsetu(0)>  
 &lt;offsetu(1)>  
 ...  
