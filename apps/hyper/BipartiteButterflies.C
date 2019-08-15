@@ -158,6 +158,7 @@ void Compute(bipartiteCSR& GA, commandLine P) {
     if (per_type_str == "VERT") per_type = VERT;
     else if (per_type_str == "EDGE") per_type = EDGE;
     else if (per_type_str == "TOTAL") per_type = TOTAL;
+    else per_type = VERT;
   } else {
     if (total) per_type = TOTAL;
     else if (te == 0) per_type = VERT;
@@ -174,16 +175,16 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   string sparse_type_str = P.getOptionValue("-sparseType", "");
   SparseType sparse;
   if (sparse_type_long == LONG_MAX) {
-    if (sparse_type_str == "NONE") sparse = NOSPARSE;
+    if (sparse_type_str == "EDGE") sparse = ESPARSE;
     else if (sparse_type_str == "COLOR") sparse = CLRSPARSE;
-    else sparse = ESPARSE;
+    else sparse = NOSPARSE;
   }
   else {
     switch(sparse_type_long) {
     case 0: sparse = NOSPARSE; break;
     case 1: sparse = CLRSPARSE; break;
     case 2: sparse = ESPARSE; break;
-    default: break;
+    default: sparse = NOSPARSE; break;
     }
   }
   if (sparse != NOSPARSE) { per_type = TOTAL; }
@@ -291,6 +292,7 @@ int parallel_main(int argc, char* argv[]) {
     if (per_type_str == "VERT") per_type = VERT;
     else if (per_type_str == "EDGE") per_type = EDGE;
     else if (per_type_str == "TOTAL") per_type = TOTAL;
+    else per_type = VERT;
   } else {
     if (total) per_type = TOTAL;
     else if (te == 0) per_type = VERT;
@@ -301,16 +303,16 @@ int parallel_main(int argc, char* argv[]) {
   string sparse_type_str = P.getOptionValue("-sparseType", "");
   SparseType sparse;
   if (sparse_type_long == LONG_MAX) {
-    if (sparse_type_str == "NONE") sparse = NOSPARSE;
+    if (sparse_type_str == "EDGE") sparse = ESPARSE;
     else if (sparse_type_str == "COLOR") sparse = CLRSPARSE;
-    else sparse = ESPARSE;
+    else sparse = NOSPARSE;
   }
   else {
     switch(sparse_type_long) {
     case 0: sparse = NOSPARSE; break;
     case 1: sparse = CLRSPARSE; break;
     case 2: sparse = ESPARSE; break;
-    default: break;
+    default: sparse = NOSPARSE; break;
     }
   }
 
