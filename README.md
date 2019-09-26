@@ -120,3 +120,22 @@ format](http://konect.cc/) and converts it to Ligra's
 adjacency hypergraph format. The first required parameter is the input
 (KONECT) file name and second required parameter is the output (Ligra)
 file name.
+
+Optimizations
+---------
+Independently of our work, [Wang et 
+al.](http://www.vldb.org/pvldb/vol12/p1139-wang.pdf) described an 
+algorithm for butterfly counting using degree ordering, and also 
+proposed a cache optimization for wedge retrieval.
+
+More specifically, Wang et al. included two cache optimizations, 
+namely cache-aware wedge processing and cache-aware graph projection. 
+We had independently implemented cache-aware graph projection in our 
+work, as well as cache-aware wedge processing for the SIDE ordering setting. 
+
+We include cache-aware wedge processing for all other orderings, as 
+based on their work. This optimization can be turned on using
+```
+#define INVERSE 1
+```
+If INVERSE is not defined, then the optimization will be turned off.

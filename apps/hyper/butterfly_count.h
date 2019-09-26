@@ -1089,11 +1089,17 @@ void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long m
 	    uintE v = GA.edges[u_offset+j] >> 1;
 	    intT v_offset = GA.offsets[v];
 	    intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
 	    if (v <= i) break;
+#endif
 	    // Iterate through all 2-hop neighbors of i (with appropriate rank)
 	    for (intT k=0; k < v_deg; ++k) { 
 	      uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+        if (u2_idx < i && u2_idx < v) {
+#else
 	      if (u2_idx > i) {
+#endif
 		// Increment the number of wedges on the second endpoint
 		wedges[shift+u2_idx]++;
 		// Keep track of used second endpoints
@@ -1108,11 +1114,17 @@ void CountOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long m
 	    uintE v = GA.edges[u_offset+j] >> 1;
 	    intT v_offset = GA.offsets[v];
 	    intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
 	    if (v <= i) break; 
+#endif
 	    if (!(GA.edges[u_offset+j] & 0b1)) continue;
 	    for (long k=0; k < v_deg; ++k) { 
 	      uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+        if (u2_idx < i && u2_idx < v) {
+#else
 	      if (u2_idx > i) {
+#endif
 		// Only store butterfly counts per center if it is on the right
 		// bipartition
 		if (wedges[shift+u2_idx] > 1) writeAdd(&butterflies[eltsPerCacheLine*v], (long)(wedges[shift+u2_idx]-1));
@@ -1195,11 +1207,17 @@ void CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
-	if (v <= i) break; 
+#ifndef INVERSE
+	if (v <= i) break;
+#endif
 	// Iterate through all 2-hop neighbors of i (with appropriate rank)
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2_idx < i && u2_idx < v) {
+#else
 	  if (u2_idx > i) {
+#endif
 	    // Increment the number of wedges on the second endpoint
 	    wedges[shift+u2_idx]++;
 	    // Keep track of used second endpoints
@@ -1214,11 +1232,17 @@ void CountWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array_
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
-	if (v <= i) break; 
+#ifndef INVERSE
+	if (v <= i) break;
+#endif
 	if (!(GA.edges[u_offset+j] & 0b1)) continue;
 	for (long k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2_idx < i && u2_idx < v) {
+#else
 	  if (u2_idx > i) {
+#endif
 	    // Only store butterfly counts per center if it is on the right
 	    // bipartition
 	    if (wedges[shift+u2_idx] > 1) writeAdd(&butterflies[eltsPerCacheLine*v], (long)(wedges[shift+u2_idx]-1));
@@ -1361,11 +1385,17 @@ void CountWorkEfficientSerial(graphCSR& GA, long* butterflies) {
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
       if (v <= i) break;
+#endif
       // Iterate through all 2-hop neighbors of i (with appropriate rank)
       for (intT k=0; k < v_deg; ++k) { 
 	uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+  if (u2_idx < i && u2_idx < v) {
+#else
 	if (u2_idx > i) {
+#endif
 	  // Only store butterfly counts per endpoint if it is on the right
 	  // bipartition
 	  if (GA.edges[v_offset+k] & 0b1) {
@@ -1388,13 +1418,19 @@ void CountWorkEfficientSerial(graphCSR& GA, long* butterflies) {
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
       if (v <= i) break;
+#endif
       // Only store butterfly counts per center if it is on the right
       // bipartition
       if (!(GA.edges[u_offset+j] & 0b1)) continue;
       for (long k=0; k < v_deg; ++k) { 
 	uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+  if (u2_idx < i && u2_idx < v) {
+#else
 	if (u2_idx > i) {
+#endif
 	  if (wedges[u2_idx] > 1) butterflies[eltsPerCacheLine*v] += wedges[u2_idx]-1;
 	}
 	else break;

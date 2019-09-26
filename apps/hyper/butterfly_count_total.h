@@ -474,11 +474,17 @@ long CountOrigCompactParallel_WedgeAwareTotal(graphCSR& GA, long max_array_size,
 	    uintE v = GA.edges[u_offset+j] >> 1;
 	    intT v_offset = GA.offsets[v];
 	    intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
 	    if (v <= i) break;
+#endif
 	    // Iterate through all 2-hop neighbors of i
 	    for (intT k=0; k < v_deg; ++k) { 
 	      uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+        if (u2_idx < i && u2_idx < v) {
+#else
 	      if (u2_idx > i) {
+#endif
 		// Increment total butterfly count to achieve number of wedges choose 2
 		// in aggregate
 		results[eltsPerCacheLine*(i % stepSize)] += wedges[shift+u2_idx];
@@ -672,11 +678,17 @@ long CountWorkEfficientParallelTotal(graphCSR& GA, long max_array_size) {
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
 	if (v <= i) break; 
+#endif
 	// Iterate through all 2-hop neighbors of i (with appropriate rank)
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2_idx < i && u2_idx < v) {
+#else
 	  if (u2_idx > i) {
+#endif
 	    // Increment total butterfly count to achieve number of wedges choose 2
 	    // in aggregate
 	    results[eltsPerCacheLine*(i % stepSize)] += wedges[shift+u2_idx];
@@ -834,11 +846,17 @@ long CountWorkEfficientSerialTotal(graphCSR& GA) {
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
       if (v <= i) break;
+#endif
       // Iterate through all 2-hop neighbors of i (with appropriate rank)
       for (intT k=0; k < v_deg; ++k) { 
 	uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+  if (u2_idx < i && u2_idx < v) {
+#else
 	if (u2_idx > i) {
+#endif
 	  // Increment total butterfly count to achieve number of wedges choose 2
 	  // in aggregate
 	  nb += wedges[u2_idx];

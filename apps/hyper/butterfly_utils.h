@@ -588,7 +588,11 @@ graphCSR rankGraph(bipartiteCSR& G, bool use_vb, uintE* ranks, uintE* rankV, uin
   sequence::plusScan(offsets,offsets,G.nv+G.nu+1);
 
   uintE* edges = newA(uintE,offsets[G.nv+G.nu]);
+#ifdef INVERSE
+  auto lt = [] (const uintE& l, const uintE& r) { return l < r; };
+#else
   auto lt = [] (const uintE& l, const uintE& r) { return l > r; };
+#endif
 
   // Fill in the correct edges using offsets
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
@@ -654,9 +658,13 @@ pair<graphCSR,tuple<uintE,uintE>*> rankGraphEdges(bipartiteCSR& G, bool use_vb, 
 
   uintE* edges = newA(uintE,offsets[G.nv+G.nu]);
   X* edges_convert = newA(X,offsets[G.nv+G.nu]);
-
+#ifdef INVERSE
+  auto lt = [] (const uintE& l, const uintE& r) { return l < r; };
+  auto ltx = [] (const X& l, const X& r) { return get<0>(l) < get<0>(r); };
+#else
   auto lt = [] (const uintE& l, const uintE& r) { return l > r; };
   auto ltx = [] (const X& l, const X& r) { return get<0>(l) > get<0>(r); };
+#endif
 
   // Fill in the correct edges using offsets
   parallel_for(long i=0; i < G.nv + G.nu; ++i) {
@@ -1201,10 +1209,19 @@ long* countWedgesScan(graphCSR& G) {
       uintE v = G.edges[offset+j] >> 1;
       intT v_offset = G.offsets[v];
       intT v_deg = G.offsets[v+1] - v_offset;
+#ifdef INVERSE
+      {
+#else
       if (v > i) {
+#endif
 	// Iterate through all two-hop neighbors and increment degrees
 	for (intT k = 0; k < v_deg; ++k) {
-	  if ((G.edges[v_offset + k] >> 1) > i) (nbhd_idxs[i][j])++;
+#ifdef INVERSE
+    if ((G.edges[v_offset + k] >> 1) < std::min((uintE) i, v))
+#else
+	  if ((G.edges[v_offset + k] >> 1) > i)
+#endif
+      (nbhd_idxs[i][j])++;
 	  else break;
 	}
       }
@@ -1775,11 +1792,17 @@ template<class wedge, class wedgeCons>
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
+#ifndef INVERSE
       if (v <= i) break;
+#endif
       // Find two-hop neighbors of i
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+        if (u2 < i && u2 < v) {
+#else
         if (u2 > i) {
+#endif
           // Store wedge
           wedges[idx] = cons(i, GA.edges[v_offset+k], v, j, k);
           ++idx;
@@ -1828,11 +1851,17 @@ template<class wedge, class wedgeCons>
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
+#ifndef INVERSE
       if (v <= i) break;
+#endif
       // Find two-hop neighbors of i
       for (intT k = 0; k < v_deg; ++k) {
         uintE u2 = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+        if (u2 < i && u2 < v) {
+#else
         if (u2 > i) {
+#endif
           // Store wedge
           wedges_seq.A[wedge_idx+idx] = cons(i, GA.edges[v_offset+k], v, j, k);
           ++idx;
@@ -1873,12 +1902,21 @@ template<class wedgeCons, class T>
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1] - v_offset;
+#ifdef INVERSE
+  {
+#else
 	if (v > i) {
+#endif
 	  // Find two-hop neighbors of i
 	  for (intT k=0; k < v_deg; ++k) { 
 	    uintE u2 = GA.edges[v_offset+k] >> 1;
 	    // Store wedge in hash table
-	    if (u2 > i) wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
+#ifdef INVERSE
+      if (u2 < i && u2 < v)
+#else
+	    if (u2 > i)
+#endif
+        wedges.insert(make_pair(cons(i, u2, (GA.edges[v_offset+k] & 0b1) ), 1));
 	    else break;
 	  }
 	} 

@@ -78,11 +78,19 @@ intT CountEHistCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
-      if (v > i) { 
+#ifdef INVERSE
+      {
+#else
+      if (v > i) {
+#endif
 	// Iterate through all wedges with endpoints i and u2, and center v
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2 = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2 < i && u2 < v) {
+#else
 	  if (u2 > i) {
+#endif
 	    // Find the number of wedges with endpoints i and u2
 	    long to_find = ((((long) i) *GA.n + (long) u2) << 1) + (GA.edges[v_offset+k] & 0b1);
 	    long num_butterflies = cs.wedges_hash.find(to_find).second;
@@ -355,11 +363,19 @@ intT CountEHist(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
-      if (v > i) { 
+#ifdef INVERSE
+      {
+#else
+      if (v > i) {
+#endif
 	// Iterate through all wedges with endpoints i and u2, and center v
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2 = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2 < i && u2 < v) {
+#else
 	  if (u2 > i) {
+#endif
 	    // Find the number of wedges with endpoints i and u2
 	    long to_find = ((((long) i) *GA.n + (long) u2) << 1) + (GA.edges[v_offset+k] & 0b1);
 	    long num_butterflies = cs.wedges_hash.find(to_find).second;
@@ -690,11 +706,19 @@ intT CountEHash(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
+#ifdef INVERSE
+      {
+#else
       if (v > i) {
+#endif
 	// Iterate through all wedges with endpoints i and u2, and center v
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2 = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2 < i && u2 < v) {
+#else
 	  if (u2 > i) {
+#endif
 	    // Find the number of wedges with endpoints i and u2
 	    long to_find = ((((long) i) *GA.n + (long) u2) << 1) + (GA.edges[v_offset+k] & 0b1);
 	    long num_butterflies = cs.wedges_hash.find(to_find).second;
@@ -745,11 +769,19 @@ intT CountEHashCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1] - v_offset;
+#ifdef INVERSE
+      {
+#else
       if (v > i) {
+#endif
 	// Iterate through all wedges with endpoints i and u2, and center v
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2 = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2 < i && u2 < v) {
+#else
 	  if (u2 > i) {
+#endif
 	    // Find the number of wedges with endpoints i and u2
 	    long to_find = ((((long) i) * GA.n + (long) u2) << 1) + (GA.edges[v_offset+k] & 0b1);
 	    long num_butterflies = cs.wedges_hash.find(to_find).second;
@@ -1178,11 +1210,17 @@ void CountEOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long 
 	    uintE v = GA.edges[u_offset+j] >> 1;
 	    intT v_offset = GA.offsets[v];
 	    intT v_deg = GA.offsets[v+1]-v_offset;
-	    if (v <= i) break; 
+#ifndef INVERSE
+	    if (v <= i) break;
+#endif
 	    // Iterate through all 2-hop neighbors of i (with appropriate rank)
 	    for (intT k=0; k < v_deg; ++k) { 
 	      uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+        if (u2_idx < i && u2_idx < v) {
+#else
 	      if (u2_idx > i) {
+#endif
 		// Count wedges on the second endpoint
 		wedges[shift+u2_idx]++;
 		// Keep track of used second endpoints
@@ -1197,10 +1235,16 @@ void CountEOrigCompactParallel_WedgeAware(graphCSR& GA, long* butterflies, long 
 	    uintE v = GA.edges[u_offset+j] >> 1;
 	    intT v_offset = GA.offsets[v];
 	    intT v_deg = GA.offsets[v+1]-v_offset;
-	    if (v <= i) break; 
+#ifndef INVERSE
+	    if (v <= i) break;
+#endif
 	    for (long k=0; k < v_deg; ++k) { 
 	      uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+        if (u2_idx < i && u2_idx < v) {
+#else
 	      if (u2_idx > i) {
+#endif
 		if (wedges[shift+u2_idx] > 1) {
 		  writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], (long)(wedges[shift+u2_idx]-1));
 		  writeAdd(&butterflies[eltsPerCacheLine*(u_offset+j)], (long)(wedges[shift+u2_idx]-1));
@@ -1277,11 +1321,17 @@ void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
 	if (v <= i) break;
+#endif
 	// Iterate through all 2-hop neighbors of i (with appropriate rank)
 	for (intT k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2_idx < i && u2_idx < v) {
+#else
 	  if (u2_idx > i) {
+#endif
 	    // Count wedges on the second endpoint
 	    wedges[shift+u2_idx]++;
 	    // Keep track of used second endpoints
@@ -1296,10 +1346,16 @@ void CountEWorkEfficientParallel(graphCSR& GA, long* butterflies, long max_array
 	uintE v = GA.edges[u_offset+j] >> 1;
 	intT v_offset = GA.offsets[v];
 	intT v_deg = GA.offsets[v+1]-v_offset;
-	if (v <= i) break; 
+#ifndef INVERSE
+	if (v <= i) break;
+#endif
 	for (long k=0; k < v_deg; ++k) { 
 	  uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+    if (u2_idx < i && u2_idx < v) {
+#else
 	  if (u2_idx > i) {
+#endif
 	    if (wedges[shift+u2_idx] > 1) {
 	      writeAdd(&butterflies[eltsPerCacheLine*(v_offset+k)], (long)(wedges[shift+u2_idx]-1));
 	      writeAdd(&butterflies[eltsPerCacheLine*(u_offset+j)], (long)(wedges[shift+u2_idx]-1));
@@ -1366,11 +1422,17 @@ void CountEWorkEfficientSerial(graphCSR& GA, long* butterflies) {
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1]-v_offset;
+#ifndef INVERSE
       if (v <= i) break;
+#endif
       // Iterate through all 2-hop neighbors of i (with appropriate rank)
       for (intT k=0; k < v_deg; ++k) { 
 	uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+  if (u2_idx < i && u2_idx < v) {
+#else
 	if (u2_idx > i) {
+#endif
 	  // Count wedges on the second endpoint
 	  wedges[u2_idx]++;
 	  // Keep track of used second endpoints
@@ -1385,10 +1447,16 @@ void CountEWorkEfficientSerial(graphCSR& GA, long* butterflies) {
       uintE v = GA.edges[u_offset+j] >> 1;
       intT v_offset = GA.offsets[v];
       intT v_deg = GA.offsets[v+1]-v_offset;
-      if (v <= i) break; 
+#ifndef INVERSE
+      if (v <= i) break;
+#endif
       for (long k=0; k < v_deg; ++k) { 
 	uintE u2_idx = GA.edges[v_offset+k] >> 1;
+#ifdef INVERSE
+  if (u2_idx < i && u2_idx < v) {
+#else
 	if (u2_idx > i) {
+#endif
 	  if (wedges[u2_idx] > 1) {
 	    butterflies[eltsPerCacheLine*(v_offset+k)] += (long)(wedges[u2_idx]-1);
 	    butterflies[eltsPerCacheLine*(u_offset+j)] += (long)(wedges[u2_idx]-1);

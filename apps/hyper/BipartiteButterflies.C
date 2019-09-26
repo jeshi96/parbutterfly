@@ -7,6 +7,7 @@
 #define HYPER 1
 #define MCX16 1
 #define VERBOSE 1
+#define INVERSE 1
 
 #include "hypergraphIO.h"
 #include "index_map.h"
@@ -128,13 +129,13 @@ void Compute(bipartiteCSR& GA, commandLine P) {
   long peel_type_long = P.getOptionLongValue("-tp", LONG_MAX);
   string peel_type_str = P.getOptionValue("-peelType", "");
   PeelType tp;
-  bool nopeel;
+  bool nopeel = false;
   if (peel_type_long == LONG_MAX) {
     if (peel_type_str == "SORT") tp = PSORT;
-    else if (count_type_str == "HASH") tp = PHASH;
-    else if (count_type_str == "HIST") tp = PHIST;
-    else if (count_type_str == "BATCHS") tp = PBATCHS;
-    else if (count_type_str == "BATCHWA") tp = PBATCHWA;
+    else if (peel_type_str == "HASH") tp = PHASH;
+    else if (peel_type_str == "HIST") tp = PHIST;
+    else if (peel_type_str == "BATCHS") tp = PBATCHS;
+    else if (peel_type_str == "BATCHWA") tp = PBATCHWA;
     else nopeel = true;
   }
   else {
