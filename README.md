@@ -126,15 +126,13 @@ Optimizations
 Independently of our work, [Wang et 
 al.](http://www.vldb.org/pvldb/vol12/p1139-wang.pdf) described an 
 algorithm for butterfly counting using degree ordering, and also 
-proposed a cache optimization for wedge retrieval.
-
-More specifically, Wang et al. included two cache optimizations, 
-namely cache-aware wedge processing and cache-aware graph projection. 
-We had independently implemented cache-aware graph projection in our 
-work, as well as cache-aware wedge processing for the SIDE ordering setting. 
-
-We include cache-aware wedge processing for all other orderings, as 
-based on their work. This optimization can be turned on using
+proposed a cache-aware wedge processing optimization that changes 
+the direction in which wedges are inspected. 
+Since our initial publication and inspired by their proposed optimization, we have 
+incorporated the cache-aware wedge processing optimization of Wang et al.
+into our framework for all orderings
+(previously we had only done for the SIDE ordering just by chance). 
+This optimization can be turned on using
 ```
 #define INVERSE 1
 ```
