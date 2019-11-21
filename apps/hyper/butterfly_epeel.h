@@ -18,8 +18,10 @@
 #include "sequence.h"
 #include "sparseSet.h"
 #include "sampleSort.h"
+#ifndef OPENMP
 #include "../../lib/histogram.h"
 #include "../../lib/sample_sort.h"
+#endif
 #include "../../radixsort/RadixSort/radixSort.h"
 
 #include "butterfly_putils.h"
@@ -55,7 +57,11 @@ pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
   auto ret = getIntersectWedges(eti, ite, current, ps, active_map, active.size(), GA, use_v, max_wedges, curr_idx);
 
   // Aggregate butterfly count updates
+#ifdef OPENMP
+  sampleSort(ps.wedges_seq_tup_fil.A, ret.first, tupleLt<uintE,long>());
+#else
   pbbs::sample_sort(ps.wedges_seq_tup_fil.A, ret.first, tupleLt<uintE,long>());
+#endif
   auto b_freq_pair = getFreqs<long>(ps.wedges_seq_tup_fil.A, ret.first, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
   auto b_freq_arr = b_freq_pair.first;
   ps.resize_update(b_freq_pair.second-1);
@@ -98,6 +104,10 @@ pair<intT, long> PeelESort(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
  */
 pair<intT, long> PeelEHist(uintE* eti, uintE* ite, bool* current, PeelESpace& ps, vertexSubset& active,
                            long* butterflies, bipartiteCSR& GA, bool use_v, long max_wedges, intT curr_idx=0) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   using X = tuple<uintE,long>;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
@@ -125,6 +135,7 @@ pair<intT, long> PeelEHist(uintE* eti, uintE* ite, bool* current, PeelESpace& ps
   }
 
   return make_pair(ret.second, butterflies_n);
+#endif
 }
 
 /*

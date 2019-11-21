@@ -12,8 +12,10 @@
 #include "sequence.h"
 #include "sparseSet.h"
 #include "sampleSort.h"
+#ifndef OPENMP
 #include "../../lib/histogram.h"
 #include "../../lib/sample_sort.h"
+#endif
 #include "../../radixsort/RadixSort/radixSort.h"
 #include "../../radixsort/common/blockRadixSort.h"
 
@@ -38,6 +40,10 @@ using namespace std;
  */
 intT CountEHistCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
                   intT curr_idx=0) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   using X = tuple<long,uintE>;
   using T = tuple<uintE, long>;
   const size_t eltsPerCacheLine = 64/sizeof(long);
@@ -126,6 +132,7 @@ intT CountEHistCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
   }
 
   return next_idx;
+#endif
 }
 
 /*
@@ -151,6 +158,10 @@ intT CountEHistCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
  */
 intT CountEHistCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long max_wedges,
                   long* wedge_idxs, uintE* eti, intT curr_idx=0) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -231,6 +242,7 @@ intT CountEHistCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
   }
 
   return next_idx;
+#endif
 }
 
 /*
@@ -257,6 +269,10 @@ intT CountEHistCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
  */
 intT CountEHist(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long* butterflies, long* butterflies_u,
                 long max_wedges, long* wedge_idxs, uintE* eti, intT curr_idx=0) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   const long nv = use_v ? GA.nv : GA.nu;
   const long nu = use_v ? GA.nu : GA.nv;
   uintT* offsetsV = use_v ? GA.offsetsV : GA.offsetsU;
@@ -313,6 +329,7 @@ intT CountEHist(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
   }
 
   return next_idx;
+#endif
 }
 
 /*
@@ -333,6 +350,10 @@ intT CountEHist(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
  */
 intT CountEHist(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflies, long max_wedges, long* wedge_idxs, 
                 intT curr_idx=0) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   using X = tuple<long,uintE>;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
@@ -392,6 +413,7 @@ intT CountEHist(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
   }
 
   return next_idx;
+#endif
 }
 
 //********************************************************************************************
@@ -435,7 +457,11 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 
   // Retrieve frequency counts for all wedges with the same key
   // First, sort wedges to aggregate
+#ifdef OPENMP
+  sampleSort(wedges, num_wedges_f, UWedgeCmp());
+#else
   pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
+#endif
   // Retrieve a list of indices where consecutive wedges have different keys
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
@@ -455,7 +481,11 @@ intT CountESortCE(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges
 
   // Aggregate butterfly counts
   // Sort butterfly counts to aggregate
+#ifdef OPENMP
+  sampleSort(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>());
+#else
   pbbs::sample_sort(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>());
+#endif
   // Retrieve a list of indices where consecutive wedges have different keys
   auto b_freq_pair = getFreqs(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>(), tupleEq<uintE,long>(),
                               LONG_MAX, nonMaxLongF());
@@ -512,7 +542,11 @@ intT CountESort(CountESpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, 
 
   // Retrieve frequency counts for all wedges with the same key
   // First, sort wedges to aggregate
+#ifdef OPENMP
+  sampleSort(wedges, num_wedges_f, UWedgeCmp());
+#else
   pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
+#endif
   // Retrieve a list of indices where consecutive wedges have different keys
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
@@ -563,7 +597,11 @@ intT CountESortCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
 
   // Retrieve frequency counts for all wedges with the same key
   // First, sort wedges to aggregate
+#ifdef OPENMP
+  sampleSort(wedges, num_wedges_f, UWedgeCmp());
+#else
   pbbs::sample_sort(wedges, num_wedges_f, UWedgeCmp());
+#endif
   // Retrieve a list of indices where consecutive wedges have different keys
   auto freq_pair = getFreqs<long>(wedges, num_wedges_f, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   auto freq_arr = freq_pair.first;
@@ -599,7 +637,11 @@ intT CountESortCE(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterfl
 
   // Aggregate butterfly counts
   // Sort butterfly counts to aggregate
+#ifdef OPENMP
+  sampleSort(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>());
+#else
   pbbs::sample_sort(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>());
+#endif
   // Retrieve a list of indices where consecutive counts have different keys
   auto b_freq_pair = getFreqs<long>(cs.butterflies_seq_intt.A, 2*num_wedges_f, tupleLt<uintE,long>(),
                                     tupleEq<uintE,long>(), LONG_MAX, nonMaxLongF());
@@ -646,7 +688,11 @@ intT CountESort(CountESpace& cs, graphCSR& GA, long num_wedges, long* butterflie
 
   // Retrieve frequency counts for all wedges with the same key
   // First, sort wedges to aggregate
+#ifdef OPENMP
+  sampleSort(wedges, num_wedges_curr, UWedgeCmp());
+#else
   pbbs::sample_sort(wedges, num_wedges_curr, UWedgeCmp());
+#endif
   // Retrieve a list of indices where consecutive wedges have different keys
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
 

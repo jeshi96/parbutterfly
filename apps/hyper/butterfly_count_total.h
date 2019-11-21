@@ -12,8 +12,10 @@
 #include "sequence.h"
 #include "sparseSet.h"
 #include "sampleSort.h"
+#ifndef OPENMP
 #include "../../lib/histogram.h"
 #include "../../lib/sample_sort.h"
+#endif
 #include "../../radixsort/RadixSort/radixSort.h"
 
 #include "butterfly_utils.h"
@@ -50,7 +52,12 @@ pair<intT,long> CountSortTotal(CountSpace& cs, bipartiteCSR& GA, bool use_v, lon
 
   // Retrieve frequency counts for all wedges with the same key
   // First, sort wedges by endpoints
+#ifdef OPENMP
+  sampleSort(wedges, num_wedges_curr, UVertexPairCmp());
+#else
   pbbs::sample_sort(wedges, num_wedges_curr, UVertexPairCmp());
+#endif
+  
   // Retrieve a list of indices where consecutive wedges have different keys
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UVertexPairCmp(), UVertexPairEq(), LONG_MAX, nonMaxLongF());
   long* butterflies = newA(long, freq_pair.second-1);
@@ -98,7 +105,11 @@ pair<intT,long> CountSortTotal(CountSpace& cs, graphCSR& GA, long num_wedges, lo
 
   // Retrieve frequency counts for all wedges with the same key
   // First, sort wedges by endpoints
+#ifdef OPENMP
+  sampleSort(wedges, num_wedges_curr, UWedgeCmp());
+#else
   pbbs::sample_sort(wedges, num_wedges_curr, UWedgeCmp());
+#endif
   // Retrieve a list of indices where consecutive wedges have different keys
   auto freq_pair = getFreqs<long>(wedges, num_wedges_curr, UWedgeCmp(), UWedgeEq(), LONG_MAX, nonMaxLongF());
   long* butterflies = newA(long, freq_pair.second-1);
@@ -228,6 +239,10 @@ pair<intT,long> CountHashTotal(CountSpace& cs, bipartiteCSR& GA, bool use_v, lon
  */
 pair<intT,long> CountHistTotal(CountSpace& cs, graphCSR& GA, long num_wedges, long max_wedges, long* wedge_idxs,
                                intT curr_idx=0) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   using X = tuple<long,uintE>;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
@@ -254,6 +269,7 @@ pair<intT,long> CountHistTotal(CountSpace& cs, graphCSR& GA, long num_wedges, lo
   free(butterflies);
 
   return make_pair(next_idx, num_butterflies);
+#endif
 }
 
 /*
@@ -275,6 +291,10 @@ pair<intT,long> CountHistTotal(CountSpace& cs, graphCSR& GA, long num_wedges, lo
  */
 pair<intT,long> CountHistTotal(CountSpace& cs, bipartiteCSR& GA, bool use_v, long num_wedges, long max_wedges,
                                long* wedge_idxs, intT curr_idx=0) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   const long nu = use_v ? GA.nu : GA.nv;
   const size_t eltsPerCacheLine = 64/sizeof(long);
 
@@ -305,6 +325,7 @@ pair<intT,long> CountHistTotal(CountSpace& cs, bipartiteCSR& GA, bool use_v, lon
   free(butterflies);
 
   return make_pair(wedges_list_pair.second, num_butterflies);
+#endif
 }
 
 //************************************************************************************************************************

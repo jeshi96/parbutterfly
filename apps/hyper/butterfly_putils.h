@@ -91,8 +91,10 @@ struct PeelSpace {
   _seq<pair<long,long>> wedges_seq_intp;
   _seq<pair<long,long>> butterflies_seq_intp;
   long num_wedges_hash;
+#ifndef OPENMP
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
+#endif
 PeelSpace(PeelType _type, long _nu, long _stepSize) : type(_type), nu(_nu), stepSize(_stepSize) {
   using E = pair<long, long>;
   using X = pair<uintE,long>;
@@ -109,11 +111,13 @@ PeelSpace(PeelType _type, long _nu, long _stepSize) : type(_type), nu(_nu), step
     butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
   }
   else if (type == PSORT) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);
+#ifndef OPENMP
   else if (type == PHIST) {
     wedges_seq_long = _seq<long>(newA(long, nu), nu);
     tmp = pbbsa::sequence<tuple<long, uintE>>();
     out = pbbsa::sequence<tuple<long, uintE>>();
   }
+#endif
   else {
     wedges_seq_int = _seq<long>(newA(long, nu*stepSize), nu*stepSize);
     granular_for(i,0,nu*stepSize,nu*stepSize > 10000, { wedges_seq_int.A[i] = 0; });

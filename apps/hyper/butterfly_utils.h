@@ -1315,11 +1315,13 @@ struct CountESpace {
   // Sort, Hist
   _seq<tuple<uintE,long>> butterflies_seq_intt;
   // Hist
+#ifndef OPENMP
   pbbsa::sequence<tuple<uintE, long>> tmp_uint;
   pbbsa::sequence<tuple<uintE, long>> out_uint;
   // AHist
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
+#endif
   _seq<long> wedges_seq_int;
   // AHist, Hash, AHash
   sparseAdditiveSet<long, long> wedges_hash;
@@ -1339,6 +1341,7 @@ CountESpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(
       butterflies_hash = sparseAdditiveSet<long, long>(nu, 1, LONG_MAX, LONG_MAX);
     }
   }
+#ifndef OPENMP
   else if (type == HIST || type == AHIST) {
     tmp = pbbsa::sequence<tuple<long, uintE>>();
     out = pbbsa::sequence<tuple<long, uintE>>();
@@ -1350,6 +1353,7 @@ CountESpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(
       out_uint = pbbsa::sequence<tuple<uintE, long>>();
     }
   }
+#endif
   else if (type == SORT || type == ASORT) {
     if (type == SORT) butterflies_seq_intt = _seq<X>(newA(X, 1), 1);
     wedges_seq_uw = _seq<UWedge>(newA(UWedge, nu), nu);
@@ -1395,13 +1399,17 @@ struct CountSpace {
   sparseAdditiveSet<long, long> butterflies_hash;
   _seq<pair<long,long>> butterflies_seq_intp;
   // Hist, AHist
+#ifndef OPENMP
   pbbsa::sequence<tuple<long, uintE>> tmp;
   pbbsa::sequence<tuple<long, uintE>> out;
+#endif
   _seq<long> wedges_seq_int;
   // Hist
   _seq<tuple<uintE,long>> butterflies_seq_intt;
+#ifndef OPENMP
   pbbsa::sequence<tuple<uintE, long>> tmp_uint;
   pbbsa::sequence<tuple<uintE, long>> out_uint;
+#endif
   // Sort, ASort
   _seq<UVertexPair> wedges_seq_uvp;
   _seq<UWedge> wedges_seq_uw;
@@ -1419,6 +1427,7 @@ CountSpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_
       butterflies_seq_intp = _seq<E>(newA(E, nu), nu);
     }
   }
+#ifndef OPENMP
   else if (type == HIST || type == AHIST) {
     tmp = pbbsa::sequence<tuple<long, uintE>>();
     out = pbbsa::sequence<tuple<long, uintE>>();
@@ -1433,6 +1442,7 @@ CountSpace(CountType _type, long _nu, bool _rank) : type(_type), nu(_nu), rank(_
       out_uint = pbbsa::sequence<tuple<uintE, long>>();
     }
   }
+#endif
   else if (type == SORT || type == ASORT) {
     if (type == SORT) butterflies_seq_intt = _seq<L>(newA(L, 1), 1);
     if (!rank) wedges_seq_uvp = _seq<UVertexPair>(newA(UVertexPair, nu), nu);

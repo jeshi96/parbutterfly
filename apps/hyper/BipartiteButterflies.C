@@ -24,7 +24,9 @@
 #include "sequence.h"
 #include "sparseSet.h"
 #include "sampleSort.h"
+#ifndef OPENMP
 #include "../../lib/histogram.h"
+#endif
 
 #include "butterfly_count.h"
 #include "butterfly_ecount.h"

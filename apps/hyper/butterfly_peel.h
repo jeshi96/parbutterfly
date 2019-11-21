@@ -19,8 +19,10 @@
 #include "sequence.h"
 #include "sparseSet.h"
 #include "sampleSort.h"
+#ifndef OPENMP
 #include "../../lib/histogram.h"
 #include "../../lib/sample_sort.h"
+#endif
 #include "../../radixsort/RadixSort/radixSort.h"
 
 #include "butterfly_putils.h"
@@ -123,7 +125,11 @@ long countSeagulls(bipartiteCSR& GA, bool use_v, vertexSubset active) {
 pair<tuple<uintE,long>*, long> getSeagullFreqs(const long nu, UVertexPair* seagulls, long num_sgs) {
   using X = tuple<uintE,long>;
   // Sort wedges (considering both active + non-active endpoints), and retrieve frequency counts
+#ifdef OPENMP
+  sampleSort(seagulls, num_sgs, UVertexPairCmp2());
+#else
   pbbs::sample_sort(seagulls, num_sgs, UVertexPairCmp2());
+#endif
   pair<long*, long> freq_pair = getFreqs<long>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), LONG_MAX,
                                                nonMaxLongF());
   long num_sg_freqs = freq_pair.second - 1;
@@ -153,7 +159,11 @@ pair<tuple<uintE,long>*, long> getSeagullFreqs(const long nu, UVertexPair* seagu
  *  corresponding vertices, and the number of elements in this array.
  */
 pair<tuple<uintE,long>*, long> getSeagullFreqs_seq(const long nu, UVertexPair* seagulls, long num_sgs) {
+#ifdef OPENMP
+  sampleSort(seagulls, num_sgs, UVertexPairCmp2());
+#else
   pbbs::sample_sort(seagulls, num_sgs, UVertexPairCmp2());
+#endif
   return getFreqs_seq<long,uintE>(seagulls, num_sgs, UVertexPairCmp2(), UVertexPairEq(), true,
                                   UVertexPairV2(), choose2(), reflCount<UVertexPair>());
 }
@@ -173,7 +183,11 @@ long getUpdates_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freq
   using X = tuple<uintE,long>;
   // Collate all butterflies to be removed with the same non-active endpoint
   // Do this by sorting on the non-active endpoint, and summing the frequencies
+#ifdef OPENMP
+  sampleSort(sg_freqs, num_sg_freqs, tupleLt<uintE,long>());
+#else
   pbbs::sample_sort(sg_freqs, num_sg_freqs, tupleLt<uintE,long>());
+#endif
   pair<X*, long> b_freq_pair =
     getFreqs_seq<long,uintE>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), false,
                              uintETupleGet0(), refl<long>(), uintECount());
@@ -211,7 +225,11 @@ long getUpdates(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, l
   using X = tuple<uintE,long>;
   // Collate all butterflies to be removed with the same non-active endpoint
   // Do this by sorting on the non-active endpoint, and summing the frequencies
+#ifdef OPENMP
+  sampleSort(sg_freqs, num_sg_freqs, tupleLt<uintE,long>());
+#else
   pbbs::sample_sort(sg_freqs, num_sg_freqs, tupleLt<uintE,long>());
+#endif
   auto b_freq_pair = getFreqs<long>(sg_freqs, num_sg_freqs, tupleLt<uintE,long>(), tupleEq<uintE,long>(), LONG_MAX,
                                     nonMaxLongF(), false);
   long num_updates = b_freq_pair.second - 1;
@@ -249,6 +267,10 @@ long getUpdates(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, l
  *  corresponding vertices, and the number of elements in this array.
  */
 pair<tuple<uintE,long>*, long> getSeagullFreqsHist(PeelSpace& ps, const long nu, long* seagulls, long num_sgs) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   using X = tuple<long,uintE>;
   using T = tuple<uintE,long>;
   pbbsa::sequence<long> sg_seq = pbbsa::sequence<long>(seagulls,num_sgs);
@@ -274,6 +296,7 @@ pair<tuple<uintE,long>*, long> getSeagullFreqsHist(PeelSpace& ps, const long nu,
   free(sg_freqs_filter);
 
   return make_pair(sg_freqs_ret, num_sg_freqs);
+#endif
 }
 
 /*
@@ -289,6 +312,10 @@ pair<tuple<uintE,long>*, long> getSeagullFreqsHist(PeelSpace& ps, const long nu,
  *  corresponding vertices, and the number of elements in this array.
  */
 pair<tuple<uintE,long>*, long> getSeagullFreqsHist_seq(PeelSpace& ps, const long nu, long* seagulls, long num_sgs) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   using X = tuple<long,uintE>;
   using T = tuple<uintE,long>;
   // Aggregate wedges using a histogram
@@ -310,6 +337,7 @@ pair<tuple<uintE,long>*, long> getSeagullFreqsHist_seq(PeelSpace& ps, const long
   }
 
   return make_pair(sg_freqs_ret, idx);
+#endif
 }
 
 /*
@@ -326,6 +354,10 @@ pair<tuple<uintE,long>*, long> getSeagullFreqsHist_seq(PeelSpace& ps, const long
  */
 long getUpdatesHist_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, const long nu,
                         long* butterflies) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   using X = tuple<uintE, long>;
   using T = tuple<long, uintE>;
 
@@ -351,6 +383,7 @@ long getUpdatesHist_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_
   free(b_freqs);
 
   return (long) num_updates;
+#endif
 }
 
 /*
@@ -366,6 +399,10 @@ long getUpdatesHist_seq(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_
  *  Returns the number of vertices with updated butterfly counts.
  */
 long getUpdatesHist(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freqs, const long nu, long* butterflies) {
+#ifdef OPENMP
+  cout << "Histogram on OPENMP not supported\n";
+  exit(0);
+#else
   using X = tuple<uintE,long>;
   // Collate all butterflies to be removed with the same non-active endpoint
   // Do this by using a histogram to sum frequencies on the non-active endpoint
@@ -389,6 +426,7 @@ long getUpdatesHist(PeelSpace& ps, tuple<uintE,long>* sg_freqs, long num_sg_freq
   free(b_freqs);
 
   return (long) num_updates;
+#endif
 }
 
 //***************************************************************************************************
