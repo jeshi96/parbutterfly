@@ -319,7 +319,7 @@ int parallel_main(int argc, char* argv[]) {
     }
   }
 
-  if ((per_type == EDGE || nopeel) && sparse == NOSPARSE) {
+  /*if ((per_type == EDGE || nopeel) && sparse == NOSPARSE) {
     bipartiteCSR G = readBipartite(iFile);
     Compute(G, P);
     for(int r = 0; r < rounds; r++) {
@@ -327,7 +327,8 @@ int parallel_main(int argc, char* argv[]) {
     }
     G.del();
   }
-  else {
+  else {*/
+  for (int r = 0; r < rounds + 1; r++) {
     bipartiteCSR G;
     if (sparse == NOSPARSE) G = readBipartite(iFile);
     else {
@@ -337,8 +338,9 @@ int parallel_main(int argc, char* argv[]) {
     }
     Compute(G, P);
     G.del();
+  }
 
-    for(int r = 0; r < rounds; r++) {
+    /*for(int r = 0; r < rounds; r++) {
       if (sparse == NOSPARSE) G = readBipartite(iFile);
       else{
 	auto tmp = readBipartite(iFile);
@@ -348,7 +350,7 @@ int parallel_main(int argc, char* argv[]) {
       }
       Compute(G, P);
       G.del();
-    }
-  }
+    }*/
+  //}
 }
 
