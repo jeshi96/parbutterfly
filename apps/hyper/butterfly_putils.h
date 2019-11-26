@@ -134,12 +134,13 @@ PeelSpace(PeelType _type, long _nu, long _stepSize) : type(_type), nu(_nu), step
   }
   
   sparseAdditiveSet<long, long>* resize(size_t size) {
-    if (type != 0) return nullptr;
+    if (type != PHASH) return nullptr;
     
     size_t find_idx = log2RoundUp(size);
     if (find_idx < num_wedges_hash) {
       wedges_hash = wedges_hash_list[find_idx];
       wedges_hash->clear(); 
+
       return wedges_hash_list[find_idx];
     }
     using T = sparseAdditiveSet<long, long>*;
@@ -154,6 +155,7 @@ PeelSpace(PeelType _type, long _nu, long _stepSize) : type(_type), nu(_nu), step
     wedges_hash_list = new_wedges_hash_list;
     num_wedges_hash = find_idx+1;
     wedges_hash = wedges_hash_list[find_idx];
+
     return wedges_hash_list[find_idx];
     // binary search wedges_hash_list for right size
     // if none found, square top until we get to size
